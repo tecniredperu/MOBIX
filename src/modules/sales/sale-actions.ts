@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { requirePermission } from "@/lib/business-context";
+import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { revalidatePaths } from "@/lib/revalidation";
@@ -374,6 +375,7 @@ export async function createSaleAction(input: CreateSaleInput) {
           selectedUnits.reduce((sum, unit) => sum + Number(unit.purchaseCost), 0) / selectedUnits.length,
         );
       } else if (variant.product.type === "ACCESSORY") {
+        await lockInventoryBalance(tx, company.id, warehouse.id, variant.id);
         const balance = await tx.inventoryBalance.findUnique({
           where: {
             companyId_warehouseId_variantId: {
