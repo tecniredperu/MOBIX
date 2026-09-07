@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BadgeCheck, CalendarClock, MessageCircle, Printer, Save, ShieldCheck, Smartphone, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, BadgeCheck, CalendarClock, Save, ShieldCheck, Smartphone, UserRound, Wrench } from "lucide-react";
 import { updateServiceOrderAction } from "./service-actions";
+import { ServicePrintActions } from "./service-print-actions";
 import type { ServiceStatus } from "./service-types";
 
 const STATUS_LABELS: Record<ServiceStatus, string> = {
@@ -24,12 +25,6 @@ function money(value: number) {
 function dateTime(value: string | null) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-function whatsappNumber(value?: string | null) {
-  const digits = value?.replace(/\D/g, "") ?? "";
-  if (!digits) return "";
-  return digits.startsWith("51") ? digits : `51${digits}`;
 }
 
 export function ServiceDetailView({
@@ -53,11 +48,6 @@ export function ServiceDetailView({
   const [finalCost, setFinalCost] = useState(String(order.finalCost ?? 0));
   const [note, setNote] = useState("");
   const closed = ["DELIVERED", "CANCELLED"].includes(order.status);
-
-  const phone = whatsappNumber(order.customer.phone);
-  const message = encodeURIComponent(
-    `Hola ${order.customer.name}. Estado de su equipo ${order.deviceName} (${order.serviceNumber}): ${STATUS_LABELS[order.status as ServiceStatus]}. ${order.identifier ? `${order.identifier}. ` : ""}${order.expectedAt ? `Entrega estimada: ${dateTime(order.expectedAt)}. ` : ""}MOBIX.`,
-  );
 
   function save() {
     setError("");
@@ -92,10 +82,7 @@ export function ServiceDetailView({
           <h1>{order.deviceName}</h1>
           <p>{order.identifier ?? "Sin IMEI/serie"} · Recibido {dateTime(order.receivedAt)}</p>
         </div>
-        <div className="service-detail-actions no-print">
-          <button className="secondary-button" type="button" onClick={() => window.print()}><Printer size={15} /> Imprimir ficha</button>
-          {phone && <a className="secondary-button whatsapp-button" href={`https://wa.me/${phone}?text=${message}`} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp</a>}
-        </div>
+        <ServicePrintActions order={order} />
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Recepción registrada</strong><span>La orden {order.serviceNumber} quedó vinculada al cliente y al equipo.</span></div></div>}
