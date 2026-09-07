@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowUpRight, Boxes, CircleDollarSign, Smartphone, TriangleAlert } from "lucide-react";
 
 const stats = [
@@ -12,11 +13,13 @@ export function DashboardView() {
     <div className="page-stack">
       <section className="page-heading">
         <div>
-          <span className="eyebrow">MOBIX CORE · v0.1</span>
+          <span className="eyebrow">MOBIX CORE</span>
           <h1>Buenos días</h1>
-          <p>Este panel comenzará a llenarse cuando registremos productos, compras y ventas reales.</p>
+          <p>Accede rápidamente a ventas, inventario y operaciones principales de tu tienda.</p>
         </div>
-        <button className="primary-button">Nueva venta <ArrowUpRight size={17} /></button>
+        <Link className="primary-button" href="/pos">
+          Nueva venta <ArrowUpRight size={17} />
+        </Link>
       </section>
 
       <section className="stat-grid">
@@ -34,7 +37,7 @@ export function DashboardView() {
         <article className="panel panel-large">
           <div className="panel-heading">
             <div><h2>Ventas</h2><p>Últimos 7 días</p></div>
-            <button className="ghost-button">Ver reporte</button>
+            <Link className="ghost-button" href="/ventas">Ver ventas</Link>
           </div>
           <div className="empty-chart">
             <div className="chart-bars" aria-hidden="true">
