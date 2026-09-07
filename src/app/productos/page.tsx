@@ -22,6 +22,8 @@ export default async function ProductsPage({
   const params = await searchParams;
   const type = single(params.type);
   const status = single(params.status);
+  const normalizedStatus: "ACTIVE" | "INACTIVE" | undefined =
+    status === "ACTIVE" || status === "INACTIVE" ? status : undefined;
   const filters = {
     q: single(params.q),
     type: (["PHONE", "SERIALIZED", "ACCESSORY", "SERVICE"] as string[]).includes(type ?? "")
@@ -29,7 +31,7 @@ export default async function ProductsPage({
       : undefined,
     brandId: single(params.brandId),
     categoryId: single(params.categoryId),
-    status: status === "ACTIVE" || status === "INACTIVE" ? status : undefined,
+    status: normalizedStatus,
   };
 
   const [{ items, summary }, { brands, categories }] = await Promise.all([
