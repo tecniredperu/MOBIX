@@ -116,9 +116,7 @@ CREATE TABLE "company_settings" (
   CONSTRAINT "company_settings_company_fkey" FOREIGN KEY ("companyId") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-INSERT INTO "company_settings" ("companyId")
-SELECT "id" FROM "companies"
-ON CONFLICT ("companyId") DO NOTHING;
+INSERT INTO "company_settings" ("companyId") SELECT "id" FROM "companies" ON CONFLICT ("companyId") DO NOTHING;
 
 INSERT INTO "permissions" ("id","code","name","description") VALUES
   ('perm_dashboard_view','dashboard.view','Ver dashboard','Acceso al panel principal'),
@@ -139,3 +137,10 @@ INSERT INTO "permissions" ("id","code","name","description") VALUES
   ('perm_roles_manage','roles.manage','Gestionar roles','Roles y permisos'),
   ('perm_settings_manage','settings.manage','Gestionar configuración','Empresa, sucursales, almacenes y parámetros')
 ON CONFLICT ("code") DO NOTHING;
+
+INSERT INTO "role_permissions" ("roleId","permissionId")
+SELECT r."id", p."id"
+FROM "roles" r
+CROSS JOIN "permissions" p
+WHERE r."isSystem" = true
+ON CONFLICT ("roleId","permissionId") DO NOTHING;
