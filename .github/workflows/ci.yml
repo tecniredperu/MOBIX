@@ -26,8 +26,6 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://mobix:mobix@localhost:5432/mobix?schema=public
-      AUTH_SECRET: mobix-ci-secret-only-2026-change-in-production-123456789
-      MOBIX_BOOTSTRAP_PASSWORD: CiMobix2026!Seguro
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -38,11 +36,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Generar credenciales efímeras de CI
+        run: |
+          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url'))" >> "$GITHUB_ENV"
+
       - name: Instalar dependencias
         run: npm ci
 
       - name: Auditar dependencias de producción
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/audit-production.mjs
 
       - name: Generar cliente Prisma
         run: npm run db:generate
