@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { SalesView } from "@/modules/sales/sales-view";
 import { getSales } from "@/modules/sales/sales.repository";
 
@@ -10,6 +11,7 @@ function single(value: string | string[] | undefined) {
 }
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  await requirePermission("sales.view");
   const params = await searchParams;
   const filters = {
     q: single(params.q),
