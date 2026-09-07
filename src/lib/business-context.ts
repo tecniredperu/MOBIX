@@ -1,4 +1,4 @@
-import { getActiveCompany } from "@/lib/company-context";
+import { requireAuthContext } from "@/lib/auth-context";
 import { prisma } from "@/lib/prisma";
 
 export type CompanySettings = {
@@ -24,25 +24,11 @@ type SettingsRow = {
 };
 
 export async function getOperationalContext() {
-  const company = await getActiveCompany();
-  const membership = await prisma.companyUser.findFirst({
-    where: { companyId: company.id, status: "ACTIVE", user: { status: "ACTIVE" } },
-    orderBy: { createdAt: "asc" },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      role: {
-        include: {
-          permissions: { include: { permission: true } },
-        },
-      },
-    },
-  });
-  if (!membership) throw new Error("No existe un usuario activo para operar MOBIX.");
-
+  const auth = await requireAuthContext();
   const rows = await prisma.$queryRaw<SettingsRow[]>`
     SELECT "taxRate", "defaultTaxCondition", "receiptSeries", "invoiceSeries", "salesNoteSeries",
            "ticketFooter", "defaultWarrantyDays", "requireCashSession"
-    FROM "company_settings" WHERE "companyId" = ${company.id} LIMIT 1
+    FROM "company_settings" WHERE "companyId" = ${auth.company.id} LIMIT 1
   `;
   const row = rows[0];
   const settings: CompanySettings = row
@@ -68,10 +54,11 @@ export async function getOperationalContext() {
       };
 
   return {
-    company,
-    membership,
+    company: auth.company,
+    membership: auth.membership,
+    user: auth.user,
     settings,
-    permissions: new Set(membership.role.permissions.map((item) => item.permission.code)),
+    permissions: auth.permissions,
   };
 }
 

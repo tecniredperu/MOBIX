@@ -1,17 +1,25 @@
-import { Bell, Search } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Search } from "lucide-react";
+import { logoutAction } from "@/modules/auth/auth-actions";
 
-export function Topbar() {
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase() || "U";
+}
+
+export function Topbar({ userName, roleName }: { userName: string; roleName: string }) {
   return (
     <header className="topbar">
-      <div className="global-search">
+      <form className="global-search" action="/buscar" method="get">
         <Search size={18} />
-        <input aria-label="Buscar" placeholder="Buscar productos, IMEI, ventas o clientes..." />
-        <kbd>Ctrl K</kbd>
-      </div>
+        <input name="q" aria-label="Buscar" placeholder="Buscar productos, IMEI, ventas o clientes..." minLength={2} />
+        <kbd>Enter</kbd>
+      </form>
       <div className="topbar-actions">
-        <button className="icon-button" aria-label="Notificaciones"><Bell size={19} /></button>
-        <div className="user-avatar">LV</div>
-        <div className="user-copy"><strong>Administrador</strong><span>Cuenta principal</span></div>
+        <Link href="/cuenta" className="topbar-account" aria-label="Mi cuenta">
+          <div className="user-avatar">{initials(userName)}</div>
+          <div className="user-copy"><strong>{userName}</strong><span>{roleName}</span></div>
+        </Link>
+        <form action={logoutAction}><button className="topbar-logout" type="submit" aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={18}/></button></form>
       </div>
     </header>
   );

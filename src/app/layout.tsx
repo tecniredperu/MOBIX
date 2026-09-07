@@ -13,6 +13,7 @@ import "./mobix-print-modals.css";
 import "./mobix-service.css";
 import "./mobix-service-print.css";
 import "./mobix-business.css";
+import "./mobix-auth.css";
 
 export const metadata: Metadata = {
   title: "MOBIX",

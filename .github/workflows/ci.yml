@@ -26,7 +26,8 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://mobix:mobix@localhost:5432/mobix?schema=public
-      NODE_ENV: test
+      AUTH_SECRET: mobix-ci-secret-only-2026-change-in-production-123456789
+      MOBIX_BOOTSTRAP_PASSWORD: CiMobix2026!Seguro
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -63,10 +64,10 @@ jobs:
           npm run start -- -p 3001 > /tmp/mobix-next.log 2>&1 &
           echo $! > /tmp/mobix-next.pid
 
-      - name: Esperar servidor
+      - name: Esperar servidor y base de datos
         run: |
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:3001/ >/dev/null; then
+            if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -74,7 +75,21 @@ jobs:
           cat /tmp/mobix-next.log || true
           exit 1
 
-      - name: Smoke test de rutas críticas
+      - name: Crear sesión de smoke test
+        run: |
+          SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
+          echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Verificar protección de acceso
+        run: |
+          curl -fsS http://127.0.0.1:3001/login >/dev/null
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/productos)
+          if [ "$STATUS" != "307" ] && [ "$STATUS" != "308" ]; then
+            echo "Se esperaba redirección a login y se recibió HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Smoke test de rutas críticas autenticadas
         run: |
           set -e
           routes=(
@@ -95,10 +110,12 @@ jobs:
             "/administracion/usuarios"
             "/administracion/roles"
             "/configuracion"
+            "/cuenta"
+            "/buscar?q=iPhone"
           )
           for route in "${routes[@]}"; do
             echo "Probando $route"
-            curl -fsS "http://127.0.0.1:3001${route}" >/dev/null || {
+            curl -fsS -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" "http://127.0.0.1:3001${route}" >/dev/null || {
               echo "Fallo en $route"
               cat /tmp/mobix-next.log || true
               exit 1
