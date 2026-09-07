@@ -115,6 +115,13 @@ enum CashMovementType {
   ADJUSTMENT_OUT
 }
 
+enum AccountReceivableStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -140,24 +147,26 @@ model Company {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  branches           Branch[]
-  warehouses         Warehouse[]
-  memberships        CompanyUser[]
-  roles              Role[]
-  categories         Category[]
-  brands             Brand[]
-  products           Product[]
-  productUnits       ProductUnit[]
-  unitIdentifiers    ProductUnitIdentifier[]
-  suppliers          Supplier[]
-  purchases          Purchase[]
-  customers          Customer[]
-  sales              Sale[]
-  inventoryMovements InventoryMovement[]
-  inventoryBalances  InventoryBalance[]
-  cashSessions       CashSession[]
-  cashMovements      CashMovement[]
-  auditLogs          AuditLog[]
+  branches            Branch[]
+  warehouses          Warehouse[]
+  memberships         CompanyUser[]
+  roles               Role[]
+  categories          Category[]
+  brands              Brand[]
+  products            Product[]
+  productUnits        ProductUnit[]
+  unitIdentifiers     ProductUnitIdentifier[]
+  suppliers           Supplier[]
+  purchases           Purchase[]
+  customers           Customer[]
+  sales               Sale[]
+  inventoryMovements  InventoryMovement[]
+  inventoryBalances   InventoryBalance[]
+  cashSessions        CashSession[]
+  cashMovements       CashMovement[]
+  accountsReceivable  AccountReceivable[]
+  receivablePayments  ReceivablePayment[]
+  auditLogs           AuditLog[]
 
   @@unique([ruc])
   @@index([status])
@@ -229,6 +238,7 @@ model User {
   inventoryMovements InventoryMovement[] @relation("MovementCreatedBy")
   cashSessions       CashSession[]
   cashMovements      CashMovement[]      @relation("CashMovementCreatedBy")
+  receivablePayments ReceivablePayment[] @relation("ReceivablePaymentCreatedBy")
   auditLogs          AuditLog[]
 
   @@index([status])
@@ -442,9 +452,7 @@ model ProductUnitIdentifier {
   company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
   productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Cascade)
 
-  // Impide que un IMEI/serie se repita en cualquier unidad dentro de la empresa.
   @@unique([companyId, value])
-  // Una unidad solo puede tener un identificador de cada tipo.
   @@unique([productUnitId, type])
   @@index([companyId, type, value])
   @@map("product_unit_identifiers")
@@ -538,12 +546,17 @@ model Customer {
   whatsapp       String?
   email          String?
   address        String?
+  creditEnabled  Boolean      @default(false)
+  creditLimit    Decimal      @default(0) @db.Decimal(14, 2)
+  creditDays     Int          @default(30)
+  creditNotes    String?
   status         EntityStatus @default(ACTIVE)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  sales   Sale[]
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sales       Sale[]
+  receivables AccountReceivable[]
 
   @@unique([companyId, documentNumber])
   @@index([companyId, status])
@@ -573,14 +586,15 @@ model Sale {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  seller    User      @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
-  createdBy User      @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  items     SaleItem[]
-  payments  SalePayment[]
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch     Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse  Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  customer   Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  seller     User               @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  createdBy  User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items      SaleItem[]
+  payments   SalePayment[]
+  receivable AccountReceivable?
 
   @@unique([companyId, saleNumber])
   @@index([companyId, branchId, createdAt])
@@ -621,7 +635,6 @@ model SaleItemUnit {
   saleItem    SaleItem    @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
   productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
 
-  // Conserva el historial: un equipo devuelto puede venderse nuevamente.
   @@unique([saleItemId, productUnitId])
   @@map("sale_item_units")
 }
@@ -691,26 +704,27 @@ model InventoryMovement {
 }
 
 model CashSession {
-  id              String            @id @default(cuid())
-  companyId       String
-  branchId        String
-  userId          String
-  status          CashSessionStatus @default(OPEN)
-  openingAmount   Decimal           @default(0) @db.Decimal(14, 2)
-  expectedAmount  Decimal?          @db.Decimal(14, 2)
-  closingAmount   Decimal?          @db.Decimal(14, 2)
-  difference      Decimal?          @db.Decimal(14, 2)
-  openingNotes    String?
-  closingNotes    String?
-  openedAt        DateTime          @default(now())
-  closedAt        DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  companyId      String
+  branchId       String
+  userId         String
+  status         CashSessionStatus @default(OPEN)
+  openingAmount  Decimal           @default(0) @db.Decimal(14, 2)
+  expectedAmount Decimal?          @db.Decimal(14, 2)
+  closingAmount  Decimal?          @db.Decimal(14, 2)
+  difference     Decimal?          @db.Decimal(14, 2)
+  openingNotes   String?
+  closingNotes   String?
+  openedAt       DateTime          @default(now())
+  closedAt       DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  company   Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  branch    Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
-  movements CashMovement[]
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch             Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  movements          CashMovement[]
+  receivablePayments ReceivablePayment[]
 
   @@index([companyId, branchId, status, openedAt])
   @@index([companyId, userId, status, openedAt])
@@ -735,6 +749,52 @@ model CashMovement {
   @@index([companyId, cashSessionId, createdAt])
   @@index([companyId, type, createdAt])
   @@map("cash_movements")
+}
+
+model AccountReceivable {
+  id             String                  @id @default(cuid())
+  companyId      String
+  customerId     String
+  saleId         String                  @unique
+  status         AccountReceivableStatus @default(OPEN)
+  originalAmount Decimal                 @db.Decimal(14, 2)
+  paidAmount     Decimal                 @default(0) @db.Decimal(14, 2)
+  balance        Decimal                 @db.Decimal(14, 2)
+  dueDate        DateTime
+  notes          String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  company  Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sale     Sale                @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  payments ReceivablePayment[]
+
+  @@index([companyId, customerId, status, dueDate])
+  @@index([companyId, status, dueDate])
+  @@map("accounts_receivable")
+}
+
+model ReceivablePayment {
+  id             String        @id @default(cuid())
+  companyId      String
+  receivableId   String
+  cashSessionId  String?
+  amount         Decimal       @db.Decimal(14, 2)
+  paymentMethod  PaymentMethod
+  reference      String?
+  notes          String?
+  createdById    String
+  paidAt         DateTime      @default(now())
+
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  receivable    AccountReceivable  @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  cashSession   CashSession?       @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  createdBy     User               @relation("ReceivablePaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, receivableId, paidAt])
+  @@index([companyId, cashSessionId, paidAt])
+  @@map("receivable_payments")
 }
 
 model AuditLog {
