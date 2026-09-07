@@ -6,10 +6,11 @@ import { loginAction, type AuthState } from "./auth-actions";
 
 const initialState: AuthState = {};
 
-export function LoginForm() {
+export function LoginForm({ nextPath = "/" }: { nextPath?: string }) {
   const [state, action, pending] = useActionState(loginAction, initialState);
   return (
     <form className="mobix-login-form" action={action}>
+      <input type="hidden" name="next" value={nextPath} />
       <label>
         <span>Correo electrónico</span>
         <div className="auth-input"><Mail size={17}/><input name="email" type="email" autoComplete="username" placeholder="usuario@empresa.com" required /></div>
