@@ -269,7 +269,13 @@ export async function closeCashSessionAction(input: {
       },
     });
 
-    return { expectedAmount, actualAmount, difference };
+    return {
+      sessionId: session.id,
+      expectedAmount,
+      actualAmount,
+      difference,
+      closedAt: closedAt.toISOString(),
+    };
   });
 
   revalidatePath("/caja");
