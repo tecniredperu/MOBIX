@@ -4,6 +4,7 @@ import "./mobix-v03.css";
 import "./mobix-sales.css";
 import "./mobix-pos-vuelto.css";
 import "./mobix-dashboard.css";
+import "./mobix-pro.css";
 
 export const metadata: Metadata = {
   title: "MOBIX",
