@@ -11,6 +11,7 @@ import {
   Smartphone,
   TriangleAlert,
   Users,
+  Wrench,
 } from "lucide-react";
 
 const quickActions = [
@@ -47,6 +48,13 @@ const quickActions = [
     description: "Historial, deuda, límites y cobranzas",
     href: "/clientes",
     icon: Users,
+    priority: "normal",
+  },
+  {
+    label: "Servicio técnico",
+    description: "Garantías, diagnósticos y reparaciones",
+    href: "/servicio-tecnico",
+    icon: Wrench,
     priority: "normal",
   },
   {
