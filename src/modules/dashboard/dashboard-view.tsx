@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   Boxes,
   CircleDollarSign,
-  ClipboardList,
   History,
   PackagePlus,
   ReceiptText,
@@ -11,6 +10,7 @@ import {
   ShoppingCart,
   Smartphone,
   TriangleAlert,
+  Users,
 } from "lucide-react";
 
 const quickActions = [
@@ -43,6 +43,13 @@ const quickActions = [
     priority: "normal",
   },
   {
+    label: "Clientes y crédito",
+    description: "Historial, deuda, límites y cobranzas",
+    href: "/clientes",
+    icon: Users,
+    priority: "normal",
+  },
+  {
     label: "Ventas",
     description: "Consultar ventas y comprobantes",
     href: "/ventas",
@@ -61,13 +68,6 @@ const quickActions = [
     description: "Revisar entradas y salidas de inventario",
     href: "/kardex",
     icon: History,
-    priority: "normal",
-  },
-  {
-    label: "Compras",
-    description: "Consultar ingresos de mercadería",
-    href: "/compras",
-    icon: ClipboardList,
     priority: "normal",
   },
 ];
