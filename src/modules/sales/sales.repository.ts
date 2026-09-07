@@ -10,6 +10,13 @@ function identifierMap(identifiers: Array<{ type: string; value: string }>) {
   return new Map(identifiers.map((item) => [item.type, item.value]));
 }
 
+function customerDisplayName(customer: { businessName?: string | null; firstName?: string | null; lastName?: string | null } | null | undefined, fallback: string) {
+  if (!customer) return fallback;
+  if (customer.businessName?.trim()) return customer.businessName;
+  const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim();
+  return name || fallback;
+}
+
 function getLimaDayBounds() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Lima",
@@ -28,7 +35,7 @@ export async function getPosContext() {
   const [warehouses, products, customers] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
-      orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
+      orderBy: { name: "asc" },
       select: { id: true, name: true, branch: { select: { name: true } } },
     }),
     prisma.product.findMany({
@@ -97,10 +104,7 @@ export async function getPosContext() {
     id: customer.id,
     documentType: customer.documentType,
     documentNumber: customer.documentNumber,
-    name:
-      customer.businessName ??
-      [customer.firstName, customer.lastName].filter(Boolean).join(" ") ??
-      "Cliente",
+    name: customerDisplayName(customer, "Cliente"),
     phone: customer.whatsapp ?? customer.phone,
   }));
 
@@ -160,10 +164,7 @@ export async function getSales(filters: { q?: string; status?: string; documentT
     documentType: sale.documentType,
     documentSeries: sale.documentSeries,
     documentNumber: sale.documentNumber,
-    customer:
-      sale.customer?.businessName ??
-      [sale.customer?.firstName, sale.customer?.lastName].filter(Boolean).join(" ") ||
-      "Consumidor final",
+    customer: customerDisplayName(sale.customer, "Consumidor final"),
     total: Number(sale.total),
     status: sale.status,
     itemCount: sale.items.reduce((sum, item) => sum + item.quantity, 0),
@@ -234,10 +235,7 @@ export async function getSaleDetail(id: string) {
           id: sale.customer.id,
           documentType: sale.customer.documentType,
           documentNumber: sale.customer.documentNumber,
-          name:
-            sale.customer.businessName ??
-            [sale.customer.firstName, sale.customer.lastName].filter(Boolean).join(" ") ||
-            "Cliente",
+          name: customerDisplayName(sale.customer, "Cliente"),
           phone: sale.customer.whatsapp ?? sale.customer.phone,
           email: sale.customer.email,
           address: sale.customer.address,
