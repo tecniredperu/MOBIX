@@ -8,6 +8,7 @@ import "./mobix-pro.css";
 import "./mobix-cash.css";
 import "./mobix-pos-cash.css";
 import "./mobix-dashboard-data.css";
+import "./mobix-customers.css";
 
 export const metadata: Metadata = {
   title: "MOBIX",
