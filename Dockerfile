@@ -8,10 +8,13 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run db:generate && npm run build
+RUN npm run db:generate && npm run build \
+    && chown -R node:node /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+
+USER node
 
 EXPOSE 3000
 
