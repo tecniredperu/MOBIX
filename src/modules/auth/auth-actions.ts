@@ -10,7 +10,9 @@ export type AuthState = { error?: string; success?: string };
 function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
-
+function safeNext(value: string) {
+  return value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/";
+}
 function bootstrapPassword() {
   return process.env.MOBIX_BOOTSTRAP_PASSWORD?.trim() || developmentBootstrapPassword();
 }
@@ -18,6 +20,7 @@ function bootstrapPassword() {
 export async function loginAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const email = text(formData.get("email")).toLowerCase();
   const password = text(formData.get("password"));
+  const nextPath = safeNext(text(formData.get("next")) || "/");
 
   if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6) {
     return { error: "Correo o contraseña incorrectos." };
@@ -69,7 +72,7 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
     },
   }).catch(() => undefined);
 
-  redirect("/");
+  redirect(nextPath);
 }
 
 export async function logoutAction() {
@@ -97,6 +100,7 @@ export async function changePasswordAction(_previous: AuthState, formData: FormD
   const newPassword = text(formData.get("newPassword"));
   const confirmPassword = text(formData.get("confirmPassword"));
   if (newPassword.length < 10) return { error: "La nueva contraseña debe tener al menos 10 caracteres." };
+  if (!/[A-ZÁÉÍÓÚÑ]/.test(newPassword) || !/[a-záéíóúñ]/.test(newPassword) || !/[0-9]/.test(newPassword)) return { error: "La nueva contraseña debe incluir mayúsculas, minúsculas y números." };
   if (newPassword !== confirmPassword) return { error: "La confirmación de contraseña no coincide." };
   if (currentPassword === newPassword) return { error: "La nueva contraseña debe ser diferente a la actual." };
 
