@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowLeft, Save, UserRound } from "lucide-react";
 import { createCustomerAction } from "./customer-actions";
 
 export function CustomerForm() {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [documentType, setDocumentType] = useState<"DNI" | "RUC" | "CE" | "OTHER">("DNI");
@@ -15,7 +17,7 @@ export function CustomerForm() {
     setError("");
     startTransition(async () => {
       try {
-        await createCustomerAction({
+        const result = await createCustomerAction({
           documentType,
           documentNumber: String(formData.get("documentNumber") ?? ""),
           name: String(formData.get("name") ?? ""),
@@ -27,6 +29,8 @@ export function CustomerForm() {
           creditDays: Number(formData.get("creditDays") ?? 30),
           creditNotes: String(formData.get("creditNotes") ?? ""),
         });
+        router.push(`/clientes/${result.id}`);
+        router.refresh();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "No se pudo registrar el cliente.");
       }
