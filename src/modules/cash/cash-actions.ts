@@ -14,6 +14,7 @@ const MOVEMENT_TYPES = new Set<CashMovementKind>([
 ]);
 
 type CashCollectionRow = { amount: unknown };
+type CashSessionLockRow = { id:string; branchId:string; userId:string; openingAmount:unknown; openedAt:Date };
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -140,10 +141,16 @@ export async function closeCashSessionAction(input: {
   if (!validMoney(actualAmount)) throw new Error("El efectivo contado no es válido.");
 
   const result = await prisma.$transaction(async (tx) => {
-    const session = await tx.cashSession.findFirst({
-      where: { id: input.sessionId, companyId: company.id, userId: membership.userId, status: "OPEN" },
-      select: { id: true, branchId: true, userId: true, openingAmount: true, openedAt: true },
-    });
+    const locked = await tx.$queryRaw<CashSessionLockRow[]>`
+      SELECT "id", "branchId", "userId", "openingAmount", "openedAt"
+      FROM "cash_sessions"
+      WHERE "id" = ${input.sessionId}
+        AND "companyId" = ${company.id}
+        AND "userId" = ${membership.userId}
+        AND "status" = 'OPEN'::"CashSessionStatus"
+      FOR UPDATE
+    `;
+    const session = locked[0];
     if (!session) throw new Error("La caja ya fue cerrada o pertenece a otro usuario.");
 
     const [cashPayments, cashCollections, movements] = await Promise.all([
