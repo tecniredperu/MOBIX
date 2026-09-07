@@ -38,6 +38,15 @@ const MOVEMENT_LABELS: Record<CashMovementKind, string> = {
   ADJUSTMENT_OUT: "Ajuste de salida",
 };
 
+type ReceivableCollectionRow = {
+  id: string;
+  amount: unknown;
+  paymentMethod: string;
+  paidAt: Date;
+  saleNumber: string;
+  customerName: string;
+};
+
 function emptyPaymentTotals(): CashPaymentTotals {
   return {
     CASH: 0,
@@ -89,7 +98,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     ...(session.closedAt ? { lte: session.closedAt } : {}),
   };
 
-  const [payments, saleAggregate] = await Promise.all([
+  const [payments, saleAggregate, collections] = await Promise.all([
     prisma.salePayment.findMany({
       where: {
         sale: {
@@ -116,6 +125,21 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
       _sum: { total: true },
       _count: { id: true },
     }),
+    prisma.$queryRaw<ReceivableCollectionRow[]>`
+      SELECT
+        rp."id",
+        rp."amount",
+        rp."paymentMethod"::text AS "paymentMethod",
+        rp."paidAt",
+        s."saleNumber",
+        COALESCE(c."businessName", NULLIF(TRIM(CONCAT(COALESCE(c."firstName", ''), ' ', COALESCE(c."lastName", ''))), ''), 'Cliente') AS "customerName"
+      FROM "receivable_payments" rp
+      INNER JOIN "accounts_receivable" ar ON ar."id" = rp."receivableId"
+      INNER JOIN "sales" s ON s."id" = ar."saleId"
+      INNER JOIN "customers" c ON c."id" = ar."customerId"
+      WHERE rp."companyId" = ${company.id} AND rp."cashSessionId" = ${session.id}
+      ORDER BY rp."paidAt" DESC
+    `,
   ]);
 
   const paymentTotals = emptyPaymentTotals();
@@ -123,6 +147,12 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     const method = payment.paymentMethod as CashPaymentMethod;
     if (PAYMENT_METHODS.includes(method)) {
       paymentTotals[method] = roundMoney(paymentTotals[method] + Number(payment.amount));
+    }
+  }
+  for (const collection of collections) {
+    const method = collection.paymentMethod as CashPaymentMethod;
+    if (PAYMENT_METHODS.includes(method) && method !== "CREDIT") {
+      paymentTotals[method] = roundMoney(paymentTotals[method] + Number(collection.amount));
     }
   }
 
@@ -154,6 +184,17 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     createdAt: payment.createdAt.toISOString(),
   }));
 
+  const collectionActivity: CashActivityItem[] = collections.map((collection) => ({
+    id: `collection-${collection.id}`,
+    source: "SALE",
+    direction: "IN",
+    label: `Cobranza ${collection.saleNumber}`,
+    detail: `${collection.customerName} · ${PAYMENT_LABELS[collection.paymentMethod as CashPaymentMethod] ?? "Cobro"}`,
+    amount: Number(collection.amount),
+    paymentMethod: collection.paymentMethod as CashPaymentMethod,
+    createdAt: collection.paidAt.toISOString(),
+  }));
+
   const manualActivity: CashActivityItem[] = session.movements.map((movement) => {
     const incoming = movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN";
     return {
@@ -168,9 +209,9 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     };
   });
 
-  const activity = [...saleActivity, ...manualActivity]
+  const activity = [...saleActivity, ...collectionActivity, ...manualActivity]
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-    .slice(0, 30);
+    .slice(0, 40);
 
   return {
     id: session.id,
