@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+Dockerfile*
+ACTUALIZAR-MOBIX.bat
