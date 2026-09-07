@@ -1,139 +1,47 @@
-# MOBIX Core v0.2 — Productos operativo
+# MOBIX Core v0.3
 
-MOBIX es un sistema integral diseñado específicamente para tiendas de celulares, accesorios, equipos serializados y servicios.
+MOBIX es un sistema integral diseñado específicamente para tiendas de celulares, accesorios, equipos serializados y servicios en Perú.
 
-## Avance incluido en esta versión
+## Módulos operativos
 
-### Base técnica
-- Next.js + TypeScript.
-- PostgreSQL 16 mediante Docker Compose.
-- Prisma ORM 7.10 con `@prisma/adapter-pg` y `pg`.
-- Arquitectura multiempresa desde la base de datos.
-- Auditoría para operaciones críticas.
+- Productos y variantes.
+- Equipos / IMEI.
+- Compras.
+- Kardex.
+- Inventario por unidades serializadas y saldos por almacén.
 
-### Catálogo y Productos
-- Listado de productos conectado a PostgreSQL.
-- Búsqueda real por nombre, modelo, SKU y código de barras.
-- Filtros por tipo, marca, categoría y estado.
-- Resumen real de productos activos, equipos disponibles, stock bajo y valor de inventario.
-- Formulario real **Nuevo producto**.
-- Tipos: Celular, Equipo serializado, Accesorio y Servicio.
-- Reglas automáticas según tipo:
-  - Celular: stock + serie + IMEI.
-  - Equipo serializado: stock + serie.
-  - Accesorio: stock por cantidades.
-  - Servicio: sin inventario.
-- Categoría, marca, modelo, SKU, código de barras, garantía y descripción.
-- Variantes dinámicas con color, RAM, almacenamiento, SKU y código de barras.
-- Costo, precio de venta, precio mínimo, utilidad y margen estimado.
-- Validación del lado servidor antes de guardar.
-- Control de duplicidad de SKU/códigos mediante restricciones de PostgreSQL/Prisma.
-- Registro automático de auditoría al crear un producto.
+## Lógica para Perú
 
-### Inventario
-MOBIX diferencia dos lógicas:
+- Moneda PEN (S/).
+- IGV 18% para operaciones gravadas.
+- Compras gravadas, exoneradas e inafectas.
+- Factura (01), Boleta de venta (03), guía/ingreso y otros documentos.
+- Proveedores con RUC, DNI, CE u otro documento.
 
-1. **Celulares/equipos serializados**: el stock se calcula contando unidades físicas con estado `AVAILABLE`.
-2. **Accesorios**: el stock se obtiene de `inventory_balances`, por variante y almacén.
+## Reglas de inventario
 
-Los IMEI y series se almacenan en `product_unit_identifiers`, con una restricción única por empresa que impide reutilizar un IMEI incluso como otro tipo de identificador.
+1. Celulares y equipos serializados: cada unidad física se registra individualmente con IMEI/serie y estado.
+2. Accesorios: el stock se administra por saldo de almacén y costo promedio.
+3. Los IMEI/series son únicos por empresa.
+4. Cada compra confirmada actualiza inventario, Kardex y auditoría en una sola transacción.
 
-## Requisitos
+## Actualización en Windows
 
-- Node.js 22.12 o superior.
-- Docker Desktop o PostgreSQL 16+.
-- npm.
+Ejecuta `ACTUALIZAR-MOBIX.bat`. El script descarga la última versión desde GitHub, levanta PostgreSQL, instala dependencias, genera Prisma, aplica migraciones y abre MOBIX en el puerto 3001.
 
-## Instalación
+## Rutas principales
 
-### 1. Variables de entorno
+- `/productos`
+- `/productos/nuevo`
+- `/equipos`
+- `/compras`
+- `/compras/nueva`
+- `/kardex`
 
-Linux/macOS:
+## Entorno local
 
-```bash
-cp .env.example .env
-```
+- Aplicación: `http://localhost:3001`
+- PostgreSQL MOBIX: puerto `5433`
+- Base de datos: `mobix`
 
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-### 2. Levantar PostgreSQL
-
-```bash
-docker compose up -d
-```
-
-### 3. Instalar dependencias
-
-```bash
-npm install
-```
-
-### 4. Validar Prisma
-
-```bash
-npm run db:validate
-```
-
-### 5. Crear la base de datos
-
-```bash
-npm run db:migrate -- --name init
-```
-
-### 6. Cargar datos demostrativos
-
-```bash
-npm run db:seed
-```
-
-El seed crea:
-- Empresa MOBIX Store.
-- Sucursal principal.
-- Almacén principal.
-- Usuario/rol administrativo de demostración (el login todavía no está habilitado).
-- Categorías y marcas.
-- Samsung Galaxy A56, iPhone 16 y Redmi Note 15 con unidades físicas e IMEI únicos.
-- Cargador Samsung y mica hidrogel con stock por cantidades.
-
-### 7. Ejecutar MOBIX
-
-```bash
-npm run dev
-```
-
-Abrir:
-
-```text
-http://localhost:3000/productos
-```
-
-Para registrar un producto:
-
-```text
-http://localhost:3000/productos/nuevo
-```
-
-## Comandos útiles
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-npm run db:validate
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-npm run db:studio
-```
-
-## Importante
-
-La selección de empresa aún usa temporalmente la primera empresa activa de la base de datos. En la etapa de autenticación se reemplazará por la empresa activa de la sesión para asegurar aislamiento SaaS completo.
-
-## Siguiente etapa recomendada
-
-Construir **Equipos / IMEI** y el flujo de **Compras**, para que un producto celular creado desde el catálogo pueda recibir unidades físicas reales y generar automáticamente stock y Kardex.
+El archivo `.env` es local y no debe subirse al repositorio.
