@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requirePermission } from "@/lib/business-context";
 import { PrintTicketButton } from "@/modules/sales/sale-detail-actions";
 import { getSaleDetail } from "@/modules/sales/sales.repository";
 
@@ -13,6 +14,7 @@ function limaDate(value: string) {
 }
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission("sales.view");
   const { id } = await params;
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
@@ -52,7 +54,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         <div className="ticket-payments">
           {sale.payments.map((payment) => <div key={payment.id}><span>{payment.method}</span><strong>{money(payment.amount)}</strong></div>)}
         </div>
-        <footer className="ticket-footer"><strong>¡Gracias por tu compra!</strong><span>Documento generado por MOBIX.</span><small>La integración de facturación electrónica SUNAT se habilitará en una etapa posterior.</small></footer>
+        <footer className="ticket-footer"><strong>¡Gracias por tu compra!</strong><span>Documento generado por MOBIX.</span><small>Comprobante interno. La emisión electrónica SUNAT se integrará en una etapa posterior.</small></footer>
       </div>
       <PrintTicketButton />
     </main>
