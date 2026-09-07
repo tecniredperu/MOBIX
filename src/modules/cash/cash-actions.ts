@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
+import { isValidMoney, roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import type { CashMovementKind } from "./cash-types";
 
@@ -14,15 +15,13 @@ const MOVEMENT_TYPES = new Set<CashMovementKind>([
 ]);
 
 type CashCollectionRow = { amount: unknown };
-type CashSessionLockRow = { id:string; branchId:string; userId:string; openingAmount:unknown; openedAt:Date };
-
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function validMoney(value: number) {
-  return Number.isFinite(value) && value >= 0 && value <= 999999999;
-}
+type CashSessionLockRow = {
+  id: string;
+  branchId: string;
+  userId: string;
+  openingAmount: unknown;
+  openedAt: Date;
+};
 
 export async function openCashSessionAction(input: {
   branchId: string;
@@ -33,7 +32,7 @@ export async function openCashSessionAction(input: {
   const openingAmount = roundMoney(Number(input.openingAmount || 0));
 
   if (!input.branchId) throw new Error("Selecciona la sucursal donde abrirás caja.");
-  if (!validMoney(openingAmount)) throw new Error("El monto inicial de caja no es válido.");
+  if (!isValidMoney(openingAmount)) throw new Error("El monto inicial de caja no es válido.");
 
   const branch = await prisma.branch.findFirst({
     where: { id: input.branchId, companyId: company.id, status: "ACTIVE" },
@@ -66,7 +65,12 @@ export async function openCashSessionAction(input: {
           action: "CREATE",
           entity: "CASH_SESSION",
           entityId: created.id,
-          newValues: { branchId: branch.id, branchName: branch.name, openingAmount, status: "OPEN" },
+          newValues: {
+            branchId: branch.id,
+            branchName: branch.name,
+            openingAmount,
+            status: "OPEN",
+          },
         },
       });
       return created;
@@ -93,12 +97,17 @@ export async function addCashMovementAction(input: {
   const concept = input.concept?.trim();
 
   if (!MOVEMENT_TYPES.has(input.type)) throw new Error("Selecciona un tipo de movimiento válido.");
-  if (!validMoney(amount) || amount <= 0) throw new Error("El importe debe ser mayor a cero.");
+  if (!isValidMoney(amount, { allowZero: false })) throw new Error("El importe debe ser mayor a cero.");
   if (!concept || concept.length < 3) throw new Error("Describe el motivo del movimiento de caja.");
 
   const movement = await prisma.$transaction(async (tx) => {
     const session = await tx.cashSession.findFirst({
-      where: { id: input.sessionId, companyId: company.id, userId: membership.userId, status: "OPEN" },
+      where: {
+        id: input.sessionId,
+        companyId: company.id,
+        userId: membership.userId,
+        status: "OPEN",
+      },
       select: { id: true },
     });
     if (!session) throw new Error("La caja ya no está abierta o pertenece a otro usuario.");
@@ -114,6 +123,7 @@ export async function addCashMovementAction(input: {
         createdById: membership.userId,
       },
     });
+
     await tx.auditLog.create({
       data: {
         companyId: company.id,
@@ -138,7 +148,7 @@ export async function closeCashSessionAction(input: {
 }) {
   const { company, membership } = await requirePermission("cash.manage");
   const actualAmount = roundMoney(Number(input.actualAmount));
-  if (!validMoney(actualAmount)) throw new Error("El efectivo contado no es válido.");
+  if (!isValidMoney(actualAmount)) throw new Error("El efectivo contado no es válido.");
 
   const result = await prisma.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<CashSessionLockRow[]>`
@@ -184,13 +194,16 @@ export async function closeCashSessionAction(input: {
     const receivableCash = roundMoney(cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0));
     let manualIn = 0;
     let manualOut = 0;
+
     for (const movement of movements) {
       const amount = Number(movement.amount);
       if (movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN") manualIn += amount;
       else manualOut += amount;
     }
 
-    const expectedAmount = roundMoney(Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut);
+    const expectedAmount = roundMoney(
+      Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut,
+    );
     const difference = roundMoney(actualAmount - expectedAmount);
     const closedAt = new Date();
 
@@ -227,7 +240,13 @@ export async function closeCashSessionAction(input: {
       },
     });
 
-    return { sessionId: session.id, expectedAmount, actualAmount, difference, closedAt: closedAt.toISOString() };
+    return {
+      sessionId: session.id,
+      expectedAmount,
+      actualAmount,
+      difference,
+      closedAt: closedAt.toISOString(),
+    };
   });
 
   revalidatePath("/caja");
