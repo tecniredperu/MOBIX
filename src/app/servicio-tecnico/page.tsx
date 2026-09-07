@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { ServiceListView } from "@/modules/service/service-list-view";
 import { getServiceOrders } from "@/modules/service/service.repository";
 
@@ -10,6 +11,7 @@ function single(value: string | string[] | undefined) {
 }
 
 export default async function ServicePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  await requirePermission("service.manage");
   const params = await searchParams;
   const filters = {
     q: single(params.q),
