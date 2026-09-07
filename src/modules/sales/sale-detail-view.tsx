@@ -38,6 +38,39 @@ function limaDate(value: string) {
 
 export function SaleDetailView({ sale, created }: { sale: any; created: boolean }) {
   const customerName = sale.customer?.name ?? "Consumidor final";
+  const ticket = {
+    saleNumber: sale.saleNumber,
+    documentSeries: sale.documentSeries,
+    documentNumber: sale.documentNumber,
+    createdAt: sale.createdAt,
+    branch: sale.branch,
+    customer: sale.customer
+      ? {
+          name: customerName,
+          documentType: sale.customer.documentType,
+          documentNumber: sale.customer.documentNumber,
+        }
+      : null,
+    items: sale.items.map((item: any) => ({
+      id: item.id,
+      product: item.product,
+      variant: item.variant,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+      identifiers: item.identifiers,
+    })),
+    subtotal: sale.subtotal,
+    tax: sale.tax,
+    discount: sale.discount,
+    total: sale.total,
+    payments: sale.payments.map((payment: any) => ({
+      id: payment.id,
+      method: payment.method,
+      amount: payment.amount,
+    })),
+  };
+
   return (
     <div className="page-stack sale-detail-page">
       <section className="page-heading sale-detail-heading">
@@ -47,7 +80,7 @@ export function SaleDetailView({ sale, created }: { sale: any; created: boolean 
           <h1>{DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
           <p>{limaDate(sale.createdAt)} · {sale.branch} / {sale.warehouse}</p>
         </div>
-        <SaleDetailActions saleId={sale.id} saleNumber={sale.saleNumber} customerName={customerName} customerPhone={sale.customer?.phone} total={sale.total} />
+        <SaleDetailActions saleNumber={sale.saleNumber} customerName={customerName} customerPhone={sale.customer?.phone} total={sale.total} ticket={ticket} />
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
