@@ -9,9 +9,24 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mobix
+          POSTGRES_PASSWORD: mobix
+          POSTGRES_DB: mobix
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mobix -d mobix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      DATABASE_URL: postgresql://mobix:mobix@localhost:5433/mobix?schema=public
+      DATABASE_URL: postgresql://mobix:mobix@localhost:5432/mobix?schema=public
+      NODE_ENV: test
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -31,5 +46,65 @@ jobs:
       - name: Validar Prisma
         run: npm run db:validate
 
+      - name: Aplicar migraciones desde cero
+        run: npx prisma migrate deploy
+
+      - name: Cargar datos de prueba
+        run: npm run db:seed
+
       - name: Revisar TypeScript
         run: npm run typecheck
+
+      - name: Compilar Next.js para producción
+        run: npm run build
+
+      - name: Iniciar MOBIX en modo producción
+        run: |
+          npm run start -- -p 3001 > /tmp/mobix-next.log 2>&1 &
+          echo $! > /tmp/mobix-next.pid
+
+      - name: Esperar servidor
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3001/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/mobix-next.log || true
+          exit 1
+
+      - name: Smoke test de rutas críticas
+        run: |
+          set -e
+          routes=(
+            "/"
+            "/productos"
+            "/equipos"
+            "/kardex"
+            "/compras"
+            "/compras/nueva"
+            "/pos"
+            "/ventas"
+            "/clientes"
+            "/servicio-tecnico"
+            "/caja"
+            "/reportes"
+            "/devoluciones"
+            "/transferencias"
+            "/administracion/usuarios"
+            "/administracion/roles"
+            "/configuracion"
+          )
+          for route in "${routes[@]}"; do
+            echo "Probando $route"
+            curl -fsS "http://127.0.0.1:3001${route}" >/dev/null || {
+              echo "Fallo en $route"
+              cat /tmp/mobix-next.log || true
+              exit 1
+            }
+          done
+
+      - name: Mostrar log si falla
+        if: failure()
+        run: cat /tmp/mobix-next.log || true
