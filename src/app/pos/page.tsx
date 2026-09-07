@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { PosForm } from "@/modules/sales/pos-form";
+import { PosFormV2 } from "@/modules/sales/pos-form-v2";
 import { getPosContext } from "@/modules/sales/sales.repository";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function PosPage() {
 
   return (
     <AppShell>
-      <PosForm warehouses={warehouses} catalog={catalog} customers={customers} />
+      <PosFormV2 warehouses={warehouses} catalog={catalog} customers={customers} />
     </AppShell>
   );
 }
