@@ -39,7 +39,7 @@ const sections = [
   { label: "Compras", items: [{ label: "Compras", href: "/compras", icon: ShoppingBag }] },
   { label: "Clientes", items: [{ label: "Clientes", href: "#", icon: Users }] },
   { label: "Postventa", items: [{ label: "Servicio técnico", href: "#", icon: Wrench }] },
-  { label: "Finanzas", items: [{ label: "Caja", href: "#", icon: CircleDollarSign }] },
+  { label: "Finanzas", items: [{ label: "Caja", href: "/caja", icon: CircleDollarSign }] },
   { label: "Reportes", items: [{ label: "Reportes", href: "#", icon: ChartNoAxesCombined }] },
 ];
 
