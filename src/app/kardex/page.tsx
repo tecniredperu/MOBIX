@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { KardexView } from "@/modules/inventory/kardex-view";
 import { getKardex } from "@/modules/inventory/kardex.repository";
 
@@ -8,6 +9,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 const single = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
 
 export default async function KardexPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  await requirePermission("inventory.view");
   const params = await searchParams;
   const filters = { q: single(params.q), movementType: single(params.movementType), warehouseId: single(params.warehouseId) };
   const { items, warehouses, summary } = await getKardex(filters);
