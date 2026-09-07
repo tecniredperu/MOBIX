@@ -1,0 +1,35 @@
+name: MOBIX CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://mobix:mobix@localhost:5433/mobix?schema=public
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npm run db:generate
+
+      - name: Validar Prisma
+        run: npm run db:validate
+
+      - name: Revisar TypeScript
+        run: npm run typecheck
