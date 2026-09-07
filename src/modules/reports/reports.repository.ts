@@ -14,7 +14,7 @@ function endOfDay(value: string | undefined, fallback: Date) {
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 
 type ReceivableRow = { balance: unknown; dueDate: Date };
-type ReturnSummaryRow = { total: unknown; count: bigint };
+type ReturnSummaryRow = { total: unknown; count: bigint; cost: unknown };
 
 export async function getReports(filters: { from?: string; to?: string }) {
   const { company, membership, permissions } = await requirePermission("reports.view");
@@ -38,8 +38,8 @@ export async function getReports(filters: { from?: string; to?: string }) {
     orderBy: { createdAt: "asc" },
   });
 
-  let salesTotal = 0;
-  let costTotal = 0;
+  let grossSalesTotal = 0;
+  let grossCostTotal = 0;
   let discountTotal = 0;
   const daily = new Map<string, { date: string; sales: number; cost: number | null; profit: number | null; count: number }>();
   const products = new Map<string, { product: string; brand: string; quantity: number; sales: number; cost: number | null; profit: number | null }>();
@@ -49,10 +49,10 @@ export async function getReports(filters: { from?: string; to?: string }) {
 
   for (const sale of sales) {
     const saleTotal = Number(sale.total);
-    salesTotal += saleTotal;
+    grossSalesTotal += saleTotal;
     discountTotal += Number(sale.discount);
     const saleCost = canSeeCosts ? sale.items.reduce((sum, item) => sum + Number(item.unitCost) * item.quantity, 0) : 0;
-    if (canSeeCosts) costTotal += saleCost;
+    if (canSeeCosts) grossCostTotal += saleCost;
     const key = isoDate(sale.createdAt);
     const day = daily.get(key) ?? { date: key, sales: 0, cost: canSeeCosts ? 0 : null, profit: canSeeCosts ? 0 : null, count: 0 };
     day.sales += saleTotal;
@@ -92,7 +92,12 @@ export async function getReports(filters: { from?: string; to?: string }) {
   const baseQueries = [
     prisma.$queryRaw<ReceivableRow[]>`SELECT "balance", "dueDate" FROM "accounts_receivable" WHERE "companyId" = ${company.id} AND "status" IN ('OPEN', 'PARTIAL')`,
     prisma.cashSession.findMany({ where: { companyId: company.id, status: "CLOSED", closedAt: { gte: from, lte: to } }, select: { difference: true } }),
-    prisma.$queryRaw<ReturnSummaryRow[]>`SELECT COALESCE(SUM("refundAmount"),0) AS "total", COUNT(*) AS "count" FROM "return_orders" WHERE "companyId" = ${company.id} AND "status" = 'COMPLETED' AND "createdAt" BETWEEN ${from} AND ${to}`,
+    prisma.$queryRaw<ReturnSummaryRow[]>`
+      SELECT
+        COALESCE((SELECT SUM(ro."refundAmount") FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "total",
+        (SELECT COUNT(*) FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}) AS "count",
+        COALESCE((SELECT SUM(ri."unitCost" * ri."quantity") FROM "return_items" ri INNER JOIN "return_orders" ro ON ro."id"=ri."returnOrderId" WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "cost"
+    `,
   ] as const;
   const [receivables, cashClosures, returnRows] = await Promise.all(baseQueries);
 
@@ -111,25 +116,32 @@ export async function getReports(filters: { from?: string; to?: string }) {
   const receivableTotal = receivables.reduce((sum, item) => sum + Number(item.balance), 0);
   const overdueTotal = receivables.filter((item) => new Date(item.dueDate) < now).reduce((sum, item) => sum + Number(item.balance), 0);
   const cashDifference = cashClosures.reduce((sum, item) => sum + Number(item.difference ?? 0), 0);
-  const grossProfit = canSeeCosts ? salesTotal - costTotal : null;
+  const returnsTotal = Number(returnRows[0]?.total ?? 0);
+  const returnedCost = canSeeCosts ? Number(returnRows[0]?.cost ?? 0) : null;
+  const salesTotal = Math.max(0, grossSalesTotal - returnsTotal);
+  const costTotal = canSeeCosts ? Math.max(0, grossCostTotal - Number(returnedCost ?? 0)) : null;
+  const grossProfit = canSeeCosts ? salesTotal - Number(costTotal ?? 0) : null;
 
   return {
     canSeeCosts,
     range: { from: isoDate(from), to: isoDate(to) },
     summary: {
+      grossSalesTotal,
       salesTotal,
-      costTotal: canSeeCosts ? costTotal : null,
+      grossCostTotal: canSeeCosts ? grossCostTotal : null,
+      returnedCost,
+      costTotal,
       grossProfit,
       margin: canSeeCosts && salesTotal ? (Number(grossProfit) / salesTotal) * 100 : null,
       transactions: sales.length,
-      averageTicket: sales.length ? salesTotal / sales.length : 0,
+      averageTicket: sales.length ? grossSalesTotal / sales.length : 0,
       purchasesTotal,
       inventoryValue,
       receivableTotal,
       overdueTotal,
       discountTotal,
       cashDifference,
-      returnsTotal: Number(returnRows[0]?.total ?? 0),
+      returnsTotal,
       returnsCount: Number(returnRows[0]?.count ?? 0),
     },
     daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
