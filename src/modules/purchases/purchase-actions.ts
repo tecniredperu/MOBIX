@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
+import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { prisma } from "@/lib/prisma";
 import type { CreatePurchaseInput } from "./purchase-types";
 
@@ -151,6 +152,7 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
           });
         }
       } else {
+        await lockInventoryBalance(tx, company.id, input.warehouseId, variant.id);
         const balance = await tx.inventoryBalance.findUnique({ where: { companyId_warehouseId_variantId: { companyId: company.id, warehouseId: input.warehouseId, variantId: variant.id } } });
         const previousQty = Number(balance?.quantity ?? 0);
         const previousCost = Number(balance?.averageCost ?? 0);
