@@ -1,40 +1,332 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
+import { revalidatePaths } from "@/lib/revalidation";
 
 const PERU_IGV_RATE = 18;
+const ENTITY_STATUSES = new Set(["ACTIVE", "INACTIVE"] as const);
+const TAX_CONDITIONS = new Set(["TAXED", "EXEMPT", "UNAFFECTED"] as const);
+const SETTINGS_PATHS = [
+  "/configuracion",
+  "/pos",
+  "/ventas",
+  "/productos",
+  "/compras",
+  "/caja",
+  "/reportes",
+] as const;
 
-function cleanCode(v:string){return v.trim().toUpperCase().replace(/\s+/g,"-")}
-function cleanRuc(v:string){return v.replace(/\D/g,"")}
-function refresh(){["/configuracion","/pos","/ventas","/productos","/compras","/caja","/reportes"].forEach((path)=>revalidatePath(path))}
+type EntityStatusInput = "ACTIVE" | "INACTIVE";
+type TaxConditionInput = "TAXED" | "EXEMPT" | "UNAFFECTED";
 
-export async function updateCompanyAction(input:{businessName:string;tradeName?:string;ruc?:string;email?:string;phone?:string;address?:string;logoUrl?:string;currency:string;timezone:string}){
- const {company,membership}=await requirePermission("settings.manage");const ruc=cleanRuc(input.ruc||"");if(ruc&&ruc.length!==11)throw new Error("El RUC debe tener 11 dígitos.");if(input.businessName.trim().length<3)throw new Error("Ingresa la razón social.");
- await prisma.$transaction(async tx=>{await tx.company.update({where:{id:company.id},data:{businessName:input.businessName.trim(),tradeName:input.tradeName?.trim()||null,ruc:ruc||null,email:input.email?.trim()||null,phone:input.phone?.trim()||null,address:input.address?.trim()||null,logoUrl:input.logoUrl?.trim()||null,currency:input.currency||"PEN",timezone:input.timezone||"America/Lima"}});await tx.auditLog.create({data:{companyId:company.id,userId:membership.userId,action:"UPDATE",entity:"COMPANY",entityId:company.id,newValues:{businessName:input.businessName.trim(),tradeName:input.tradeName?.trim()||null,ruc:ruc||null}}})});refresh();
+type CompanyInput = {
+  businessName: string;
+  tradeName?: string;
+  ruc?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  logoUrl?: string;
+  currency: string;
+  timezone: string;
+};
+
+type CompanySettingsInput = {
+  taxRate: number;
+  defaultTaxCondition: TaxConditionInput;
+  receiptSeries: string;
+  invoiceSeries: string;
+  salesNoteSeries: string;
+  ticketFooter?: string;
+  defaultWarrantyDays: number;
+  requireCashSession: boolean;
+};
+
+type BranchInput = {
+  id?: string;
+  name: string;
+  code: string;
+  address?: string;
+  phone?: string;
+  status: EntityStatusInput;
+};
+
+type WarehouseInput = {
+  id?: string;
+  branchId: string;
+  name: string;
+  code: string;
+  description?: string;
+  isSaleable: boolean;
+  status: EntityStatusInput;
+};
+
+function cleanCode(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "-");
 }
 
-export async function updateCompanySettingsAction(input:{taxRate:number;defaultTaxCondition:"TAXED"|"EXEMPT"|"UNAFFECTED";receiptSeries:string;invoiceSeries:string;salesNoteSeries:string;ticketFooter?:string;defaultWarrantyDays:number;requireCashSession:boolean}){
- const {company,membership}=await requirePermission("settings.manage");
- if(!Number.isFinite(input.taxRate)||Math.abs(Number(input.taxRate)-PERU_IGV_RATE)>0.001)throw new Error("MOBIX Perú utiliza IGV general de 18%. Para operaciones sin IGV usa Exonerado o Inafecto.");
- if(!Number.isInteger(input.defaultWarrantyDays)||input.defaultWarrantyDays<0||input.defaultWarrantyDays>3650)throw new Error("Los días de garantía no son válidos.");
- const receipt=cleanCode(input.receiptSeries),invoice=cleanCode(input.invoiceSeries),note=cleanCode(input.salesNoteSeries);if(!receipt||!invoice||!note)throw new Error("Configura las series de comprobantes.");
- await prisma.$transaction(async tx=>{await tx.$executeRaw`INSERT INTO "company_settings" ("companyId","taxRate","defaultTaxCondition","receiptSeries","invoiceSeries","salesNoteSeries","ticketFooter","defaultWarrantyDays","requireCashSession","createdAt","updatedAt") VALUES (${company.id},${PERU_IGV_RATE},${input.defaultTaxCondition},${receipt},${invoice},${note},${input.ticketFooter?.trim()||null},${input.defaultWarrantyDays},${input.requireCashSession},NOW(),NOW()) ON CONFLICT ("companyId") DO UPDATE SET "taxRate"=EXCLUDED."taxRate","defaultTaxCondition"=EXCLUDED."defaultTaxCondition","receiptSeries"=EXCLUDED."receiptSeries","invoiceSeries"=EXCLUDED."invoiceSeries","salesNoteSeries"=EXCLUDED."salesNoteSeries","ticketFooter"=EXCLUDED."ticketFooter","defaultWarrantyDays"=EXCLUDED."defaultWarrantyDays","requireCashSession"=EXCLUDED."requireCashSession","updatedAt"=NOW()`;await tx.auditLog.create({data:{companyId:company.id,userId:membership.userId,action:"UPDATE",entity:"COMPANY_SETTINGS",entityId:company.id,newValues:{taxRate:PERU_IGV_RATE,defaultTaxCondition:input.defaultTaxCondition,receiptSeries:receipt,invoiceSeries:invoice,salesNoteSeries:note,defaultWarrantyDays:input.defaultWarrantyDays,requireCashSession:input.requireCashSession}}})});refresh();
+function cleanRuc(value: string) {
+  return value.replace(/\D/g, "");
 }
 
-export async function saveBranchAction(input:{id?:string;name:string;code:string;address?:string;phone?:string;status:"ACTIVE"|"INACTIVE"}){
- const {company,membership}=await requirePermission("settings.manage");const code=cleanCode(input.code);if(input.name.trim().length<2||!code)throw new Error("Nombre y código de sucursal son obligatorios.");
- const duplicate=await prisma.branch.findFirst({where:{companyId:company.id,code,id:input.id?{not:input.id}:undefined}});if(duplicate)throw new Error("Ya existe una sucursal con ese código.");
- if(input.id){const current=await prisma.branch.findFirst({where:{id:input.id,companyId:company.id},select:{id:true}});if(!current)throw new Error("La sucursal ya no existe o no pertenece a la empresa.")}
- const branch=input.id?await prisma.branch.update({where:{id:input.id},data:{name:input.name.trim(),code,address:input.address?.trim()||null,phone:input.phone?.trim()||null,status:input.status}}):await prisma.branch.create({data:{companyId:company.id,name:input.name.trim(),code,address:input.address?.trim()||null,phone:input.phone?.trim()||null,status:input.status}});
- await prisma.auditLog.create({data:{companyId:company.id,userId:membership.userId,action:input.id?"UPDATE":"CREATE",entity:"BRANCH",entityId:branch.id,newValues:{name:branch.name,code:branch.code,status:branch.status}}});refresh();return {id:branch.id};
+function nullableText(value?: string) {
+  return value?.trim() || null;
 }
 
-export async function saveWarehouseAction(input:{id?:string;branchId:string;name:string;code:string;description?:string;isSaleable:boolean;status:"ACTIVE"|"INACTIVE"}){
- const {company,membership}=await requirePermission("settings.manage");const code=cleanCode(input.code);const branch=await prisma.branch.findFirst({where:{id:input.branchId,companyId:company.id}});if(!branch)throw new Error("Sucursal inválida.");if(input.name.trim().length<2||!code)throw new Error("Nombre y código de almacén son obligatorios.");
- const duplicate=await prisma.warehouse.findFirst({where:{companyId:company.id,code,id:input.id?{not:input.id}:undefined}});if(duplicate)throw new Error("Ya existe un almacén con ese código.");
- if(input.id){const current=await prisma.warehouse.findFirst({where:{id:input.id,companyId:company.id},select:{id:true}});if(!current)throw new Error("El almacén ya no existe o no pertenece a la empresa.")}
- const warehouse=input.id?await prisma.warehouse.update({where:{id:input.id},data:{branchId:branch.id,name:input.name.trim(),code,description:input.description?.trim()||null,isSaleable:input.isSaleable,status:input.status}}):await prisma.warehouse.create({data:{companyId:company.id,branchId:branch.id,name:input.name.trim(),code,description:input.description?.trim()||null,isSaleable:input.isSaleable,status:input.status}});
- await prisma.auditLog.create({data:{companyId:company.id,userId:membership.userId,action:input.id?"UPDATE":"CREATE",entity:"WAREHOUSE",entityId:warehouse.id,newValues:{name:warehouse.name,code:warehouse.code,branchId:warehouse.branchId,status:warehouse.status,isSaleable:warehouse.isSaleable}}});refresh();return {id:warehouse.id};
+function refreshSettings() {
+  revalidatePaths(SETTINGS_PATHS);
+}
+
+export async function updateCompanyAction(input: CompanyInput) {
+  const { company, membership } = await requirePermission("settings.manage");
+  const businessName = input.businessName.trim();
+  const ruc = cleanRuc(input.ruc || "");
+
+  if (businessName.length < 3) throw new Error("Ingresa la razón social.");
+  if (ruc && ruc.length !== 11) throw new Error("El RUC debe tener 11 dígitos.");
+
+  const companyData = {
+    businessName,
+    tradeName: nullableText(input.tradeName),
+    ruc: ruc || null,
+    email: nullableText(input.email),
+    phone: nullableText(input.phone),
+    address: nullableText(input.address),
+    logoUrl: nullableText(input.logoUrl),
+    currency: input.currency?.trim() || "PEN",
+    timezone: input.timezone?.trim() || "America/Lima",
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.company.update({ where: { id: company.id }, data: companyData });
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "UPDATE",
+        entity: "COMPANY",
+        entityId: company.id,
+        newValues: {
+          businessName: companyData.businessName,
+          tradeName: companyData.tradeName,
+          ruc: companyData.ruc,
+        },
+      },
+    });
+  });
+
+  refreshSettings();
+}
+
+export async function updateCompanySettingsAction(input: CompanySettingsInput) {
+  const { company, membership } = await requirePermission("settings.manage");
+
+  if (!Number.isFinite(input.taxRate) || Math.abs(Number(input.taxRate) - PERU_IGV_RATE) > 0.001) {
+    throw new Error("MOBIX Perú utiliza IGV general de 18%. Para operaciones sin IGV usa Exonerado o Inafecto.");
+  }
+  if (!TAX_CONDITIONS.has(input.defaultTaxCondition)) {
+    throw new Error("La condición tributaria predeterminada no es válida.");
+  }
+  if (!Number.isInteger(input.defaultWarrantyDays) || input.defaultWarrantyDays < 0 || input.defaultWarrantyDays > 3650) {
+    throw new Error("Los días de garantía no son válidos.");
+  }
+
+  const receiptSeries = cleanCode(input.receiptSeries);
+  const invoiceSeries = cleanCode(input.invoiceSeries);
+  const salesNoteSeries = cleanCode(input.salesNoteSeries);
+  if (!receiptSeries || !invoiceSeries || !salesNoteSeries) {
+    throw new Error("Configura las series de comprobantes.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      INSERT INTO "company_settings" (
+        "companyId", "taxRate", "defaultTaxCondition", "receiptSeries", "invoiceSeries",
+        "salesNoteSeries", "ticketFooter", "defaultWarrantyDays", "requireCashSession",
+        "createdAt", "updatedAt"
+      ) VALUES (
+        ${company.id}, ${PERU_IGV_RATE}, ${input.defaultTaxCondition}, ${receiptSeries}, ${invoiceSeries},
+        ${salesNoteSeries}, ${nullableText(input.ticketFooter)}, ${input.defaultWarrantyDays},
+        ${input.requireCashSession}, NOW(), NOW()
+      )
+      ON CONFLICT ("companyId") DO UPDATE SET
+        "taxRate" = EXCLUDED."taxRate",
+        "defaultTaxCondition" = EXCLUDED."defaultTaxCondition",
+        "receiptSeries" = EXCLUDED."receiptSeries",
+        "invoiceSeries" = EXCLUDED."invoiceSeries",
+        "salesNoteSeries" = EXCLUDED."salesNoteSeries",
+        "ticketFooter" = EXCLUDED."ticketFooter",
+        "defaultWarrantyDays" = EXCLUDED."defaultWarrantyDays",
+        "requireCashSession" = EXCLUDED."requireCashSession",
+        "updatedAt" = NOW()
+    `;
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "UPDATE",
+        entity: "COMPANY_SETTINGS",
+        entityId: company.id,
+        newValues: {
+          taxRate: PERU_IGV_RATE,
+          defaultTaxCondition: input.defaultTaxCondition,
+          receiptSeries,
+          invoiceSeries,
+          salesNoteSeries,
+          defaultWarrantyDays: input.defaultWarrantyDays,
+          requireCashSession: input.requireCashSession,
+        },
+      },
+    });
+  });
+
+  refreshSettings();
+}
+
+export async function saveBranchAction(input: BranchInput) {
+  const { company, membership } = await requirePermission("settings.manage");
+  const name = input.name.trim();
+  const code = cleanCode(input.code);
+
+  if (!ENTITY_STATUSES.has(input.status)) throw new Error("El estado de la sucursal no es válido.");
+  if (name.length < 2 || !code) throw new Error("Nombre y código de sucursal son obligatorios.");
+
+  const duplicate = await prisma.branch.findFirst({
+    where: {
+      companyId: company.id,
+      code,
+      id: input.id ? { not: input.id } : undefined,
+    },
+    select: { id: true },
+  });
+  if (duplicate) throw new Error("Ya existe una sucursal con ese código.");
+
+  if (input.id) {
+    const current = await prisma.branch.findFirst({
+      where: { id: input.id, companyId: company.id },
+      select: { id: true },
+    });
+    if (!current) throw new Error("La sucursal ya no existe o no pertenece a la empresa.");
+  }
+
+  const branch = await prisma.$transaction(async (tx) => {
+    const saved = input.id
+      ? await tx.branch.update({
+          where: { id: input.id },
+          data: {
+            name,
+            code,
+            address: nullableText(input.address),
+            phone: nullableText(input.phone),
+            status: input.status,
+          },
+        })
+      : await tx.branch.create({
+          data: {
+            companyId: company.id,
+            name,
+            code,
+            address: nullableText(input.address),
+            phone: nullableText(input.phone),
+            status: input.status,
+          },
+        });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: input.id ? "UPDATE" : "CREATE",
+        entity: "BRANCH",
+        entityId: saved.id,
+        newValues: { name: saved.name, code: saved.code, status: saved.status },
+      },
+    });
+    return saved;
+  });
+
+  refreshSettings();
+  return { id: branch.id };
+}
+
+export async function saveWarehouseAction(input: WarehouseInput) {
+  const { company, membership } = await requirePermission("settings.manage");
+  const name = input.name.trim();
+  const code = cleanCode(input.code);
+
+  if (!ENTITY_STATUSES.has(input.status)) throw new Error("El estado del almacén no es válido.");
+  if (name.length < 2 || !code) throw new Error("Nombre y código de almacén son obligatorios.");
+
+  const branch = await prisma.branch.findFirst({
+    where: { id: input.branchId, companyId: company.id },
+    select: { id: true },
+  });
+  if (!branch) throw new Error("Sucursal inválida.");
+
+  const duplicate = await prisma.warehouse.findFirst({
+    where: {
+      companyId: company.id,
+      code,
+      id: input.id ? { not: input.id } : undefined,
+    },
+    select: { id: true },
+  });
+  if (duplicate) throw new Error("Ya existe un almacén con ese código.");
+
+  if (input.id) {
+    const current = await prisma.warehouse.findFirst({
+      where: { id: input.id, companyId: company.id },
+      select: { id: true },
+    });
+    if (!current) throw new Error("El almacén ya no existe o no pertenece a la empresa.");
+  }
+
+  const warehouse = await prisma.$transaction(async (tx) => {
+    const saved = input.id
+      ? await tx.warehouse.update({
+          where: { id: input.id },
+          data: {
+            branchId: branch.id,
+            name,
+            code,
+            description: nullableText(input.description),
+            isSaleable: input.isSaleable,
+            status: input.status,
+          },
+        })
+      : await tx.warehouse.create({
+          data: {
+            companyId: company.id,
+            branchId: branch.id,
+            name,
+            code,
+            description: nullableText(input.description),
+            isSaleable: input.isSaleable,
+            status: input.status,
+          },
+        });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: input.id ? "UPDATE" : "CREATE",
+        entity: "WAREHOUSE",
+        entityId: saved.id,
+        newValues: {
+          name: saved.name,
+          code: saved.code,
+          branchId: saved.branchId,
+          status: saved.status,
+          isSaleable: saved.isSaleable,
+        },
+      },
+    });
+    return saved;
+  });
+
+  refreshSettings();
+  return { id: warehouse.id };
 }
