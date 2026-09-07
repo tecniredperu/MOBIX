@@ -23,6 +23,7 @@ import {
   closeCashSessionAction,
   openCashSessionAction,
 } from "./cash-actions";
+import { CashCloseReport, type CashCloseReportData } from "./cash-close-report";
 import type {
   CashBranchOption,
   CashMovementKind,
@@ -86,6 +87,7 @@ export function CashView({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [closedReport, setClosedReport] = useState<CashCloseReportData | null>(null);
 
   const [branchId, setBranchId] = useState(
     currentUser.defaultBranchId ?? branches[0]?.id ?? "",
@@ -151,12 +153,35 @@ export function CashView({
 
   function closeCash() {
     if (!openSession) return;
+    const sessionSnapshot = openSession;
+    const notesSnapshot = closingNotes;
+
     runAction(async () => {
       const result = await closeCashSessionAction({
-        sessionId: openSession.id,
+        sessionId: sessionSnapshot.id,
         actualAmount: Number(actualCash),
-        notes: closingNotes,
+        notes: notesSnapshot,
       });
+
+      setClosedReport({
+        sessionId: result.sessionId,
+        companyName,
+        branchName: sessionSnapshot.branchName,
+        userName: sessionSnapshot.userName,
+        openedAt: sessionSnapshot.openedAt,
+        closedAt: result.closedAt,
+        openingAmount: sessionSnapshot.openingAmount,
+        salesCount: sessionSnapshot.salesCount,
+        salesTotal: sessionSnapshot.salesTotal,
+        paymentTotals: sessionSnapshot.paymentTotals,
+        manualIncome: sessionSnapshot.manualIncome,
+        manualOut: sessionSnapshot.manualOut,
+        expectedAmount: result.expectedAmount,
+        actualAmount: result.actualAmount,
+        difference: result.difference,
+        closingNotes: notesSnapshot,
+      });
+
       setSuccess(
         Math.abs(result.difference) <= 0.01
           ? "Caja cerrada y cuadrada correctamente."
@@ -169,6 +194,8 @@ export function CashView({
 
   return (
     <div className="cash-page page-stack">
+      {closedReport && <CashCloseReport report={closedReport} onClose={() => setClosedReport(null)} />}
+
       <section className="page-heading cash-heading">
         <div>
           <span className="eyebrow">FINANZAS</span>
