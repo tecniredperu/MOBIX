@@ -1,0 +1,67 @@
+import { ArrowUpRight, Boxes, CircleDollarSign, Smartphone, TriangleAlert } from "lucide-react";
+
+const stats = [
+  { label: "Ventas de hoy", value: "S/ 0.00", hint: "Sin operaciones todavía", icon: CircleDollarSign },
+  { label: "Equipos disponibles", value: "0", hint: "Celulares con IMEI disponible", icon: Smartphone },
+  { label: "Productos", value: "0", hint: "Catálogo activo", icon: Boxes },
+  { label: "Alertas de stock", value: "0", hint: "Productos bajo mínimo", icon: TriangleAlert },
+];
+
+export function DashboardView() {
+  return (
+    <div className="page-stack">
+      <section className="page-heading">
+        <div>
+          <span className="eyebrow">MOBIX CORE · v0.1</span>
+          <h1>Buenos días</h1>
+          <p>Este panel comenzará a llenarse cuando registremos productos, compras y ventas reales.</p>
+        </div>
+        <button className="primary-button">Nueva venta <ArrowUpRight size={17} /></button>
+      </section>
+
+      <section className="stat-grid">
+        {stats.map(({ label, value, hint, icon: Icon }) => (
+          <article className="stat-card" key={label}>
+            <div className="stat-icon"><Icon size={20} /></div>
+            <p>{label}</p>
+            <strong>{value}</strong>
+            <span>{hint}</span>
+          </article>
+        ))}
+      </section>
+
+      <section className="dashboard-grid">
+        <article className="panel panel-large">
+          <div className="panel-heading">
+            <div><h2>Ventas</h2><p>Últimos 7 días</p></div>
+            <button className="ghost-button">Ver reporte</button>
+          </div>
+          <div className="empty-chart">
+            <div className="chart-bars" aria-hidden="true">
+              {[32, 48, 38, 65, 52, 76, 58].map((h, i) => <span key={i} style={{ height: `${h}%` }} />)}
+            </div>
+            <p>Los datos aparecerán cuando registres tu primera venta.</p>
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="panel-heading"><div><h2>Primeros pasos</h2><p>Configura el núcleo de tu tienda</p></div></div>
+          <div className="checklist">
+            {[
+              "Configurar empresa y sucursal",
+              "Crear almacén principal",
+              "Registrar marcas y categorías",
+              "Crear primer producto",
+              "Registrar compra e IMEI",
+            ].map((item, index) => (
+              <div className="check-row" key={item}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <p>{item}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,694 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  INACTIVE
+}
+
+enum ProductType {
+  PHONE
+  SERIALIZED
+  ACCESSORY
+  SERVICE
+}
+
+enum ProductUnitStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  IN_TRANSFER
+  WARRANTY
+  TECHNICAL_SERVICE
+  RETURNED
+  DAMAGED
+  LOST
+  INACTIVE
+}
+
+enum DeviceIdentifierType {
+  IMEI_1
+  IMEI_2
+  SERIAL
+}
+
+enum PurchaseStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum SaleStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum TaxCondition {
+  TAXED
+  EXEMPT
+  UNAFFECTED
+}
+
+enum DocumentType {
+  RECEIPT
+  INVOICE
+  SALES_NOTE
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  YAPE
+  PLIN
+  CARD
+  TRANSFER
+  CREDIT
+  OTHER
+}
+
+enum InventoryMovementType {
+  PURCHASE
+  SALE
+  TRANSFER_IN
+  TRANSFER_OUT
+  RETURN_IN
+  RETURN_OUT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  WARRANTY_IN
+  WARRANTY_OUT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  CANCEL
+  ACTIVATE
+  DEACTIVATE
+  LOGIN
+  LOGOUT
+}
+
+model Company {
+  id           String       @id @default(cuid())
+  businessName String
+  tradeName    String?
+  ruc          String?
+  email        String?
+  phone        String?
+  address      String?
+  logoUrl      String?
+  currency     String       @default("PEN")
+  timezone     String       @default("America/Lima")
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  branches           Branch[]
+  warehouses         Warehouse[]
+  memberships        CompanyUser[]
+  roles              Role[]
+  categories         Category[]
+  brands             Brand[]
+  products           Product[]
+  productUnits       ProductUnit[]
+  unitIdentifiers    ProductUnitIdentifier[]
+  suppliers          Supplier[]
+  purchases          Purchase[]
+  customers          Customer[]
+  sales              Sale[]
+  inventoryMovements InventoryMovement[]
+  inventoryBalances  InventoryBalance[]
+  auditLogs          AuditLog[]
+
+  @@unique([ruc])
+  @@index([status])
+  @@map("companies")
+}
+
+model Branch {
+  id        String       @id @default(cuid())
+  companyId String
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  status    EntityStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  warehouses        Warehouse[]
+  defaultForMembers CompanyUser[]  @relation("DefaultBranch")
+  sales             Sale[]
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+  @@map("branches")
+}
+
+model Warehouse {
+  id         String       @id @default(cuid())
+  companyId  String
+  branchId   String
+  name       String
+  code       String
+  description String?
+  isSaleable Boolean      @default(true)
+  status     EntityStatus @default(ACTIVE)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  productUnits       ProductUnit[]
+  purchases          Purchase[]
+  sales              Sale[]
+  inventoryMovements InventoryMovement[]
+  inventoryBalances  InventoryBalance[]
+
+  @@unique([companyId, code])
+  @@index([companyId, branchId, status])
+  @@map("warehouses")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  phone        String?
+  avatarUrl    String?
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  memberships       CompanyUser[]
+  createdPurchases  Purchase[]          @relation("PurchaseCreatedBy")
+  soldSales         Sale[]              @relation("SaleSeller")
+  createdSales      Sale[]              @relation("SaleCreatedBy")
+  inventoryMovements InventoryMovement[] @relation("MovementCreatedBy")
+  auditLogs         AuditLog[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  isSystem    Boolean      @default(false)
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  memberships CompanyUser[]
+  permissions RolePermission[]
+
+  @@unique([companyId, name])
+  @@index([companyId, status])
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  code        String @unique
+  name        String
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model CompanyUser {
+  id              String           @id @default(cuid())
+  companyId       String
+  userId          String
+  roleId          String
+  defaultBranchId String?
+  status          MembershipStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          Role    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  defaultBranch Branch? @relation("DefaultBranch", fields: [defaultBranchId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, userId])
+  @@index([companyId, roleId, status])
+  @@map("company_users")
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  companyId   String
+  parentId    String?
+  name        String
+  slug        String
+  description String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  company  Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@unique([companyId, slug])
+  @@index([companyId, parentId, status])
+  @@map("categories")
+}
+
+model Brand {
+  id        String       @id @default(cuid())
+  companyId String
+  name      String
+  slug      String
+  logoUrl   String?
+  status    EntityStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([companyId, slug])
+  @@index([companyId, status])
+  @@map("brands")
+}
+
+model Product {
+  id              String        @id @default(cuid())
+  companyId       String
+  categoryId      String?
+  brandId         String?
+  type            ProductType
+  name            String
+  model           String?
+  description     String?
+  sku             String?
+  barcode         String?
+  controlsStock   Boolean       @default(true)
+  requiresSerial  Boolean       @default(false)
+  requiresImei    Boolean       @default(false)
+  warrantyDays    Int           @default(0)
+  minimumStock    Int           @default(0)
+  status          EntityStatus  @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  category           Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  brand              Brand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  variants           ProductVariant[]
+  units              ProductUnit[]
+  purchaseItems      PurchaseItem[]
+  saleItems          SaleItem[]
+  inventoryMovements InventoryMovement[]
+  inventoryBalances  InventoryBalance[]
+
+  @@unique([companyId, sku])
+  @@unique([companyId, barcode])
+  @@index([companyId, type, status])
+  @@index([companyId, brandId, categoryId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id               String       @id @default(cuid())
+  companyId        String
+  productId        String
+  sku              String?
+  barcode          String?
+  color            String?
+  ram              String?
+  storage          String?
+  purchasePrice    Decimal      @default(0) @db.Decimal(14, 2)
+  salePrice        Decimal      @default(0) @db.Decimal(14, 2)
+  minimumSalePrice Decimal      @default(0) @db.Decimal(14, 2)
+  status           EntityStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  units              ProductUnit[]
+  purchaseItems      PurchaseItem[]
+  saleItems          SaleItem[]
+  inventoryMovements InventoryMovement[]
+  inventoryBalances  InventoryBalance[]
+
+  @@unique([companyId, sku])
+  @@unique([companyId, barcode])
+  @@index([companyId, productId, status])
+  @@map("product_variants")
+}
+
+model ProductUnit {
+  id             String            @id @default(cuid())
+  companyId      String
+  productId      String
+  variantId      String
+  warehouseId    String
+  purchaseId     String?
+  purchaseItemId String?
+  purchaseCost   Decimal           @default(0) @db.Decimal(14, 2)
+  status         ProductUnitStatus @default(AVAILABLE)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  company           Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  product           Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant           ProductVariant          @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  warehouse         Warehouse               @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  purchase          Purchase?               @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchaseItem      PurchaseItem?           @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  identifiers       ProductUnitIdentifier[]
+  saleLinks         SaleItemUnit[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([companyId, productId, variantId, status])
+  @@index([companyId, warehouseId, status])
+  @@map("product_units")
+}
+
+model ProductUnitIdentifier {
+  id            String               @id @default(cuid())
+  companyId     String
+  productUnitId String
+  type          DeviceIdentifierType
+  value         String
+  createdAt     DateTime             @default(now())
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Cascade)
+
+  // Impide que un IMEI/serie se repita en cualquier unidad dentro de la empresa.
+  @@unique([companyId, value])
+  // Una unidad solo puede tener un identificador de cada tipo.
+  @@unique([productUnitId, type])
+  @@index([companyId, type, value])
+  @@map("product_unit_identifiers")
+}
+
+model Supplier {
+  id             String       @id @default(cuid())
+  companyId      String
+  documentType   String?
+  documentNumber String?
+  businessName   String
+  contactName    String?
+  phone          String?
+  email          String?
+  address        String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  purchases Purchase[]
+
+  @@unique([companyId, documentNumber])
+  @@index([companyId, status])
+  @@map("suppliers")
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  companyId      String
+  supplierId     String
+  warehouseId    String
+  number         String
+  documentType   String?
+  documentSeries String?
+  documentNumber String?
+  issueDate      DateTime
+  currency       String         @default("PEN")
+  subtotal       Decimal        @default(0) @db.Decimal(14, 2)
+  tax            Decimal        @default(0) @db.Decimal(14, 2)
+  total          Decimal        @default(0) @db.Decimal(14, 2)
+  status         PurchaseStatus @default(DRAFT)
+  notes          String?
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  createdBy    User           @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items        PurchaseItem[]
+  productUnits ProductUnit[]
+
+  @@unique([companyId, number])
+  @@index([companyId, supplierId, issueDate])
+  @@index([companyId, warehouseId, status])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  productId   String
+  variantId   String
+  quantity    Int
+  unitCost    Decimal  @db.Decimal(14, 2)
+  subtotal    Decimal  @db.Decimal(14, 2)
+  tax         Decimal  @default(0) @db.Decimal(14, 2)
+  total       Decimal  @db.Decimal(14, 2)
+  createdAt   DateTime @default(now())
+
+  purchase    Purchase       @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productUnits ProductUnit[]
+
+  @@index([purchaseId, productId, variantId])
+  @@map("purchase_items")
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  companyId      String
+  documentType   String?
+  documentNumber String?
+  firstName      String?
+  lastName       String?
+  businessName   String?
+  phone          String?
+  whatsapp       String?
+  email          String?
+  address        String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sales   Sale[]
+
+  @@unique([companyId, documentNumber])
+  @@index([companyId, status])
+  @@index([companyId, phone])
+  @@map("customers")
+}
+
+model Sale {
+  id             String       @id @default(cuid())
+  companyId      String
+  branchId       String
+  warehouseId    String
+  customerId     String?
+  saleNumber     String
+  documentType   DocumentType @default(SALES_NOTE)
+  documentSeries String?
+  documentNumber String?
+  taxCondition   TaxCondition @default(TAXED)
+  currency       String       @default("PEN")
+  subtotal       Decimal      @default(0) @db.Decimal(14, 2)
+  discount       Decimal      @default(0) @db.Decimal(14, 2)
+  tax            Decimal      @default(0) @db.Decimal(14, 2)
+  total          Decimal      @default(0) @db.Decimal(14, 2)
+  status         SaleStatus   @default(DRAFT)
+  sellerId       String
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse  Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  seller     User         @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  createdBy  User         @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items      SaleItem[]
+  payments   SalePayment[]
+
+  @@unique([companyId, saleNumber])
+  @@index([companyId, branchId, createdAt])
+  @@index([companyId, customerId, createdAt])
+  @@index([companyId, status, createdAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id         String   @id @default(cuid())
+  saleId     String
+  productId  String
+  variantId  String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(14, 2)
+  unitCost   Decimal  @db.Decimal(14, 2)
+  discount   Decimal  @default(0) @db.Decimal(14, 2)
+  subtotal   Decimal  @db.Decimal(14, 2)
+  tax        Decimal  @default(0) @db.Decimal(14, 2)
+  total      Decimal  @db.Decimal(14, 2)
+  createdAt  DateTime @default(now())
+
+  sale      Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  units     SaleItemUnit[]
+
+  @@index([saleId, productId, variantId])
+  @@map("sale_items")
+}
+
+model SaleItemUnit {
+  id            String   @id @default(cuid())
+  saleItemId    String
+  productUnitId String
+  createdAt     DateTime @default(now())
+
+  saleItem    SaleItem    @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+  productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+
+  // Conserva el historial: un equipo devuelto puede venderse nuevamente.
+  @@unique([saleItemId, productUnitId])
+  @@map("sale_item_units")
+}
+
+model SalePayment {
+  id            String        @id @default(cuid())
+  saleId        String
+  paymentMethod PaymentMethod
+  amount        Decimal       @db.Decimal(14, 2)
+  reference     String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId, paymentMethod])
+  @@map("sale_payments")
+}
+
+model InventoryBalance {
+  id          String   @id @default(cuid())
+  companyId   String
+  warehouseId String
+  productId   String
+  variantId   String
+  quantity    Decimal  @default(0) @db.Decimal(14, 3)
+  averageCost Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt   DateTime @updatedAt
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, warehouseId, variantId])
+  @@index([companyId, productId, variantId])
+  @@map("inventory_balances")
+}
+
+model InventoryMovement {
+  id            String                @id @default(cuid())
+  companyId     String
+  warehouseId   String
+  productId     String
+  variantId     String
+  productUnitId String?
+  movementType  InventoryMovementType
+  quantity      Decimal               @db.Decimal(14, 3)
+  unitCost      Decimal               @default(0) @db.Decimal(14, 2)
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime              @default(now())
+
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productUnit ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: SetNull)
+  createdBy   User            @relation("MovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, warehouseId, productId, variantId, createdAt])
+  @@index([companyId, productUnitId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("inventory_movements")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  companyId String
+  userId    String?
+  action    AuditAction
+  entity    String
+  entityId  String?
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, entity, entityId, createdAt])
+  @@index([companyId, userId, createdAt])
+  @@map("audit_logs")
+}
