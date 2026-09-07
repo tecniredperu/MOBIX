@@ -2,6 +2,14 @@ import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import type { PosCatalogItem, PosCustomer, PosWarehouse } from "./sale-types";
 
+type CreditProfileRow = {
+  id: string;
+  creditEnabled: boolean;
+  creditLimit: unknown;
+  creditDays: number;
+  outstanding: unknown;
+};
+
 function variantLabel(input: { ram: string | null; storage: string | null; color: string | null }) {
   return [input.ram, input.storage, input.color].filter(Boolean).join(" / ") || "Variante base";
 }
@@ -32,7 +40,7 @@ function getLimaDayBounds() {
 export async function getPosContext() {
   const company = await getActiveCompany();
 
-  const [warehouses, products, customers] = await Promise.all([
+  const [warehouses, products, customers, creditProfiles] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
       orderBy: { name: "asc" },
@@ -63,7 +71,22 @@ export async function getPosContext() {
       orderBy: { updatedAt: "desc" },
       take: 100,
     }),
+    prisma.$queryRaw<CreditProfileRow[]>`
+      SELECT
+        c."id",
+        c."creditEnabled",
+        c."creditLimit",
+        c."creditDays",
+        COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN', 'PARTIAL')), 0) AS "outstanding"
+      FROM "customers" c
+      LEFT JOIN "accounts_receivable" ar
+        ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
+      WHERE c."companyId" = ${company.id}
+      GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
+    `,
   ]);
+
+  const creditMap = new Map(creditProfiles.map((profile) => [profile.id, profile]));
 
   const catalog: PosCatalogItem[] = products.flatMap((product) =>
     product.variants.map((variant) => ({
@@ -100,13 +123,23 @@ export async function getPosContext() {
     branchName: warehouse.branch.name,
   }));
 
-  const customerOptions: PosCustomer[] = customers.map((customer) => ({
-    id: customer.id,
-    documentType: customer.documentType,
-    documentNumber: customer.documentNumber,
-    name: customerDisplayName(customer, "Cliente"),
-    phone: customer.whatsapp ?? customer.phone,
-  }));
+  const customerOptions: PosCustomer[] = customers.map((customer) => {
+    const profile = creditMap.get(customer.id);
+    const creditLimit = Number(profile?.creditLimit ?? 0);
+    const outstanding = Number(profile?.outstanding ?? 0);
+    return {
+      id: customer.id,
+      documentType: customer.documentType,
+      documentNumber: customer.documentNumber,
+      name: customerDisplayName(customer, "Cliente"),
+      phone: customer.whatsapp ?? customer.phone,
+      creditEnabled: Boolean(profile?.creditEnabled),
+      creditLimit,
+      creditDays: Number(profile?.creditDays ?? 30),
+      outstanding,
+      availableCredit: Math.max(0, creditLimit - outstanding),
+    };
+  });
 
   return { company, warehouses: warehouseOptions, catalog, customers: customerOptions };
 }
