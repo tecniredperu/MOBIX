@@ -2,7 +2,6 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 
@@ -92,18 +91,12 @@ export async function createCustomerAction(input: {
         whatsapp: input.phone?.trim() || null,
         email: input.email?.trim() || null,
         address: input.address?.trim() || null,
+        creditEnabled: Boolean(input.creditEnabled),
+        creditLimit,
+        creditDays,
+        creditNotes: input.creditNotes?.trim() || null,
       },
     });
-
-    await tx.$executeRaw`
-      UPDATE "customers"
-      SET
-        "creditEnabled" = ${Boolean(input.creditEnabled)},
-        "creditLimit" = ${creditLimit},
-        "creditDays" = ${creditDays},
-        "creditNotes" = ${input.creditNotes?.trim() || null}
-      WHERE "id" = ${created.id} AND "companyId" = ${company.id}
-    `;
 
     await tx.auditLog.create({
       data: {
@@ -128,7 +121,7 @@ export async function createCustomerAction(input: {
 
   revalidatePath("/clientes");
   revalidatePath("/pos");
-  redirect(`/clientes/${customer.id}`);
+  return { id: customer.id };
 }
 
 export async function updateCustomerAction(input: {
@@ -198,16 +191,15 @@ export async function updateCustomerCreditAction(input: {
   if (!customer) throw new Error("El cliente no está disponible.");
 
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      UPDATE "customers"
-      SET
-        "creditEnabled" = ${Boolean(input.enabled)},
-        "creditLimit" = ${limit},
-        "creditDays" = ${days},
-        "creditNotes" = ${input.notes?.trim() || null},
-        "updatedAt" = NOW()
-      WHERE "id" = ${customer.id} AND "companyId" = ${company.id}
-    `;
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: {
+        creditEnabled: Boolean(input.enabled),
+        creditLimit: limit,
+        creditDays: days,
+        creditNotes: input.notes?.trim() || null,
+      },
+    });
     await tx.auditLog.create({
       data: {
         companyId: company.id,
@@ -275,25 +267,28 @@ export async function registerReceivablePaymentAction(input: {
     const newBalance = roundMoney(Math.max(0, balance - amount));
     const newStatus = newBalance <= 0.009 ? "PAID" : "PARTIAL";
 
-    await tx.$executeRaw`
-      INSERT INTO "receivable_payments" (
-        "id", "companyId", "receivableId", "cashSessionId", "amount",
-        "paymentMethod", "reference", "notes", "createdById", "paidAt"
-      ) VALUES (
-        ${paymentId}, ${company.id}, ${receivable.id}, ${openSession.id}, ${amount},
-        ${input.method}::"PaymentMethod", ${input.reference?.trim() || null}, ${input.notes?.trim() || null}, ${membership.userId}, NOW()
-      )
-    `;
+    await tx.receivablePayment.create({
+      data: {
+        id: paymentId,
+        companyId: company.id,
+        receivableId: receivable.id,
+        cashSessionId: openSession.id,
+        amount,
+        paymentMethod: input.method,
+        reference: input.reference?.trim() || null,
+        notes: input.notes?.trim() || null,
+        createdById: membership.userId,
+      },
+    });
 
-    await tx.$executeRaw`
-      UPDATE "accounts_receivable"
-      SET
-        "paidAmount" = "paidAmount" + ${amount},
-        "balance" = ${newBalance},
-        "status" = ${newStatus}::"AccountReceivableStatus",
-        "updatedAt" = NOW()
-      WHERE "id" = ${receivable.id} AND "companyId" = ${company.id}
-    `;
+    await tx.accountReceivable.update({
+      where: { id: receivable.id },
+      data: {
+        paidAmount: { increment: amount },
+        balance: newBalance,
+        status: newStatus,
+      },
+    });
 
     await tx.auditLog.create({
       data: {
