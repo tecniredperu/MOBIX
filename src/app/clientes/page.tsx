@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { CustomersView } from "@/modules/customers/customers-view";
 import { getCustomers } from "@/modules/customers/customers.repository";
 
@@ -10,6 +11,7 @@ function single(value: string | string[] | undefined) {
 }
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  await requirePermission("customers.manage");
   const params = await searchParams;
   const filters = { q: single(params.q), credit: single(params.credit) };
   const { items, summary } = await getCustomers(filters);
