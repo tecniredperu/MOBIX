@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./mobix-v03.css";
 import "./mobix-sales.css";
+import "./mobix-pos-vuelto.css";
 
 export const metadata: Metadata = {
   title: "MOBIX",
