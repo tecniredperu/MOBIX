@@ -1,6 +1,6 @@
 export type SaleTaxCondition = "TAXED" | "EXEMPT" | "UNAFFECTED";
 export type SaleDocumentType = "RECEIPT" | "INVOICE" | "SALES_NOTE";
-export type SalePaymentMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "OTHER";
+export type SalePaymentMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "CREDIT" | "OTHER";
 
 export type PosWarehouse = {
   id: string;
@@ -42,6 +42,11 @@ export type PosCustomer = {
   documentNumber: string | null;
   name: string;
   phone: string | null;
+  creditEnabled: boolean;
+  creditLimit: number;
+  creditDays: number;
+  outstanding: number;
+  availableCredit: number;
 };
 
 export type CreateSaleInput = {
