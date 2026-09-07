@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { getPosCashStatus } from "@/modules/cash/pos-cash-status";
 import { PosFormV3 } from "@/modules/sales/pos-form-v3";
 import { getPosContext } from "@/modules/sales/sales.repository";
@@ -7,6 +8,7 @@ import { getPosContext } from "@/modules/sales/sales.repository";
 export const dynamic = "force-dynamic";
 
 export default async function PosPage() {
+  await requirePermission("sales.create");
   const [{ warehouses, catalog, customers }, cashStatus] = await Promise.all([
     getPosContext(),
     getPosCashStatus(),
