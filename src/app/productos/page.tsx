@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { requirePermission } from "@/lib/business-context";
 import { ProductsView } from "@/modules/products/products-view";
 import {
   getProductCatalogContext,
@@ -19,6 +20,7 @@ export default async function ProductsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  await requirePermission("inventory.view");
   const params = await searchParams;
   const type = single(params.type);
   const status = single(params.status);
