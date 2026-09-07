@@ -13,14 +13,18 @@ export async function createReturnAction(input:{saleId:string;type:"RETURN"|"EXC
   if(!input.saleId||!input.items.length) throw new Error("Selecciona la venta y al menos un producto.");
   if(!input.reason?.trim()||input.reason.trim().length<4) throw new Error("Indica el motivo de la devolución o cambio.");
   if(input.type==="RETURN"&&!REFUND_METHODS.has(input.refundMethod||"")) throw new Error("Selecciona el medio por el que se devolverá el dinero.");
+
   const sale=await prisma.sale.findFirst({where:{id:input.saleId,companyId:company.id,status:"COMPLETED"},include:{warehouse:{include:{branch:true}},items:{include:{product:true,units:{include:{productUnit:true}}}}}});
   if(!sale) throw new Error("La venta ya no está disponible para devolución.");
   const itemMap=new Map(sale.items.map(i=>[i.id,i]));
   const ids=input.items.map(i=>i.saleItemId);
   if(new Set(ids).size!==ids.length) throw new Error("No repitas una misma línea de venta.");
+
   const prior=await prisma.$queryRaw<Array<{saleItemId:string;qty:bigint}>>`
-    SELECT ri."saleItemId",COALESCE(SUM(ri."quantity"),0)::bigint AS "qty" FROM "return_items" ri JOIN "return_orders" ro ON ro."id"=ri."returnOrderId"
-    WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ri."saleItemId" IN (${PrismaJoin(ids)}) GROUP BY ri."saleItemId"`;
+    SELECT ri."saleItemId",COALESCE(SUM(ri."quantity"),0)::bigint AS "qty"
+    FROM "return_items" ri JOIN "return_orders" ro ON ro."id"=ri."returnOrderId"
+    WHERE ro."companyId"=${company.id} AND ro."saleId"=${sale.id} AND ro."status"='COMPLETED'
+    GROUP BY ri."saleItemId"`;
   const priorMap=new Map(prior.map(r=>[r.saleItemId,Number(r.qty)]));
 
   let refundAmount=0;
@@ -71,11 +75,4 @@ export async function createReturnAction(input:{saleId:string;type:"RETURN"|"EXC
   });
   ["/devoluciones","/ventas","/productos","/equipos","/kardex","/caja","/reportes"].forEach(p=>revalidatePath(p));
   return result;
-}
-
-function PrismaJoin(values:string[]){
-  if(!values.length) return "" as never;
-  // Los IDs provienen del payload pero se parametrizan individualmente mediante Prisma.sql no está disponible en este cliente.
-  // Esta función solo se usa para construir la lista tipada del tagged template; se reemplaza por consulta por venta si la lista está vacía.
-  return values as never;
 }
