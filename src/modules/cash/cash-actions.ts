@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getActiveCompany } from "@/lib/company-context";
+import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 import type { CashMovementKind } from "./cash-types";
 
@@ -23,23 +23,12 @@ function validMoney(value: number) {
   return Number.isFinite(value) && value >= 0 && value <= 999999999;
 }
 
-async function getMembership(companyId: string) {
-  const membership = await prisma.companyUser.findFirst({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: { createdAt: "asc" },
-    select: { userId: true },
-  });
-  if (!membership) throw new Error("No existe un usuario activo para operar la caja.");
-  return membership;
-}
-
 export async function openCashSessionAction(input: {
   branchId: string;
   openingAmount: number;
   notes?: string;
 }) {
-  const company = await getActiveCompany();
-  const membership = await getMembership(company.id);
+  const { company, membership } = await requirePermission("cash.manage");
   const openingAmount = roundMoney(Number(input.openingAmount || 0));
 
   if (!input.branchId) throw new Error("Selecciona la sucursal donde abrirás caja.");
@@ -76,15 +65,9 @@ export async function openCashSessionAction(input: {
           action: "CREATE",
           entity: "CASH_SESSION",
           entityId: created.id,
-          newValues: {
-            branchId: branch.id,
-            branchName: branch.name,
-            openingAmount,
-            status: "OPEN",
-          },
+          newValues: { branchId: branch.id, branchName: branch.name, openingAmount, status: "OPEN" },
         },
       });
-
       return created;
     });
 
@@ -104,8 +87,7 @@ export async function addCashMovementAction(input: {
   concept: string;
   reference?: string;
 }) {
-  const company = await getActiveCompany();
-  const membership = await getMembership(company.id);
+  const { company, membership } = await requirePermission("cash.manage");
   const amount = roundMoney(Number(input.amount || 0));
   const concept = input.concept?.trim();
 
@@ -115,12 +97,7 @@ export async function addCashMovementAction(input: {
 
   const movement = await prisma.$transaction(async (tx) => {
     const session = await tx.cashSession.findFirst({
-      where: {
-        id: input.sessionId,
-        companyId: company.id,
-        userId: membership.userId,
-        status: "OPEN",
-      },
+      where: { id: input.sessionId, companyId: company.id, userId: membership.userId, status: "OPEN" },
       select: { id: true },
     });
     if (!session) throw new Error("La caja ya no está abierta o pertenece a otro usuario.");
@@ -136,7 +113,6 @@ export async function addCashMovementAction(input: {
         createdById: membership.userId,
       },
     });
-
     await tx.auditLog.create({
       data: {
         companyId: company.id,
@@ -144,15 +120,9 @@ export async function addCashMovementAction(input: {
         action: "CREATE",
         entity: "CASH_MOVEMENT",
         entityId: created.id,
-        newValues: {
-          cashSessionId: session.id,
-          type: input.type,
-          amount,
-          concept,
-        },
+        newValues: { cashSessionId: session.id, type: input.type, amount, concept },
       },
     });
-
     return created;
   });
 
@@ -165,27 +135,14 @@ export async function closeCashSessionAction(input: {
   actualAmount: number;
   notes?: string;
 }) {
-  const company = await getActiveCompany();
-  const membership = await getMembership(company.id);
+  const { company, membership } = await requirePermission("cash.manage");
   const actualAmount = roundMoney(Number(input.actualAmount));
-
   if (!validMoney(actualAmount)) throw new Error("El efectivo contado no es válido.");
 
   const result = await prisma.$transaction(async (tx) => {
     const session = await tx.cashSession.findFirst({
-      where: {
-        id: input.sessionId,
-        companyId: company.id,
-        userId: membership.userId,
-        status: "OPEN",
-      },
-      select: {
-        id: true,
-        branchId: true,
-        userId: true,
-        openingAmount: true,
-        openedAt: true,
-      },
+      where: { id: input.sessionId, companyId: company.id, userId: membership.userId, status: "OPEN" },
+      select: { id: true, branchId: true, userId: true, openingAmount: true, openedAt: true },
     });
     if (!session) throw new Error("La caja ya fue cerrada o pertenece a otro usuario.");
 
@@ -216,12 +173,8 @@ export async function closeCashSessionAction(input: {
       }),
     ]);
 
-    const cashSales = roundMoney(
-      cashPayments.reduce((sum, payment) => sum + Number(payment.amount), 0),
-    );
-    const receivableCash = roundMoney(
-      cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0),
-    );
+    const cashSales = roundMoney(cashPayments.reduce((sum, payment) => sum + Number(payment.amount), 0));
+    const receivableCash = roundMoney(cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0));
     let manualIn = 0;
     let manualOut = 0;
     for (const movement of movements) {
@@ -230,9 +183,7 @@ export async function closeCashSessionAction(input: {
       else manualOut += amount;
     }
 
-    const expectedAmount = roundMoney(
-      Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut,
-    );
+    const expectedAmount = roundMoney(Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut);
     const difference = roundMoney(actualAmount - expectedAmount);
     const closedAt = new Date();
 
@@ -269,13 +220,7 @@ export async function closeCashSessionAction(input: {
       },
     });
 
-    return {
-      sessionId: session.id,
-      expectedAmount,
-      actualAmount,
-      difference,
-      closedAt: closedAt.toISOString(),
-    };
+    return { sessionId: session.id, expectedAmount, actualAmount, difference, closedAt: closedAt.toISOString() };
   });
 
   revalidatePath("/caja");

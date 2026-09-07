@@ -2,18 +2,19 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { getOperationalContext } from "@/lib/business-context";
+import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 import type { CreateSaleInput, SalePaymentMethod } from "./sale-types";
 
 const PAYMENT_METHODS = new Set<SalePaymentMethod>(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "CREDIT", "OTHER"]);
 type CreditCustomerRow = { creditEnabled: boolean; creditLimit: unknown; creditDays: number; outstanding: unknown };
+type NextNumberRow = { next: unknown };
 function money(value:number){return Math.round((value+Number.EPSILON)*100)/100}
 function cleanDocument(value?:string){return value?.replace(/\D/g,"")??""}
 function validateCustomerDocument(documentType:string|undefined,documentNumber:string){if(!documentNumber)return;if(documentType==="RUC"&&documentNumber.length!==11)throw new Error("El RUC del cliente debe tener 11 dígitos.");if(documentType==="DNI"&&documentNumber.length!==8)throw new Error("El DNI del cliente debe tener 8 dígitos.")}
 
 export async function createSaleAction(input:CreateSaleInput){
-  const {company,membership,settings}=await getOperationalContext();
+  const {company,membership,settings}=await requirePermission("sales.create");
   const TAX_RATE=Math.max(0,Number(settings.taxRate||0))/100;
   if(!input.warehouseId)throw new Error("Selecciona el almacén de venta.");
   if(!input.lines.length)throw new Error("Agrega al menos un producto a la venta.");
@@ -52,9 +53,11 @@ export async function createSaleAction(input:CreateSaleInput){
     if(creditAmount>0){if(!customerId)throw new Error("Selecciona un cliente para la venta a crédito.");const profile=await tx.$queryRaw<CreditCustomerRow[]>`SELECT c."creditEnabled",c."creditLimit",c."creditDays",COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN','PARTIAL')),0) AS "outstanding" FROM "customers" c LEFT JOIN "accounts_receivable" ar ON ar."customerId"=c."id" AND ar."companyId"=c."companyId" WHERE c."id"=${customerId} AND c."companyId"=${company.id} GROUP BY c."id",c."creditEnabled",c."creditLimit",c."creditDays"`;const credit=profile[0];if(!credit?.creditEnabled)throw new Error("Este cliente no tiene habilitada una línea de crédito.");const available=money(Math.max(0,Number(credit.creditLimit??0)-Number(credit.outstanding??0)));if(creditAmount>available+0.01)throw new Error(`Crédito insuficiente. Disponible: S/ ${available.toFixed(2)}.`);creditDays=Math.max(0,Number(credit.creditDays??30))}
 
     await tx.$queryRaw<Array<{locked:number}>>`WITH l AS (SELECT pg_advisory_xact_lock(hashtext(${`${company.id}:sale-number`}))) SELECT 1::int AS "locked" FROM l`;
-    const saleCount=await tx.sale.count({where:{companyId:company.id}});const saleNumber=`V001-${String(saleCount+1).padStart(6,"0")}`;
+    const saleSeq=await tx.$queryRaw<NextNumberRow[]>`SELECT COALESCE(MAX(CASE WHEN "saleNumber" ~ '^V001-[0-9]+$' THEN CAST(SPLIT_PART("saleNumber",'-',2) AS BIGINT) END),0)+1 AS "next" FROM "sales" WHERE "companyId"=${company.id}`;
+    const saleNumber=`V001-${String(Number(saleSeq[0]?.next??1)).padStart(6,"0")}`;
     const documentSeries=input.documentType==="INVOICE"?settings.invoiceSeries:input.documentType==="RECEIPT"?settings.receiptSeries:settings.salesNoteSeries;
-    const documentCount=await tx.sale.count({where:{companyId:company.id,documentType:input.documentType,documentSeries}});const documentNumber=String(documentCount+1).padStart(8,"0");
+    const documentSeq=await tx.$queryRaw<NextNumberRow[]>`SELECT COALESCE(MAX(CASE WHEN "documentNumber" ~ '^[0-9]+$' THEN CAST("documentNumber" AS BIGINT) END),0)+1 AS "next" FROM "sales" WHERE "companyId"=${company.id} AND "documentType"=${input.documentType}::"DocumentType" AND "documentSeries"=${documentSeries}`;
+    const documentNumber=String(Number(documentSeq[0]?.next??1)).padStart(8,"0");
     const sale=await tx.sale.create({data:{companyId:company.id,branchId:warehouse.branchId,warehouseId:warehouse.id,customerId,saleNumber,documentType:input.documentType,documentSeries,documentNumber,taxCondition:input.taxCondition,currency:company.currency,subtotal,discount,tax,total,status:"COMPLETED",sellerId:membership.userId,createdById:membership.userId}});
 
     let remainingDiscount=discount;
