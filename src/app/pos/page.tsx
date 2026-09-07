@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { getPosCashStatus } from "@/modules/cash/pos-cash-status";
-import { PosFormV2 } from "@/modules/sales/pos-form-v2";
+import { PosFormV3 } from "@/modules/sales/pos-form-v3";
 import { getPosContext } from "@/modules/sales/sales.repository";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export default async function PosPage() {
             <Link href="/caja">Abrir caja</Link>
           </div>
         )}
-        <PosFormV2 warehouses={warehouses} catalog={catalog} customers={customers} />
+        <PosFormV3 warehouses={warehouses} catalog={catalog} customers={customers} />
       </div>
     </AppShell>
   );
