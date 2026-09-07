@@ -1,12 +1,20 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import type { CreateSaleInput, SalePaymentMethod } from "./sale-types";
 
 const TAX_RATE = 0.18;
-const PAYMENT_METHODS = new Set<SalePaymentMethod>(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "OTHER"]);
+const PAYMENT_METHODS = new Set<SalePaymentMethod>(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "CREDIT", "OTHER"]);
+
+type CreditCustomerRow = {
+  creditEnabled: boolean;
+  creditLimit: unknown;
+  creditDays: number;
+  outstanding: unknown;
+};
 
 function money(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -54,10 +62,8 @@ export async function createSaleAction(input: CreateSaleInput) {
       if (!invoiceCustomer || invoiceCustomer.documentType !== "RUC" || cleanDocument(invoiceCustomer.documentNumber ?? "").length !== 11) {
         throw new Error("Para emitir Factura debes seleccionar un cliente con RUC válido.");
       }
-    } else {
-      if (input.customer?.documentType !== "RUC" || customerDocument.length !== 11 || !input.customer?.name?.trim()) {
-        throw new Error("Para emitir Factura registra RUC y razón social del cliente.");
-      }
+    } else if (input.customer?.documentType !== "RUC" || customerDocument.length !== 11 || !input.customer?.name?.trim()) {
+      throw new Error("Para emitir Factura registra RUC y razón social del cliente.");
     }
   }
 
@@ -129,6 +135,15 @@ export async function createSaleAction(input: CreateSaleInput) {
     throw new Error(`Los pagos suman S/ ${paid.toFixed(2)} y el total de la venta es S/ ${total.toFixed(2)}.`);
   }
 
+  const creditAmount = money(
+    input.payments
+      .filter((payment) => payment.method === "CREDIT")
+      .reduce((sum, payment) => sum + Number(payment.amount), 0),
+  );
+  if (creditAmount > 0 && !input.customerId) {
+    throw new Error("Para vender a crédito debes seleccionar un cliente registrado con línea de crédito habilitada.");
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     let customerId: string | null = null;
     if (input.customerId) {
@@ -155,6 +170,34 @@ export async function createSaleAction(input: CreateSaleInput) {
         customer = await tx.customer.create({ data: { companyId: company.id, ...customerData } });
       }
       customerId = customer.id;
+    }
+
+    let creditDays = 30;
+    if (creditAmount > 0) {
+      if (!customerId) throw new Error("Selecciona un cliente para la venta a crédito.");
+      const profile = await tx.$queryRaw<CreditCustomerRow[]>`
+        SELECT
+          c."creditEnabled",
+          c."creditLimit",
+          c."creditDays",
+          COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN', 'PARTIAL')), 0) AS "outstanding"
+        FROM "customers" c
+        LEFT JOIN "accounts_receivable" ar
+          ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
+        WHERE c."id" = ${customerId} AND c."companyId" = ${company.id}
+        GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
+      `;
+      const credit = profile[0];
+      if (!credit?.creditEnabled) {
+        throw new Error("Este cliente no tiene habilitada una línea de crédito.");
+      }
+      const creditLimit = Number(credit.creditLimit ?? 0);
+      const outstanding = Number(credit.outstanding ?? 0);
+      const available = money(Math.max(0, creditLimit - outstanding));
+      if (creditAmount > available + 0.01) {
+        throw new Error(`Crédito insuficiente. Disponible: S/ ${available.toFixed(2)}.`);
+      }
+      creditDays = Math.max(0, Number(credit.creditDays ?? 30));
     }
 
     const saleCount = await tx.sale.count({ where: { companyId: company.id } });
@@ -300,6 +343,21 @@ export async function createSaleAction(input: CreateSaleInput) {
       });
     }
 
+    let receivableId: string | null = null;
+    if (creditAmount > 0 && customerId) {
+      receivableId = randomUUID();
+      const dueDate = new Date(Date.now() + creditDays * 86_400_000);
+      await tx.$executeRaw`
+        INSERT INTO "accounts_receivable" (
+          "id", "companyId", "customerId", "saleId", "status",
+          "originalAmount", "paidAmount", "balance", "dueDate", "notes", "createdAt", "updatedAt"
+        ) VALUES (
+          ${receivableId}, ${company.id}, ${customerId}, ${sale.id}, 'OPEN'::"AccountReceivableStatus",
+          ${creditAmount}, 0, ${creditAmount}, ${dueDate}, ${`Crédito originado por venta ${saleNumber}`}, NOW(), NOW()
+        )
+      `;
+    }
+
     await tx.auditLog.create({
       data: {
         companyId: company.id,
@@ -317,6 +375,8 @@ export async function createSaleAction(input: CreateSaleInput) {
           tax,
           discount,
           total,
+          creditAmount,
+          receivableId,
           paymentMethods: input.payments.map((payment) => payment.method),
         },
       },
@@ -327,6 +387,9 @@ export async function createSaleAction(input: CreateSaleInput) {
 
   revalidatePath("/pos");
   revalidatePath("/ventas");
+  revalidatePath("/clientes");
+  if (input.customerId) revalidatePath(`/clientes/${input.customerId}`);
+  revalidatePath("/caja");
   revalidatePath("/productos");
   revalidatePath("/equipos");
   revalidatePath("/kardex");
