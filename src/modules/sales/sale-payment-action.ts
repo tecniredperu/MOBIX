@@ -1,10 +1,45 @@
 "use server";
 
+import { getActiveCompany } from "@/lib/company-context";
+import { prisma } from "@/lib/prisma";
 import { createSaleAction } from "./sale-actions";
 import type { CreateSaleInput } from "./sale-types";
 
 function money(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+async function assertOpenCashForSale(warehouseId: string) {
+  const company = await getActiveCompany();
+  const membership = await prisma.companyUser.findFirst({
+    where: { companyId: company.id, status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true },
+  });
+  if (!membership) throw new Error("No existe un usuario activo para registrar la venta.");
+
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { id: warehouseId, companyId: company.id, status: "ACTIVE", isSaleable: true },
+    select: { branchId: true, branch: { select: { name: true } } },
+  });
+  if (!warehouse) throw new Error("El almacén seleccionado no está disponible para ventas.");
+
+  const session = await prisma.cashSession.findFirst({
+    where: { companyId: company.id, userId: membership.userId, status: "OPEN" },
+    orderBy: { openedAt: "desc" },
+    include: { branch: { select: { id: true, name: true } } },
+  });
+
+  if (!session) {
+    throw new Error("Debes abrir Caja antes de confirmar una venta. Ve a Finanzas > Caja e inicia tu turno.");
+  }
+  if (session.branchId !== warehouse.branchId) {
+    throw new Error(
+      `Tu caja está abierta en ${session.branch.name}, pero la venta intenta salir de ${warehouse.branch.name}. Selecciona un almacén de la sucursal correcta o cierra y abre caja en la otra sucursal.`,
+    );
+  }
+
+  return session.id;
 }
 
 /**
@@ -13,9 +48,11 @@ function money(value: number) {
  * El importe digitado en Efectivo representa el dinero que el cliente entrega.
  * Si entrega más que el total, MOBIX calcula el vuelto y registra en la venta
  * únicamente el efectivo neto que queda en caja. Los medios electrónicos no
- * pueden generar vuelto.
+ * pueden generar vuelto. Toda venta exige una sesión de caja abierta.
  */
 export async function createSaleWithChangeAction(input: CreateSaleInput) {
+  await assertOpenCashForSale(input.warehouseId);
+
   const gross = money(
     input.lines.reduce(
       (sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
