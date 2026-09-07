@@ -8,7 +8,13 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run db:generate && npm run build \
+
+# Prisma 7 valida la existencia de DATABASE_URL al cargar prisma.config.ts.
+# Esta URL es ficticia y se usa únicamente para generar/compilar; el contenedor
+# en ejecución debe recibir el DATABASE_URL real desde el hosting.
+ARG BUILD_DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=public"
+RUN DATABASE_URL="$BUILD_DATABASE_URL" npm run db:generate \
+    && DATABASE_URL="$BUILD_DATABASE_URL" npm run build \
     && chown -R node:node /app
 
 ENV NODE_ENV=production
