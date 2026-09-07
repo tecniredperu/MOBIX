@@ -13,6 +13,8 @@ const MOVEMENT_TYPES = new Set<CashMovementKind>([
   "ADJUSTMENT_OUT",
 ]);
 
+type CashCollectionRow = { amount: unknown };
+
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -187,7 +189,7 @@ export async function closeCashSessionAction(input: {
     });
     if (!session) throw new Error("La caja ya fue cerrada o pertenece a otro usuario.");
 
-    const [cashPayments, movements] = await Promise.all([
+    const [cashPayments, cashCollections, movements] = await Promise.all([
       tx.salePayment.findMany({
         where: {
           paymentMethod: "CASH",
@@ -201,6 +203,13 @@ export async function closeCashSessionAction(input: {
         },
         select: { amount: true },
       }),
+      tx.$queryRaw<CashCollectionRow[]>`
+        SELECT rp."amount"
+        FROM "receivable_payments" rp
+        WHERE rp."companyId" = ${company.id}
+          AND rp."cashSessionId" = ${session.id}
+          AND rp."paymentMethod" = 'CASH'::"PaymentMethod"
+      `,
       tx.cashMovement.findMany({
         where: { companyId: company.id, cashSessionId: session.id },
         select: { type: true, amount: true },
@@ -209,6 +218,9 @@ export async function closeCashSessionAction(input: {
 
     const cashSales = roundMoney(
       cashPayments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+    );
+    const receivableCash = roundMoney(
+      cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0),
     );
     let manualIn = 0;
     let manualOut = 0;
@@ -219,7 +231,7 @@ export async function closeCashSessionAction(input: {
     }
 
     const expectedAmount = roundMoney(
-      Number(session.openingAmount) + cashSales + manualIn - manualOut,
+      Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut,
     );
     const difference = roundMoney(actualAmount - expectedAmount);
     const closedAt = new Date();
@@ -250,6 +262,7 @@ export async function closeCashSessionAction(input: {
           closingAmount: actualAmount,
           difference,
           cashSales,
+          receivableCash,
           manualIn: roundMoney(manualIn),
           manualOut: roundMoney(manualOut),
         },
