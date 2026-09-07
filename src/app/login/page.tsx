@@ -5,9 +5,18 @@ import { LoginForm } from "@/modules/auth/login-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+type SearchParams = Record<string, string | string[] | undefined>;
+function safeNext(value: string | string[] | undefined) {
+  const next = Array.isArray(value) ? value[0] : value;
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) return "/";
+  return next;
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const active = await getAuthContext({ redirectToLogin: false });
-  if (active) redirect("/");
+  const params = await searchParams;
+  const nextPath = safeNext(params.next);
+  if (active) redirect(nextPath);
 
   return (
     <main className="mobix-login-page">
@@ -27,7 +36,7 @@ export default async function LoginPage() {
           <span className="eyebrow">ACCESO SEGURO</span>
           <h2>Bienvenido</h2>
           <p>Ingresa con tu cuenta asignada para continuar.</p>
-          <LoginForm />
+          <LoginForm nextPath={nextPath} />
           <small className="login-help">Si no puedes ingresar, solicita al administrador que revise tu usuario o restablezca tu contraseña.</small>
         </div>
       </section>
