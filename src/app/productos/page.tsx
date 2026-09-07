@@ -20,7 +20,8 @@ export default async function ProductsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requirePermission("inventory.view");
+  const auth = await requirePermission("inventory.view");
+  const canManage = auth.membership.role.isSystem || auth.permissions.has("inventory.manage");
   const params = await searchParams;
   const type = single(params.type);
   const status = single(params.status);
@@ -50,6 +51,7 @@ export default async function ProductsPage({
         categories={categories}
         filters={filters}
         created={single(params.created) === "1"}
+        canManage={canManage}
       />
     </AppShell>
   );
