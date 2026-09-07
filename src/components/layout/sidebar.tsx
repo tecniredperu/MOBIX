@@ -21,8 +21,8 @@ const sections = [
   {
     label: "Ventas",
     items: [
-      { label: "Punto de venta", href: "#", icon: ShoppingCart },
-      { label: "Ventas", href: "#", icon: BadgeDollarSign },
+      { label: "Punto de venta", href: "/pos", icon: ShoppingCart },
+      { label: "Ventas", href: "/ventas", icon: BadgeDollarSign },
     ],
   },
   {
