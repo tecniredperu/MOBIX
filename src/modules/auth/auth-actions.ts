@@ -1,11 +1,15 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createSession, clearSession, readSession } from "@/lib/session";
 import { developmentBootstrapPassword, hashPassword, verifyPassword } from "@/lib/password";
 
 export type AuthState = { error?: string; success?: string };
+
+type LoginLimitRow = { lockedUntil: Date | null };
+const LOGIN_ERROR = "Correo o contraseña incorrectos.";
 
 function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -16,14 +20,72 @@ function safeNext(value: string) {
 function bootstrapPassword() {
   return process.env.MOBIX_BOOTSTRAP_PASSWORD?.trim() || developmentBootstrapPassword();
 }
+function safeRateKey(prefix: string, value: string) {
+  return `${prefix}:${value.trim().toLowerCase().slice(0, 180)}`;
+}
+async function clientIp() {
+  const requestHeaders = await headers();
+  const forwarded = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const real = requestHeaders.get("x-real-ip")?.trim();
+  return (forwarded || real || "unknown").slice(0, 120);
+}
+async function loginKeyLocked(key: string) {
+  const rows = await prisma.$queryRaw<LoginLimitRow[]>`
+    SELECT "lockedUntil" FROM "auth_login_limits" WHERE "key" = ${key} LIMIT 1
+  `;
+  const lockedUntil = rows[0]?.lockedUntil;
+  return Boolean(lockedUntil && new Date(lockedUntil).getTime() > Date.now());
+}
+async function recordFailedLogin(keys: string[]) {
+  const unique = [...new Set(keys.filter(Boolean))];
+  await prisma.$transaction(async (tx) => {
+    for (const key of unique) {
+      await tx.$executeRaw`
+        INSERT INTO "auth_login_limits" ("key","attempts","windowStartedAt","lockedUntil","updatedAt")
+        VALUES (${key},1,NOW(),NULL,NOW())
+        ON CONFLICT ("key") DO UPDATE SET
+          "attempts" = CASE
+            WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN 1
+            ELSE "auth_login_limits"."attempts" + 1
+          END,
+          "windowStartedAt" = CASE
+            WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN NOW()
+            ELSE "auth_login_limits"."windowStartedAt"
+          END,
+          "lockedUntil" = CASE
+            WHEN (CASE WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN 1 ELSE "auth_login_limits"."attempts" + 1 END) >= 8
+              THEN NOW() + INTERVAL '15 minutes'
+            ELSE "auth_login_limits"."lockedUntil"
+          END,
+          "updatedAt" = NOW()
+      `;
+    }
+    await tx.$executeRaw`DELETE FROM "auth_login_limits" WHERE "updatedAt" < NOW() - INTERVAL '30 days'`;
+  });
+}
+async function clearLoginLimits(keys: string[]) {
+  const unique = [...new Set(keys.filter(Boolean))];
+  for (const key of unique) {
+    await prisma.$executeRaw`DELETE FROM "auth_login_limits" WHERE "key" = ${key}`;
+  }
+}
 
 export async function loginAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
   const email = text(formData.get("email")).toLowerCase();
   const password = text(formData.get("password"));
   const nextPath = safeNext(text(formData.get("next")) || "/");
+  const ip = await clientIp();
+  const emailKey = safeRateKey("email", email || "invalid");
+  const ipKey = safeRateKey("ip", ip);
+  const rateKeys = [emailKey, ipKey];
+
+  if (await loginKeyLocked(emailKey) || await loginKeyLocked(ipKey)) {
+    return { error: "Demasiados intentos fallidos. Espera 15 minutos antes de volver a intentar." };
+  }
 
   if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6) {
-    return { error: "Correo o contraseña incorrectos." };
+    await recordFailedLogin(rateKeys);
+    return { error: LOGIN_ERROR };
   }
 
   const user = await prisma.user.findUnique({
@@ -42,18 +104,22 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
   });
 
   if (!user || user.status !== "ACTIVE" || !user.memberships.length) {
-    return { error: "Correo o contraseña incorrectos." };
+    await recordFailedLogin(rateKeys);
+    return { error: LOGIN_ERROR };
   }
 
   const legacy = user.passwordHash === "LOGIN_NOT_ENABLED_YET";
   const bootstrap = bootstrapPassword();
   const valid = legacy ? Boolean(bootstrap && password === bootstrap) : verifyPassword(password, user.passwordHash);
   if (!valid) {
+    await recordFailedLogin(rateKeys);
     if (legacy && process.env.NODE_ENV === "production" && !bootstrap) {
       return { error: "El acceso inicial no está configurado. Define MOBIX_BOOTSTRAP_PASSWORD en el hosting." };
     }
-    return { error: "Correo o contraseña incorrectos." };
+    return { error: LOGIN_ERROR };
   }
+
+  await clearLoginLimits(rateKeys);
 
   if (legacy) {
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(password) } });
@@ -68,6 +134,7 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
       action: "LOGIN",
       entity: "AUTH_SESSION",
       entityId: user.id,
+      ipAddress: ip === "unknown" ? null : ip,
       newValues: { email: user.email, roleId: membership.roleId },
     },
   }).catch(() => undefined);
@@ -107,9 +174,7 @@ export async function changePasswordAction(_previous: AuthState, formData: FormD
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user || user.status !== "ACTIVE") redirect("/login");
   const legacy = user.passwordHash === "LOGIN_NOT_ENABLED_YET";
-  const validCurrent = legacy
-    ? currentPassword === bootstrapPassword()
-    : verifyPassword(currentPassword, user.passwordHash);
+  const validCurrent = legacy ? currentPassword === bootstrapPassword() : verifyPassword(currentPassword, user.passwordHash);
   if (!validCurrent) return { error: "La contraseña actual no es correcta." };
 
   await prisma.$transaction(async (tx) => {
