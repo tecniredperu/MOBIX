@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 function cleanCode(v:string){return v.trim().toUpperCase().replace(/\s+/g,"-")}
 function cleanRuc(v:string){return v.replace(/\D/g,"")}
-function refresh(){["/configuracion","/pos","/ventas","/productos","/caja"].forEach(revalidatePath)}
+function refresh(){["/configuracion","/pos","/ventas","/productos","/caja"].forEach((path)=>revalidatePath(path))}
 
 export async function updateCompanyAction(input:{businessName:string;tradeName?:string;ruc?:string;email?:string;phone?:string;address?:string;logoUrl?:string;currency:string;timezone:string}){
  const {company,membership}=await requirePermission("settings.manage");const ruc=cleanRuc(input.ruc||"");if(ruc&&ruc.length!==11)throw new Error("El RUC debe tener 11 dígitos.");if(input.businessName.trim().length<3)throw new Error("Ingresa la razón social.");
