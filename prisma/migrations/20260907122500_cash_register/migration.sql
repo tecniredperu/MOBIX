@@ -46,6 +46,11 @@ CREATE INDEX "cash_sessions_companyId_branchId_status_openedAt_idx" ON "cash_ses
 -- CreateIndex
 CREATE INDEX "cash_sessions_companyId_userId_status_openedAt_idx" ON "cash_sessions"("companyId", "userId", "status", "openedAt");
 
+-- Evita dos aperturas simultáneas para el mismo usuario y empresa.
+CREATE UNIQUE INDEX "cash_sessions_one_open_per_user_idx"
+ON "cash_sessions"("companyId", "userId")
+WHERE "status" = 'OPEN';
+
 -- CreateIndex
 CREATE INDEX "cash_movements_companyId_cashSessionId_createdAt_idx" ON "cash_movements"("companyId", "cashSessionId", "createdAt");
 
