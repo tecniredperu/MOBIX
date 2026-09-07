@@ -7,12 +7,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run db:validate && npm run typecheck && npm run build",
+    "audit:prod": "node scripts/audit-production.mjs",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "typecheck": "tsc --noEmit"
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
