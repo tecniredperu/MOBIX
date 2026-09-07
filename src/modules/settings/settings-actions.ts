@@ -26,6 +26,7 @@ export async function updateCompanySettingsAction(input:{taxRate:number;defaultT
 export async function saveBranchAction(input:{id?:string;name:string;code:string;address?:string;phone?:string;status:"ACTIVE"|"INACTIVE"}){
  const {company,membership}=await requirePermission("settings.manage");const code=cleanCode(input.code);if(input.name.trim().length<2||!code)throw new Error("Nombre y código de sucursal son obligatorios.");
  const duplicate=await prisma.branch.findFirst({where:{companyId:company.id,code,id:input.id?{not:input.id}:undefined}});if(duplicate)throw new Error("Ya existe una sucursal con ese código.");
+ if(input.id){const current=await prisma.branch.findFirst({where:{id:input.id,companyId:company.id},select:{id:true}});if(!current)throw new Error("La sucursal ya no existe o no pertenece a la empresa.")}
  const branch=input.id?await prisma.branch.update({where:{id:input.id},data:{name:input.name.trim(),code,address:input.address?.trim()||null,phone:input.phone?.trim()||null,status:input.status}}):await prisma.branch.create({data:{companyId:company.id,name:input.name.trim(),code,address:input.address?.trim()||null,phone:input.phone?.trim()||null,status:input.status}});
  await prisma.auditLog.create({data:{companyId:company.id,userId:membership.userId,action:input.id?"UPDATE":"CREATE",entity:"BRANCH",entityId:branch.id,newValues:{name:branch.name,code:branch.code,status:branch.status}}});refresh();return {id:branch.id};
 }
