@@ -8,25 +8,33 @@ import { getPosContext } from "@/modules/sales/sales.repository";
 export const dynamic = "force-dynamic";
 
 export default async function PosPage() {
-  await requirePermission("sales.create");
+  const { settings } = await requirePermission("sales.create");
   const [{ warehouses, catalog, customers }, cashStatus] = await Promise.all([
     getPosContext(),
-    getPosCashStatus(),
+    settings.requireCashSession ? getPosCashStatus() : Promise.resolve(null),
   ]);
 
   return (
     <AppShell>
       <div className="pos-page-shell">
-        {cashStatus ? (
+        {settings.requireCashSession ? (
+          cashStatus ? (
+            <div className="pos-cash-gate open">
+              <span className="cash-live-dot" />
+              <div><strong>Caja abierta</strong><span>Turno activo en {cashStatus.branchName}. Las ventas quedarán incluidas en este arqueo.</span></div>
+              <Link href="/caja">Ver caja</Link>
+            </div>
+          ) : (
+            <div className="pos-cash-gate closed">
+              <div><strong>Debes abrir caja antes de vender</strong><span>MOBIX no confirmará ventas fuera de un turno de caja para evitar descuadres.</span></div>
+              <Link href="/caja">Abrir caja</Link>
+            </div>
+          )
+        ) : (
           <div className="pos-cash-gate open">
             <span className="cash-live-dot" />
-            <div><strong>Caja abierta</strong><span>Turno activo en {cashStatus.branchName}. Las ventas quedarán incluidas en este arqueo.</span></div>
-            <Link href="/caja">Ver caja</Link>
-          </div>
-        ) : (
-          <div className="pos-cash-gate closed">
-            <div><strong>Debes abrir caja antes de vender</strong><span>MOBIX no confirmará ventas fuera de un turno de caja para evitar descuadres.</span></div>
-            <Link href="/caja">Abrir caja</Link>
+            <div><strong>Control de caja opcional</strong><span>La configuración empresarial permite registrar ventas sin un turno de caja abierto.</span></div>
+            <Link href="/configuracion">Configuración</Link>
           </div>
         )}
         <PosFormV3 warehouses={warehouses} catalog={catalog} customers={customers} />
