@@ -1,11 +1,82 @@
 import Link from "next/link";
-import { ArrowUpRight, Boxes, CircleDollarSign, Smartphone, TriangleAlert } from "lucide-react";
+import {
+  ArrowUpRight,
+  Boxes,
+  CircleDollarSign,
+  ClipboardList,
+  History,
+  PackagePlus,
+  ReceiptText,
+  ScanLine,
+  ShoppingCart,
+  Smartphone,
+  TriangleAlert,
+} from "lucide-react";
 
 const stats = [
   { label: "Ventas de hoy", value: "S/ 0.00", hint: "Sin operaciones todavía", icon: CircleDollarSign },
   { label: "Equipos disponibles", value: "0", hint: "Celulares con IMEI disponible", icon: Smartphone },
   { label: "Productos", value: "0", hint: "Catálogo activo", icon: Boxes },
   { label: "Alertas de stock", value: "0", hint: "Productos bajo mínimo", icon: TriangleAlert },
+];
+
+const quickActions = [
+  {
+    label: "Nueva venta",
+    description: "Abrir POS y registrar una venta",
+    href: "/pos",
+    icon: ShoppingCart,
+    priority: "primary",
+  },
+  {
+    label: "Nueva compra",
+    description: "Ingresar mercadería, costos e IMEI",
+    href: "/compras/nueva",
+    icon: PackagePlus,
+    priority: "primary",
+  },
+  {
+    label: "Nuevo producto",
+    description: "Crear celular, accesorio o servicio",
+    href: "/productos/nuevo",
+    icon: Boxes,
+    priority: "normal",
+  },
+  {
+    label: "Ventas",
+    description: "Consultar ventas y comprobantes",
+    href: "/ventas",
+    icon: ReceiptText,
+    priority: "normal",
+  },
+  {
+    label: "Equipos / IMEI",
+    description: "Ver stock individual y trazabilidad",
+    href: "/equipos",
+    icon: ScanLine,
+    priority: "normal",
+  },
+  {
+    label: "Kardex",
+    description: "Revisar entradas y salidas de inventario",
+    href: "/kardex",
+    icon: History,
+    priority: "normal",
+  },
+  {
+    label: "Compras",
+    description: "Consultar ingresos de mercadería",
+    href: "/compras",
+    icon: ClipboardList,
+    priority: "normal",
+  },
+  {
+    label: "Productos",
+    description: "Administrar catálogo, precios y stock",
+    href: "/productos",
+    icon: Smartphone,
+    priority: "normal",
+  },
 ];
 
 export function DashboardView() {
@@ -31,6 +102,33 @@ export function DashboardView() {
             <span>{hint}</span>
           </article>
         ))}
+      </section>
+
+      <section className="dashboard-quick-section">
+        <div className="dashboard-section-heading">
+          <div>
+            <span className="eyebrow">OPERACIONES</span>
+            <h2>Accesos rápidos</h2>
+            <p>Las funciones que más se utilizan durante la jornada de una tienda de celulares.</p>
+          </div>
+        </div>
+
+        <div className="dashboard-quick-grid">
+          {quickActions.map(({ label, description, href, icon: Icon, priority }) => (
+            <Link
+              className={`dashboard-quick-card ${priority === "primary" ? "is-primary" : ""}`}
+              href={href}
+              key={label}
+            >
+              <span className="dashboard-quick-icon"><Icon size={20} /></span>
+              <span className="dashboard-quick-copy">
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
+              <ArrowUpRight className="dashboard-quick-arrow" size={17} />
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="dashboard-grid">
