@@ -43,6 +43,13 @@ const quickActions = [
     priority: "normal",
   },
   {
+    label: "Caja",
+    description: "Apertura, movimientos, arqueo y cierre",
+    href: "/caja",
+    icon: CircleDollarSign,
+    priority: "normal",
+  },
+  {
     label: "Ventas",
     description: "Consultar ventas y comprobantes",
     href: "/ventas",
@@ -68,13 +75,6 @@ const quickActions = [
     description: "Consultar ingresos de mercadería",
     href: "/compras",
     icon: ClipboardList,
-    priority: "normal",
-  },
-  {
-    label: "Productos",
-    description: "Administrar catálogo, precios y stock",
-    href: "/productos",
-    icon: Smartphone,
     priority: "normal",
   },
 ];
