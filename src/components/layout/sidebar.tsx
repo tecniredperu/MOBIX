@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BadgeDollarSign,
   Boxes,
@@ -40,12 +43,20 @@ const sections = [
   { label: "Reportes", items: [{ label: "Reportes", href: "#", icon: ChartNoAxesCombined }] },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  if (href === "#") return false;
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark">M</div>
-        <div>
+        <div className="brand-copy">
           <strong>MOBIX</strong>
           <span>Gestión móvil</span>
         </div>
@@ -57,18 +68,24 @@ export function Sidebar() {
           <strong>Tienda principal</strong>
           <span>Moyobamba</span>
         </div>
-        <ChevronDown size={16} />
+        <ChevronDown size={15} />
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Navegación principal">
         {sections.map((section) => (
           <div className="nav-section" key={section.label}>
             <p>{section.label}</p>
             {section.items.map((item) => {
               const Icon = item.icon;
+              const active = isActivePath(pathname, item.href);
               return (
-                <Link href={item.href} className="nav-item" key={item.label}>
-                  <Icon size={18} strokeWidth={1.8} />
+                <Link
+                  href={item.href}
+                  className={`nav-item${active ? " active" : ""}${item.href === "#" ? " disabled-link" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  key={item.label}
+                >
+                  <Icon size={17} strokeWidth={1.9} />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -78,8 +95,8 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
-        <Link className="nav-item" href="#"><ShieldCheck size={18} /> Administración</Link>
-        <Link className="nav-item" href="#"><Settings size={18} /> Configuración</Link>
+        <Link className="nav-item disabled-link" href="#"><ShieldCheck size={17} /> <span>Administración</span></Link>
+        <Link className="nav-item disabled-link" href="#"><Settings size={17} /> <span>Configuración</span></Link>
       </div>
     </aside>
   );
