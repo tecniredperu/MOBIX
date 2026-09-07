@@ -164,7 +164,9 @@ export async function createServiceOrderAction(input: {
   const id = randomUUID();
   const eventId = randomUUID();
   const serviceNumber = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${company.id}:service-order`}))`;
+    await tx.$queryRaw<Array<{ locked: string }>>`
+      SELECT pg_advisory_xact_lock(hashtext(${`${company.id}:service-order`}))::text AS "locked"
+    `;
     const sequence = await tx.$queryRaw<SequenceRow[]>`
       SELECT COALESCE(MAX(CAST(SPLIT_PART("serviceNumber", '-', 2) AS INTEGER)), 0) + 1 AS "next"
       FROM "service_orders"
