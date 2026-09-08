@@ -9,23 +9,6 @@ import { revalidatePaths } from "@/lib/revalidation";
 
 const TRANSFER_PATHS = ["/transferencias", "/productos", "/equipos", "/kardex", "/reportes"] as const;
 
-type TransferHeader = {
-  id: string;
-  transferNumber: string;
-  fromWarehouseId: string;
-  toWarehouseId: string;
-  status: string;
-};
-
-type TransferItemRow = {
-  id: string;
-  productId: string;
-  variantId: string;
-  productUnitId: string | null;
-  quantity: number;
-  unitCost: unknown;
-};
-
 type CreateTransferInput = {
   fromWarehouseId: string;
   toWarehouseId: string;
@@ -60,7 +43,9 @@ export async function createTransferAction(input: CreateTransferInput) {
     where: { companyId: company.id, id: { in: variantIds }, status: "ACTIVE" },
     include: { product: true },
   });
-  if (variants.length !== variantIds.length) throw new Error("Uno de los productos ya no está disponible.");
+  if (variants.length !== variantIds.length) {
+    throw new Error("Uno de los productos ya no está disponible.");
+  }
   const variantMap = new Map(variants.map((variant) => [variant.id, variant]));
 
   const result = await prisma.$transaction(async (tx) => {
@@ -79,15 +64,19 @@ export async function createTransferAction(input: CreateTransferInput) {
     const transferNumber = `TR001-${String(Number(sequence[0]?.next ?? 1)).padStart(6, "0")}`;
     const transferId = randomUUID();
 
-    await tx.$executeRaw`
-      INSERT INTO "stock_transfers" (
-        "id", "companyId", "transferNumber", "fromWarehouseId", "toWarehouseId",
-        "status", "notes", "createdById", "createdAt", "sentAt"
-      ) VALUES (
-        ${transferId}, ${company.id}, ${transferNumber}, ${input.fromWarehouseId}, ${input.toWarehouseId},
-        'IN_TRANSIT', ${input.notes?.trim() || null}, ${membership.userId}, NOW(), NOW()
-      )
-    `;
+    await tx.stockTransfer.create({
+      data: {
+        id: transferId,
+        companyId: company.id,
+        transferNumber,
+        fromWarehouseId: input.fromWarehouseId,
+        toWarehouseId: input.toWarehouseId,
+        status: "IN_TRANSIT",
+        notes: input.notes?.trim() || null,
+        createdById: membership.userId,
+        sentAt: new Date(),
+      },
+    });
 
     for (const line of input.lines) {
       const variant = variantMap.get(line.variantId);
@@ -118,18 +107,29 @@ export async function createTransferAction(input: CreateTransferInput) {
 
         for (const unit of units) {
           const updated = await tx.productUnit.updateMany({
-            where: { id: unit.id, companyId: company.id, status: "AVAILABLE", warehouseId: input.fromWarehouseId },
+            where: {
+              id: unit.id,
+              companyId: company.id,
+              status: "AVAILABLE",
+              warehouseId: input.fromWarehouseId,
+            },
             data: { status: "IN_TRANSFER" },
           });
-          if (updated.count !== 1) throw new Error("Un IMEI cambió de estado durante la transferencia.");
+          if (updated.count !== 1) {
+            throw new Error("Un IMEI cambió de estado durante la transferencia.");
+          }
 
-          await tx.$executeRaw`
-            INSERT INTO "stock_transfer_items" (
-              "id", "transferId", "productId", "variantId", "productUnitId", "quantity", "unitCost", "createdAt"
-            ) VALUES (
-              ${randomUUID()}, ${transferId}, ${variant.productId}, ${variant.id}, ${unit.id}, 1, ${Number(unit.purchaseCost)}, NOW()
-            )
-          `;
+          await tx.stockTransferItem.create({
+            data: {
+              id: randomUUID(),
+              transferId,
+              productId: variant.productId,
+              variantId: variant.id,
+              productUnitId: unit.id,
+              quantity: 1,
+              unitCost: Number(unit.purchaseCost),
+            },
+          });
 
           await tx.inventoryMovement.create({
             data: {
@@ -149,6 +149,7 @@ export async function createTransferAction(input: CreateTransferInput) {
           });
         }
       } else {
+        await lockInventoryBalance(tx, company.id, input.fromWarehouseId, variant.id);
         const balance = await tx.inventoryBalance.findUnique({
           where: {
             companyId_warehouseId_variantId: {
@@ -166,15 +167,21 @@ export async function createTransferAction(input: CreateTransferInput) {
           where: { id: balance.id, quantity: { gte: line.quantity } },
           data: { quantity: { decrement: line.quantity } },
         });
-        if (updated.count !== 1) throw new Error(`Stock insuficiente de ${variant.product.name}.`);
+        if (updated.count !== 1) {
+          throw new Error(`Stock insuficiente de ${variant.product.name}.`);
+        }
 
-        await tx.$executeRaw`
-          INSERT INTO "stock_transfer_items" (
-            "id", "transferId", "productId", "variantId", "productUnitId", "quantity", "unitCost", "createdAt"
-          ) VALUES (
-            ${randomUUID()}, ${transferId}, ${variant.productId}, ${variant.id}, NULL, ${line.quantity}, ${Number(balance.averageCost)}, NOW()
-          )
-        `;
+        await tx.stockTransferItem.create({
+          data: {
+            id: randomUUID(),
+            transferId,
+            productId: variant.productId,
+            variantId: variant.id,
+            productUnitId: null,
+            quantity: line.quantity,
+            unitCost: Number(balance.averageCost),
+          },
+        });
 
         await tx.inventoryMovement.create({
           data: {
@@ -221,24 +228,25 @@ export async function receiveTransferAction(transferId: string) {
   const { company, membership } = await requirePermission("inventory.transfer");
 
   const result = await prisma.$transaction(async (tx) => {
-    const headers = await tx.$queryRaw<TransferHeader[]>`
-      SELECT "id", "transferNumber", "fromWarehouseId", "toWarehouseId", "status"
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
       FROM "stock_transfers"
       WHERE "id" = ${transferId} AND "companyId" = ${company.id}
       LIMIT 1
       FOR UPDATE
     `;
-    const header = headers[0];
+    if (!locked.length) throw new Error("La transferencia ya no existe.");
+
+    const header = await tx.stockTransfer.findFirst({
+      where: { id: transferId, companyId: company.id },
+      include: { items: true },
+    });
     if (!header) throw new Error("La transferencia ya no existe.");
-    if (header.status !== "IN_TRANSIT") throw new Error("Solo se pueden recibir transferencias en tránsito.");
+    if (header.status !== "IN_TRANSIT") {
+      throw new Error("Solo se pueden recibir transferencias en tránsito.");
+    }
 
-    const items = await tx.$queryRaw<TransferItemRow[]>`
-      SELECT "id", "productId", "variantId", "productUnitId", "quantity", "unitCost"
-      FROM "stock_transfer_items"
-      WHERE "transferId" = ${header.id}
-    `;
-
-    for (const item of items) {
+    for (const item of header.items) {
       const cost = Number(item.unitCost);
       if (item.productUnitId) {
         const updated = await tx.productUnit.updateMany({
@@ -282,7 +290,9 @@ export async function receiveTransferAction(transferId: string) {
         const oldQty = Number(balance?.quantity ?? 0);
         const oldAverage = Number(balance?.averageCost ?? 0);
         const newQty = oldQty + item.quantity;
-        const newAverage = newQty > 0 ? roundMoney((oldQty * oldAverage + item.quantity * cost) / newQty) : cost;
+        const newAverage = newQty > 0
+          ? roundMoney((oldQty * oldAverage + item.quantity * cost) / newQty)
+          : cost;
 
         await tx.inventoryBalance.upsert({
           where: {
@@ -321,12 +331,17 @@ export async function receiveTransferAction(transferId: string) {
       }
     }
 
-    const changed = await tx.$executeRaw`
-      UPDATE "stock_transfers"
-      SET "status" = 'RECEIVED', "receivedById" = ${membership.userId}, "receivedAt" = NOW()
-      WHERE "id" = ${header.id} AND "companyId" = ${company.id} AND "status" = 'IN_TRANSIT'
-    `;
-    if (changed !== 1) throw new Error("La transferencia fue recibida por otro usuario.");
+    const changed = await tx.stockTransfer.updateMany({
+      where: { id: header.id, companyId: company.id, status: "IN_TRANSIT" },
+      data: {
+        status: "RECEIVED",
+        receivedById: membership.userId,
+        receivedAt: new Date(),
+      },
+    });
+    if (changed.count !== 1) {
+      throw new Error("La transferencia fue recibida por otro usuario.");
+    }
 
     await tx.auditLog.create({
       data: {
@@ -351,25 +366,26 @@ export async function cancelTransferAction(transferId: string) {
   const { company, membership } = await requirePermission("inventory.transfer");
 
   const result = await prisma.$transaction(async (tx) => {
-    const headers = await tx.$queryRaw<TransferHeader[]>`
-      SELECT "id", "transferNumber", "fromWarehouseId", "toWarehouseId", "status"
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
       FROM "stock_transfers"
       WHERE "id" = ${transferId} AND "companyId" = ${company.id}
       LIMIT 1
       FOR UPDATE
     `;
-    const header = headers[0];
+    if (!locked.length) {
+      throw new Error("Solo se puede cancelar una transferencia en tránsito.");
+    }
+
+    const header = await tx.stockTransfer.findFirst({
+      where: { id: transferId, companyId: company.id },
+      include: { items: true },
+    });
     if (!header || header.status !== "IN_TRANSIT") {
       throw new Error("Solo se puede cancelar una transferencia en tránsito.");
     }
 
-    const items = await tx.$queryRaw<TransferItemRow[]>`
-      SELECT "id", "productId", "variantId", "productUnitId", "quantity", "unitCost"
-      FROM "stock_transfer_items"
-      WHERE "transferId" = ${header.id}
-    `;
-
-    for (const item of items) {
+    for (const item of header.items) {
       const cost = Number(item.unitCost);
       if (item.productUnitId) {
         const updated = await tx.productUnit.updateMany({
@@ -381,7 +397,9 @@ export async function cancelTransferAction(transferId: string) {
           },
           data: { status: "AVAILABLE" },
         });
-        if (updated.count !== 1) throw new Error("Un IMEI ya no se encuentra en tránsito.");
+        if (updated.count !== 1) {
+          throw new Error("Un IMEI ya no se encuentra en tránsito.");
+        }
       } else {
         await lockInventoryBalance(tx, company.id, header.fromWarehouseId, item.variantId);
         const balance = await tx.inventoryBalance.findUnique({
@@ -396,7 +414,9 @@ export async function cancelTransferAction(transferId: string) {
         const oldQty = Number(balance?.quantity ?? 0);
         const oldAverage = Number(balance?.averageCost ?? 0);
         const newQty = oldQty + item.quantity;
-        const newAverage = newQty > 0 ? roundMoney((oldQty * oldAverage + item.quantity * cost) / newQty) : cost;
+        const newAverage = newQty > 0
+          ? roundMoney((oldQty * oldAverage + item.quantity * cost) / newQty)
+          : cost;
 
         await tx.inventoryBalance.upsert({
           where: {
@@ -436,12 +456,13 @@ export async function cancelTransferAction(transferId: string) {
       });
     }
 
-    const changed = await tx.$executeRaw`
-      UPDATE "stock_transfers"
-      SET "status" = 'CANCELLED'
-      WHERE "id" = ${header.id} AND "companyId" = ${company.id} AND "status" = 'IN_TRANSIT'
-    `;
-    if (changed !== 1) throw new Error("La transferencia cambió de estado durante la cancelación.");
+    const changed = await tx.stockTransfer.updateMany({
+      where: { id: header.id, companyId: company.id, status: "IN_TRANSIT" },
+      data: { status: "CANCELLED" },
+    });
+    if (changed.count !== 1) {
+      throw new Error("La transferencia cambió de estado durante la cancelación.");
+    }
 
     await tx.auditLog.create({
       data: {
