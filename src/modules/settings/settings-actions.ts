@@ -139,28 +139,23 @@ export async function updateCompanySettingsAction(input: CompanySettingsInput) {
     throw new Error("Configura las series de comprobantes.");
   }
 
+  const settingsData = {
+    taxRate: PERU_IGV_RATE,
+    defaultTaxCondition: input.defaultTaxCondition,
+    receiptSeries,
+    invoiceSeries,
+    salesNoteSeries,
+    ticketFooter: nullableText(input.ticketFooter),
+    defaultWarrantyDays: input.defaultWarrantyDays,
+    requireCashSession: input.requireCashSession,
+  };
+
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      INSERT INTO "company_settings" (
-        "companyId", "taxRate", "defaultTaxCondition", "receiptSeries", "invoiceSeries",
-        "salesNoteSeries", "ticketFooter", "defaultWarrantyDays", "requireCashSession",
-        "createdAt", "updatedAt"
-      ) VALUES (
-        ${company.id}, ${PERU_IGV_RATE}, ${input.defaultTaxCondition}, ${receiptSeries}, ${invoiceSeries},
-        ${salesNoteSeries}, ${nullableText(input.ticketFooter)}, ${input.defaultWarrantyDays},
-        ${input.requireCashSession}, NOW(), NOW()
-      )
-      ON CONFLICT ("companyId") DO UPDATE SET
-        "taxRate" = EXCLUDED."taxRate",
-        "defaultTaxCondition" = EXCLUDED."defaultTaxCondition",
-        "receiptSeries" = EXCLUDED."receiptSeries",
-        "invoiceSeries" = EXCLUDED."invoiceSeries",
-        "salesNoteSeries" = EXCLUDED."salesNoteSeries",
-        "ticketFooter" = EXCLUDED."ticketFooter",
-        "defaultWarrantyDays" = EXCLUDED."defaultWarrantyDays",
-        "requireCashSession" = EXCLUDED."requireCashSession",
-        "updatedAt" = NOW()
-    `;
+    await tx.companySettings.upsert({
+      where: { companyId: company.id },
+      update: settingsData,
+      create: { companyId: company.id, ...settingsData },
+    });
 
     await tx.auditLog.create({
       data: {
@@ -169,15 +164,7 @@ export async function updateCompanySettingsAction(input: CompanySettingsInput) {
         action: "UPDATE",
         entity: "COMPANY_SETTINGS",
         entityId: company.id,
-        newValues: {
-          taxRate: PERU_IGV_RATE,
-          defaultTaxCondition: input.defaultTaxCondition,
-          receiptSeries,
-          invoiceSeries,
-          salesNoteSeries,
-          defaultWarrantyDays: input.defaultWarrantyDays,
-          requireCashSession: input.requireCashSession,
-        },
+        newValues: settingsData,
       },
     });
   });
