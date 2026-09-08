@@ -8,53 +8,16 @@ import type {
   SoldUnitOption,
 } from "./service-types";
 
-type ServiceRow = {
-  id: string;
-  serviceNumber: string;
-  serviceType: string;
-  status: string;
-  deviceName: string;
-  identifier: string | null;
-  warrantyCovered: boolean;
-  estimatedCost: unknown;
-  finalCost: unknown;
-  receivedAt: Date;
-  expectedAt: Date | null;
-  customerName: string;
-  customerPhone: string | null;
-  technicianName: string | null;
-};
-
-type ServiceDetailRow = ServiceRow & {
-  companyId: string;
-  customerId: string;
-  productUnitId: string | null;
-  saleId: string | null;
-  brand: string | null;
-  model: string | null;
-  reportedIssue: string;
-  accessories: string | null;
-  physicalCondition: string | null;
-  warrantyExpiresAt: Date | null;
-  diagnosis: string | null;
-  workPerformed: string | null;
-  technicianId: string | null;
-  readyAt: Date | null;
-  deliveredAt: Date | null;
-  customerDocumentType: string | null;
-  customerDocumentNumber: string | null;
-  customerEmail: string | null;
-  customerAddress: string | null;
-  saleNumber: string | null;
-};
-
-type ServiceEventRow = {
-  id: string;
-  status: string;
-  note: string | null;
-  createdAt: Date;
-  userName: string;
-};
+const SERVICE_STATUSES = new Set<ServiceStatus>([
+  "RECEIVED",
+  "DIAGNOSIS",
+  "WAITING_APPROVAL",
+  "IN_REPAIR",
+  "READY",
+  "DELIVERED",
+  "CANCELLED",
+]);
+const SERVICE_TYPES = new Set<ServiceType>(["WARRANTY", "TECHNICAL_SERVICE"]);
 
 function displayCustomer(customer: {
   businessName: string | null;
@@ -78,6 +41,14 @@ function unitIdentifier(identifiers: Array<{ type: string; value: string }>) {
 function warrantyExpiry(soldAt: Date, days: number) {
   if (days <= 0) return null;
   return new Date(soldAt.getTime() + days * 86_400_000);
+}
+
+function asServiceStatus(value: string): ServiceStatus {
+  return SERVICE_STATUSES.has(value as ServiceStatus) ? (value as ServiceStatus) : "RECEIVED";
+}
+
+function asServiceType(value: string): ServiceType {
+  return SERVICE_TYPES.has(value as ServiceType) ? (value as ServiceType) : "TECHNICAL_SERVICE";
 }
 
 export async function getServiceContext() {
@@ -105,13 +76,14 @@ export async function getServiceContext() {
         },
       },
     }),
-    prisma.$queryRaw<Array<{ productUnitId: string | null }>>`
-      SELECT "productUnitId"
-      FROM "service_orders"
-      WHERE "companyId" = ${company.id}
-        AND "productUnitId" IS NOT NULL
-        AND "status" NOT IN ('DELIVERED','CANCELLED')
-    `,
+    prisma.serviceOrder.findMany({
+      where: {
+        companyId: company.id,
+        productUnitId: { not: null },
+        status: { notIn: ["DELIVERED", "CANCELLED"] },
+      },
+      select: { productUnitId: true },
+    }),
     prisma.companyUser.findMany({
       where: { companyId: company.id, status: "ACTIVE", user: { status: "ACTIVE" } },
       orderBy: { createdAt: "asc" },
@@ -119,7 +91,7 @@ export async function getServiceContext() {
     }),
   ]);
 
-  const activeUnitIds = new Set(activeRows.map((row) => row.productUnitId).filter(Boolean));
+  const activeUnitIds = new Set(activeRows.flatMap((row) => row.productUnitId ? [row.productUnitId] : []));
 
   const customers: ServiceCustomerOption[] = customersRaw.map((customer) => ({
     id: customer.id,
@@ -137,6 +109,7 @@ export async function getServiceContext() {
     );
     const latest = links[0]?.saleItem.sale;
     if (!latest?.customerId || !latest.customer) return [];
+
     const warrantyDays = unit.product.warrantyDays ?? 0;
     const expires = warrantyExpiry(latest.createdAt, warrantyDays);
     return [{
@@ -172,47 +145,52 @@ export async function getServiceOrders(filters: {
   type?: string;
 } = {}) {
   const company = await getActiveCompany();
-  const rows = await prisma.$queryRaw<ServiceRow[]>`
-    SELECT
-      so."id", so."serviceNumber", so."serviceType", so."status", so."deviceName",
-      so."identifier", so."warrantyCovered", so."estimatedCost", so."finalCost",
-      so."receivedAt", so."expectedAt",
-      COALESCE(c."businessName", NULLIF(TRIM(CONCAT(COALESCE(c."firstName", ''), ' ', COALESCE(c."lastName", ''))), ''), 'Cliente') AS "customerName",
-      COALESCE(c."whatsapp", c."phone") AS "customerPhone",
-      u."name" AS "technicianName"
-    FROM "service_orders" so
-    INNER JOIN "customers" c ON c."id" = so."customerId"
-    LEFT JOIN "users" u ON u."id" = so."technicianId"
-    WHERE so."companyId" = ${company.id}
-    ORDER BY so."receivedAt" DESC
-    LIMIT 250
-  `;
+  const q = filters.q?.trim();
+  const status = SERVICE_STATUSES.has(filters.status as ServiceStatus) ? filters.status : undefined;
+  const serviceType = SERVICE_TYPES.has(filters.type as ServiceType) ? filters.type : undefined;
 
-  const q = filters.q?.trim().toLowerCase();
-  const allowedStatuses = new Set(["RECEIVED","DIAGNOSIS","WAITING_APPROVAL","IN_REPAIR","READY","DELIVERED","CANCELLED"]);
-  const allowedTypes = new Set(["WARRANTY","TECHNICAL_SERVICE"]);
-  const items: ServiceListItem[] = rows
-    .filter((row) => !filters.status || !allowedStatuses.has(filters.status) || row.status === filters.status)
-    .filter((row) => !filters.type || !allowedTypes.has(filters.type) || row.serviceType === filters.type)
-    .filter((row) => !q || [row.serviceNumber, row.customerName, row.deviceName, row.identifier ?? ""].join(" ").toLowerCase().includes(q))
-    .map((row) => ({
-      id: row.id,
-      serviceNumber: row.serviceNumber,
-      serviceType: row.serviceType as ServiceType,
-      status: row.status as ServiceStatus,
-      customerName: row.customerName,
-      customerPhone: row.customerPhone,
-      deviceName: row.deviceName,
-      identifier: row.identifier,
-      warrantyCovered: row.warrantyCovered,
-      technicianName: row.technicianName,
-      estimatedCost: Number(row.estimatedCost ?? 0),
-      finalCost: Number(row.finalCost ?? 0),
-      receivedAt: row.receivedAt.toISOString(),
-      expectedAt: row.expectedAt?.toISOString() ?? null,
-    }));
+  const rows = await prisma.serviceOrder.findMany({
+    where: {
+      companyId: company.id,
+      ...(status ? { status } : {}),
+      ...(serviceType ? { serviceType } : {}),
+      ...(q ? {
+        OR: [
+          { serviceNumber: { contains: q, mode: "insensitive" } },
+          { deviceName: { contains: q, mode: "insensitive" } },
+          { identifier: { contains: q, mode: "insensitive" } },
+          { customer: { is: { businessName: { contains: q, mode: "insensitive" } } } },
+          { customer: { is: { firstName: { contains: q, mode: "insensitive" } } } },
+          { customer: { is: { lastName: { contains: q, mode: "insensitive" } } } },
+        ],
+      } : {}),
+    },
+    include: {
+      customer: true,
+      technician: { select: { name: true } },
+    },
+    orderBy: { receivedAt: "desc" },
+    take: 250,
+  });
 
-  const open = items.filter((item) => !["DELIVERED","CANCELLED"].includes(item.status));
+  const items: ServiceListItem[] = rows.map((row) => ({
+    id: row.id,
+    serviceNumber: row.serviceNumber,
+    serviceType: asServiceType(row.serviceType),
+    status: asServiceStatus(row.status),
+    customerName: displayCustomer(row.customer),
+    customerPhone: row.customer.whatsapp ?? row.customer.phone,
+    deviceName: row.deviceName,
+    identifier: row.identifier,
+    warrantyCovered: row.warrantyCovered,
+    technicianName: row.technician?.name ?? null,
+    estimatedCost: Number(row.estimatedCost),
+    finalCost: Number(row.finalCost),
+    receivedAt: row.receivedAt.toISOString(),
+    expectedAt: row.expectedAt?.toISOString() ?? null,
+  }));
+
+  const open = items.filter((item) => !["DELIVERED", "CANCELLED"].includes(item.status));
   return {
     items,
     summary: {
@@ -226,40 +204,28 @@ export async function getServiceOrders(filters: {
 
 export async function getServiceOrderDetail(id: string) {
   const company = await getActiveCompany();
-  const rows = await prisma.$queryRaw<ServiceDetailRow[]>`
-    SELECT
-      so.*,
-      COALESCE(c."businessName", NULLIF(TRIM(CONCAT(COALESCE(c."firstName", ''), ' ', COALESCE(c."lastName", ''))), ''), 'Cliente') AS "customerName",
-      COALESCE(c."whatsapp", c."phone") AS "customerPhone",
-      c."documentType" AS "customerDocumentType", c."documentNumber" AS "customerDocumentNumber",
-      c."email" AS "customerEmail", c."address" AS "customerAddress",
-      u."name" AS "technicianName", s."saleNumber"
-    FROM "service_orders" so
-    INNER JOIN "customers" c ON c."id" = so."customerId"
-    LEFT JOIN "users" u ON u."id" = so."technicianId"
-    LEFT JOIN "sales" s ON s."id" = so."saleId"
-    WHERE so."id" = ${id} AND so."companyId" = ${company.id}
-    LIMIT 1
-  `;
-  const row = rows[0];
+  const row = await prisma.serviceOrder.findFirst({
+    where: { id, companyId: company.id },
+    include: {
+      customer: true,
+      technician: { select: { name: true } },
+      sale: { select: { saleNumber: true } },
+      events: {
+        include: { createdBy: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
   if (!row) return null;
-
-  const events = await prisma.$queryRaw<ServiceEventRow[]>`
-    SELECT e."id", e."status", e."note", e."createdAt", u."name" AS "userName"
-    FROM "service_order_events" e
-    INNER JOIN "users" u ON u."id" = e."createdById"
-    WHERE e."serviceOrderId" = ${id}
-    ORDER BY e."createdAt" DESC
-  `;
 
   return {
     id: row.id,
     serviceNumber: row.serviceNumber,
-    serviceType: row.serviceType as ServiceType,
-    status: row.status as ServiceStatus,
+    serviceType: asServiceType(row.serviceType),
+    status: asServiceStatus(row.status),
     productUnitId: row.productUnitId,
     saleId: row.saleId,
-    saleNumber: row.saleNumber,
+    saleNumber: row.sale?.saleNumber ?? null,
     deviceName: row.deviceName,
     brand: row.brand,
     model: row.model,
@@ -272,28 +238,28 @@ export async function getServiceOrderDetail(id: string) {
     diagnosis: row.diagnosis,
     workPerformed: row.workPerformed,
     technicianId: row.technicianId,
-    technicianName: row.technicianName,
-    estimatedCost: Number(row.estimatedCost ?? 0),
-    finalCost: Number(row.finalCost ?? 0),
+    technicianName: row.technician?.name ?? null,
+    estimatedCost: Number(row.estimatedCost),
+    finalCost: Number(row.finalCost),
     receivedAt: row.receivedAt.toISOString(),
     expectedAt: row.expectedAt?.toISOString() ?? null,
     readyAt: row.readyAt?.toISOString() ?? null,
     deliveredAt: row.deliveredAt?.toISOString() ?? null,
     customer: {
       id: row.customerId,
-      name: row.customerName,
-      phone: row.customerPhone,
-      documentType: row.customerDocumentType,
-      documentNumber: row.customerDocumentNumber,
-      email: row.customerEmail,
-      address: row.customerAddress,
+      name: displayCustomer(row.customer),
+      phone: row.customer.whatsapp ?? row.customer.phone,
+      documentType: row.customer.documentType,
+      documentNumber: row.customer.documentNumber,
+      email: row.customer.email,
+      address: row.customer.address,
     },
-    events: events.map((event) => ({
+    events: row.events.map((event) => ({
       id: event.id,
-      status: event.status as ServiceStatus,
+      status: asServiceStatus(event.status),
       note: event.note,
       createdAt: event.createdAt.toISOString(),
-      userName: event.userName,
+      userName: event.createdBy.name,
     })),
   };
 }
