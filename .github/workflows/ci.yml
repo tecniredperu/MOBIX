@@ -58,6 +58,12 @@ jobs:
       - name: Cargar datos de prueba
         run: npm run db:seed
 
+      - name: Pruebas unitarias de negocio
+        run: npm run test:unit
+
+      - name: Pruebas de integración y concurrencia
+        run: npm run test:integration
+
       - name: Revisar TypeScript
         run: npm run typecheck
 
