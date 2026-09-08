@@ -11,6 +11,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "test:integration": "tsx --test tests/integration/*.test.ts",
+    "uat:staging": "tsx scripts/uat-staging.ts",
     "verify": "npm run db:validate && npm run test && npm run typecheck && npm run build",
     "audit:prod": "node scripts/audit-production.mjs",
     "db:generate": "prisma generate",
