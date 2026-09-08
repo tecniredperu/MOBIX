@@ -1,19 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import "./mobix-v03.css";
-import "./mobix-sales.css";
-import "./mobix-pos-vuelto.css";
-import "./mobix-dashboard.css";
-import "./mobix-pro.css";
-import "./mobix-cash.css";
-import "./mobix-pos-cash.css";
-import "./mobix-dashboard-data.css";
-import "./mobix-customers.css";
-import "./mobix-print-modals.css";
-import "./mobix-service.css";
-import "./mobix-service-print.css";
-import "./mobix-business.css";
-import "./mobix-auth.css";
+import "./mobix.css";
 
 export const metadata: Metadata = {
   title: "MOBIX",
