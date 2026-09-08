@@ -167,6 +167,10 @@ model Company {
   accountsReceivable  AccountReceivable[]
   receivablePayments  ReceivablePayment[]
   auditLogs           AuditLog[]
+  settings            CompanySettings?
+  returnOrders        ReturnOrder[]
+  stockTransfers      StockTransfer[]
+  serviceOrders       ServiceOrder[]
 
   @@unique([ruc])
   @@index([status])
@@ -184,9 +188,9 @@ model Branch {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  company           Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
   warehouses        Warehouse[]
-  defaultForMembers CompanyUser[]  @relation("DefaultBranch")
+  defaultForMembers CompanyUser[] @relation("DefaultBranch")
   sales             Sale[]
   cashSessions      CashSession[]
 
@@ -214,6 +218,9 @@ model Warehouse {
   sales              Sale[]
   inventoryMovements InventoryMovement[]
   inventoryBalances  InventoryBalance[]
+  returnOrders       ReturnOrder[]
+  stockTransfersFrom StockTransfer[]      @relation("TransferFromWarehouse")
+  stockTransfersTo   StockTransfer[]      @relation("TransferToWarehouse")
 
   @@unique([companyId, code])
   @@index([companyId, branchId, status])
@@ -231,15 +238,21 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  memberships        CompanyUser[]
-  createdPurchases   Purchase[]          @relation("PurchaseCreatedBy")
-  soldSales          Sale[]              @relation("SaleSeller")
-  createdSales       Sale[]              @relation("SaleCreatedBy")
-  inventoryMovements InventoryMovement[] @relation("MovementCreatedBy")
-  cashSessions       CashSession[]
-  cashMovements      CashMovement[]      @relation("CashMovementCreatedBy")
-  receivablePayments ReceivablePayment[] @relation("ReceivablePaymentCreatedBy")
-  auditLogs          AuditLog[]
+  memberships             CompanyUser[]
+  createdPurchases        Purchase[]          @relation("PurchaseCreatedBy")
+  soldSales               Sale[]              @relation("SaleSeller")
+  createdSales            Sale[]              @relation("SaleCreatedBy")
+  inventoryMovements      InventoryMovement[] @relation("MovementCreatedBy")
+  cashSessions            CashSession[]
+  cashMovements           CashMovement[]      @relation("CashMovementCreatedBy")
+  receivablePayments      ReceivablePayment[] @relation("ReceivablePaymentCreatedBy")
+  auditLogs               AuditLog[]
+  createdReturnOrders     ReturnOrder[]        @relation("ReturnCreatedBy")
+  createdStockTransfers   StockTransfer[]      @relation("TransferCreatedBy")
+  receivedStockTransfers  StockTransfer[]      @relation("TransferReceivedBy")
+  createdServiceOrders    ServiceOrder[]       @relation("ServiceCreatedBy")
+  technicianServiceOrders ServiceOrder[]       @relation("ServiceTechnician")
+  serviceOrderEvents      ServiceOrderEvent[]  @relation("ServiceEventCreatedBy")
 
   @@index([status])
   @@map("users")
@@ -375,6 +388,8 @@ model Product {
   saleItems          SaleItem[]
   inventoryMovements InventoryMovement[]
   inventoryBalances  InventoryBalance[]
+  returnItems        ReturnItem[]
+  stockTransferItems StockTransferItem[]
 
   @@unique([companyId, sku])
   @@unique([companyId, barcode])
@@ -405,6 +420,8 @@ model ProductVariant {
   saleItems          SaleItem[]
   inventoryMovements InventoryMovement[]
   inventoryBalances  InventoryBalance[]
+  returnItems        ReturnItem[]
+  stockTransferItems StockTransferItem[]
 
   @@unique([companyId, sku])
   @@unique([companyId, barcode])
@@ -435,6 +452,9 @@ model ProductUnit {
   identifiers        ProductUnitIdentifier[]
   saleLinks          SaleItemUnit[]
   inventoryMovements InventoryMovement[]
+  returnItems        ReturnItem[]
+  stockTransferItems StockTransferItem[]
+  serviceOrders      ServiceOrder[]
 
   @@index([companyId, productId, variantId, status])
   @@index([companyId, warehouseId, status])
@@ -554,9 +574,11 @@ model Customer {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company     Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  sales       Sale[]
-  receivables AccountReceivable[]
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sales         Sale[]
+  receivables   AccountReceivable[]
+  returnOrders  ReturnOrder[]
+  serviceOrders ServiceOrder[]
 
   @@unique([companyId, documentNumber])
   @@index([companyId, status])
@@ -586,15 +608,17 @@ model Sale {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company    Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  branch     Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  warehouse  Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  customer   Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  seller     User               @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
-  createdBy  User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  items      SaleItem[]
-  payments   SalePayment[]
-  receivable AccountReceivable?
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch        Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  customer      Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  seller        User               @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  createdBy     User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items         SaleItem[]
+  payments      SalePayment[]
+  receivable    AccountReceivable?
+  returnOrders  ReturnOrder[]
+  serviceOrders ServiceOrder[]
 
   @@unique([companyId, saleNumber])
   @@index([companyId, branchId, createdAt])
@@ -617,10 +641,11 @@ model SaleItem {
   total     Decimal  @db.Decimal(14, 2)
   createdAt DateTime @default(now())
 
-  sale    Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  units   SaleItemUnit[]
+  sale        Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  units       SaleItemUnit[]
+  returnItems ReturnItem[]
 
   @@index([saleId, productId, variantId])
   @@map("sale_items")
@@ -690,12 +715,12 @@ model InventoryMovement {
   createdById   String
   createdAt     DateTime              @default(now())
 
-  company     Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  product     Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
-  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  productUnit ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: SetNull)
-  createdBy   User            @relation("MovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productUnit ProductUnit?   @relation(fields: [productUnitId], references: [id], onDelete: SetNull)
+  createdBy   User           @relation("MovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([companyId, warehouseId, productId, variantId, createdAt])
   @@index([companyId, productUnitId, createdAt])
@@ -776,25 +801,217 @@ model AccountReceivable {
 }
 
 model ReceivablePayment {
-  id             String        @id @default(cuid())
-  companyId      String
-  receivableId   String
-  cashSessionId  String?
-  amount         Decimal       @db.Decimal(14, 2)
-  paymentMethod  PaymentMethod
-  reference      String?
-  notes          String?
-  createdById    String
-  paidAt         DateTime      @default(now())
+  id            String        @id @default(cuid())
+  companyId     String
+  receivableId  String
+  cashSessionId String?
+  amount        Decimal       @db.Decimal(14, 2)
+  paymentMethod PaymentMethod
+  reference     String?
+  notes         String?
+  createdById   String
+  paidAt        DateTime      @default(now())
 
-  company       Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  receivable    AccountReceivable  @relation(fields: [receivableId], references: [id], onDelete: Restrict)
-  cashSession   CashSession?       @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
-  createdBy     User               @relation("ReceivablePaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  receivable  AccountReceivable @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  cashSession CashSession?      @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+  createdBy   User              @relation("ReceivablePaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([companyId, receivableId, paidAt])
   @@index([companyId, cashSessionId, paidAt])
   @@map("receivable_payments")
+}
+
+model CompanySettings {
+  companyId             String       @id
+  taxRate               Decimal      @default(18) @db.Decimal(6, 3)
+  defaultTaxCondition   TaxCondition @default(TAXED)
+  receiptSeries         String       @default("B001")
+  invoiceSeries         String       @default("F001")
+  salesNoteSeries       String       @default("NV01")
+  ticketFooter          String?
+  defaultWarrantyDays   Int          @default(0)
+  requireCashSession    Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @default(now()) @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade, map: "company_settings_company_fkey")
+
+  @@map("company_settings")
+}
+
+model ReturnOrder {
+  id           String   @id
+  companyId    String
+  saleId       String
+  customerId   String?
+  warehouseId  String
+  returnNumber String
+  type         String   @default("RETURN")
+  status       String   @default("COMPLETED")
+  reason       String
+  refundMethod String?
+  refundAmount Decimal  @default(0) @db.Decimal(14, 2)
+  notes        String?
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict, map: "return_orders_company_fkey")
+  sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict, map: "return_orders_sale_fkey")
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull, map: "return_orders_customer_fkey")
+  warehouse Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
+  createdBy User       @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
+  items     ReturnItem[]
+
+  @@unique([companyId, returnNumber], map: "return_orders_company_number_key")
+  @@index([companyId, createdAt], map: "return_orders_company_date_idx")
+  @@index([saleId], map: "return_orders_sale_idx")
+  @@map("return_orders")
+}
+
+model ReturnItem {
+  id            String   @id
+  returnOrderId String
+  saleItemId    String
+  productId     String
+  variantId     String
+  productUnitId String?
+  quantity      Int
+  unitPrice     Decimal  @db.Decimal(14, 2)
+  unitCost      Decimal  @db.Decimal(14, 2)
+  amount        Decimal  @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+
+  returnOrder ReturnOrder     @relation(fields: [returnOrderId], references: [id], onDelete: Cascade, map: "return_items_order_fkey")
+  saleItem    SaleItem        @relation(fields: [saleItemId], references: [id], onDelete: Restrict, map: "return_items_sale_item_fkey")
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Restrict, map: "return_items_product_fkey")
+  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict, map: "return_items_variant_fkey")
+  productUnit ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: SetNull, map: "return_items_unit_fkey")
+
+  @@index([returnOrderId], map: "return_items_order_idx")
+  @@index([saleItemId], map: "return_items_sale_item_idx")
+  @@map("return_items")
+}
+
+model StockTransfer {
+  id              String   @id
+  companyId       String
+  transferNumber  String
+  fromWarehouseId String
+  toWarehouseId   String
+  status          String   @default("IN_TRANSIT")
+  notes           String?
+  createdById     String
+  receivedById    String?
+  createdAt       DateTime @default(now())
+  sentAt          DateTime?
+  receivedAt      DateTime?
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Restrict, map: "stock_transfers_company_fkey")
+  fromWarehouse Warehouse @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: Restrict, map: "stock_transfers_from_fkey")
+  toWarehouse   Warehouse @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id], onDelete: Restrict, map: "stock_transfers_to_fkey")
+  createdBy     User      @relation("TransferCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "stock_transfers_created_by_fkey")
+  receivedBy    User?     @relation("TransferReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull, map: "stock_transfers_received_by_fkey")
+  items         StockTransferItem[]
+
+  @@unique([companyId, transferNumber], map: "stock_transfers_company_number_key")
+  @@index([companyId, status, createdAt], map: "stock_transfers_company_status_idx")
+  @@index([fromWarehouseId, createdAt], map: "stock_transfers_from_idx")
+  @@index([toWarehouseId, createdAt], map: "stock_transfers_to_idx")
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id            String   @id
+  transferId    String
+  productId     String
+  variantId     String
+  productUnitId String?
+  quantity      Int
+  unitCost      Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+
+  transfer    StockTransfer   @relation(fields: [transferId], references: [id], onDelete: Cascade, map: "stock_transfer_items_transfer_fkey")
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Restrict, map: "stock_transfer_items_product_fkey")
+  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict, map: "stock_transfer_items_variant_fkey")
+  productUnit ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: SetNull, map: "stock_transfer_items_unit_fkey")
+
+  @@index([transferId], map: "stock_transfer_items_transfer_idx")
+  @@index([productUnitId], map: "stock_transfer_items_unit_idx")
+  @@map("stock_transfer_items")
+}
+
+model ServiceOrder {
+  id                  String   @id
+  companyId           String
+  customerId          String
+  productUnitId       String?
+  saleId              String?
+  serviceNumber       String
+  serviceType         String
+  status              String   @default("RECEIVED")
+  deviceName          String
+  brand               String?
+  model               String?
+  identifier          String?
+  reportedIssue       String
+  accessories         String?
+  physicalCondition   String?
+  warrantyCovered     Boolean  @default(false)
+  warrantyExpiresAt   DateTime?
+  diagnosis           String?
+  workPerformed       String?
+  technicianId        String?
+  estimatedCost       Decimal  @default(0) @db.Decimal(14, 2)
+  finalCost           Decimal  @default(0) @db.Decimal(14, 2)
+  receivedAt          DateTime @default(now())
+  expectedAt          DateTime?
+  readyAt             DateTime?
+  deliveredAt         DateTime?
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Restrict, map: "service_orders_company_fkey")
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict, map: "service_orders_customer_fkey")
+  productUnit ProductUnit? @relation(fields: [productUnitId], references: [id], onDelete: SetNull, map: "service_orders_unit_fkey")
+  sale        Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull, map: "service_orders_sale_fkey")
+  technician  User?        @relation("ServiceTechnician", fields: [technicianId], references: [id], onDelete: SetNull, map: "service_orders_technician_fkey")
+  createdBy   User         @relation("ServiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "service_orders_created_by_fkey")
+  events      ServiceOrderEvent[]
+
+  @@unique([companyId, serviceNumber], map: "service_orders_company_number_key")
+  @@index([companyId, status, receivedAt], map: "service_orders_company_status_idx")
+  @@index([companyId, customerId, receivedAt], map: "service_orders_company_customer_idx")
+  @@index([companyId, productUnitId, receivedAt], map: "service_orders_company_unit_idx")
+  @@map("service_orders")
+}
+
+model ServiceOrderEvent {
+  id             String   @id
+  serviceOrderId String
+  status         String
+  note           String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade, map: "service_order_events_order_fkey")
+  createdBy    User         @relation("ServiceEventCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "service_order_events_user_fkey")
+
+  @@index([serviceOrderId, createdAt], map: "service_order_events_order_date_idx")
+  @@map("service_order_events")
+}
+
+model AuthLoginLimit {
+  key             String    @id
+  attempts        Int       @default(0)
+  windowStartedAt DateTime  @default(now())
+  lockedUntil     DateTime?
+  updatedAt       DateTime  @default(now())
+
+  @@index([lockedUntil], map: "auth_login_limits_locked_idx")
+  @@index([updatedAt], map: "auth_login_limits_updated_idx")
+  @@map("auth_login_limits")
 }
 
 model AuditLog {
