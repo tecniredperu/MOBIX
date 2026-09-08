@@ -31,9 +31,35 @@ type CreateReturnInput = {
   items: Array<{ saleItemId: string; quantity: number; productUnitId?: string }>;
 };
 
-type PriorReturnRow = { saleItemId: string; qty: bigint };
-type ReceivableRow = { id: string; originalAmount: unknown; paidAmount: unknown; balance: unknown };
+type ReceivableLockRow = {
+  id: string;
+  originalAmount: unknown;
+  paidAmount: unknown;
+  balance: unknown;
+  notes: string | null;
+};
+
 type CashSessionRow = { id: string };
+
+async function returnedQuantityMap(
+  client: Pick<typeof prisma, "returnItem">,
+  companyId: string,
+  saleId: string,
+) {
+  const rows = await client.returnItem.groupBy({
+    by: ["saleItemId"],
+    where: {
+      returnOrder: {
+        companyId,
+        saleId,
+        status: "COMPLETED",
+      },
+    },
+    _sum: { quantity: true },
+  });
+
+  return new Map(rows.map((row) => [row.saleItemId, Number(row._sum.quantity ?? 0)]));
+}
 
 export async function createReturnAction(input: CreateReturnInput) {
   const { company, membership } = await requirePermission("returns.manage");
@@ -71,16 +97,7 @@ export async function createReturnAction(input: CreateReturnInput) {
     throw new Error("No repitas una misma línea de venta.");
   }
 
-  const prior = await prisma.$queryRaw<PriorReturnRow[]>`
-    SELECT ri."saleItemId", COALESCE(SUM(ri."quantity"), 0)::bigint AS "qty"
-    FROM "return_items" ri
-    JOIN "return_orders" ro ON ro."id" = ri."returnOrderId"
-    WHERE ro."companyId" = ${company.id}
-      AND ro."saleId" = ${sale.id}
-      AND ro."status" = 'COMPLETED'
-    GROUP BY ri."saleItemId"
-  `;
-  const priorMap = new Map(prior.map((row) => [row.saleItemId, Number(row.qty)]));
+  const priorMap = await returnedQuantityMap(prisma, company.id, sale.id);
 
   let merchandiseAmount = 0;
   const validated = input.items.map((line) => {
@@ -110,31 +127,22 @@ export async function createReturnAction(input: CreateReturnInput) {
     return { item, quantity: line.quantity, unitId, amount };
   });
 
-  // Un cambio reingresa mercadería, pero no representa una salida de dinero.
-  // El reemplazo se registra como una nueva venta para conservar la trazabilidad.
   const refundAmount = input.type === "RETURN" ? merchandiseAmount : 0;
 
   const result = await prisma.$transaction(async (tx) => {
-    // Serializa devoluciones sobre la misma venta. Esto evita que dos usuarios
-    // devuelvan simultáneamente más unidades de las que se vendieron.
     const saleLock = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id"
       FROM "sales"
-      WHERE "id" = ${sale.id} AND "companyId" = ${company.id} AND "status" = 'COMPLETED'::"SaleStatus"
+      WHERE "id" = ${sale.id}
+        AND "companyId" = ${company.id}
+        AND "status" = 'COMPLETED'::"SaleStatus"
       FOR UPDATE
     `;
-    if (!saleLock.length) throw new Error("La venta cambió de estado durante la devolución.");
+    if (!saleLock.length) {
+      throw new Error("La venta cambió de estado durante la devolución.");
+    }
 
-    const currentPrior = await tx.$queryRaw<PriorReturnRow[]>`
-      SELECT ri."saleItemId", COALESCE(SUM(ri."quantity"), 0)::bigint AS "qty"
-      FROM "return_items" ri
-      JOIN "return_orders" ro ON ro."id" = ri."returnOrderId"
-      WHERE ro."companyId" = ${company.id}
-        AND ro."saleId" = ${sale.id}
-        AND ro."status" = 'COMPLETED'
-      GROUP BY ri."saleItemId"
-    `;
-    const currentPriorMap = new Map(currentPrior.map((row) => [row.saleItemId, Number(row.qty)]));
+    const currentPriorMap = await returnedQuantityMap(tx, company.id, sale.id);
     for (const row of validated) {
       const remaining = row.item.quantity - (currentPriorMap.get(row.item.id) ?? 0);
       if (row.quantity > remaining) {
@@ -162,10 +170,10 @@ export async function createReturnAction(input: CreateReturnInput) {
       cashSessionId = session.id;
     }
 
-    let creditReceivable: ReceivableRow | null = null;
+    let creditReceivable: ReceivableLockRow | null = null;
     if (input.type === "RETURN" && input.refundMethod === "CREDIT") {
-      const rows = await tx.$queryRaw<ReceivableRow[]>`
-        SELECT "id", "originalAmount", "paidAmount", "balance"
+      const rows = await tx.$queryRaw<ReceivableLockRow[]>`
+        SELECT "id", "originalAmount", "paidAmount", "balance", "notes"
         FROM "accounts_receivable"
         WHERE "companyId" = ${company.id}
           AND "saleId" = ${sale.id}
@@ -177,6 +185,7 @@ export async function createReturnAction(input: CreateReturnInput) {
       if (!creditReceivable) {
         throw new Error("Esta venta no tiene una cuenta por cobrar pendiente donde aplicar la devolución.");
       }
+
       const pending = roundMoney(Number(creditReceivable.balance));
       if (refundAmount > pending + 0.01) {
         throw new Error(`El saldo pendiente del crédito es S/ ${pending.toFixed(2)}. Para devolver un importe mayor utiliza otro medio de devolución.`);
@@ -197,34 +206,48 @@ export async function createReturnAction(input: CreateReturnInput) {
     const returnNumber = `DV001-${String(Number(sequence[0]?.next ?? 1)).padStart(6, "0")}`;
     const returnId = randomUUID();
 
-    await tx.$executeRaw`
-      INSERT INTO "return_orders" (
-        "id", "companyId", "saleId", "customerId", "warehouseId", "returnNumber", "type", "status",
-        "reason", "refundMethod", "refundAmount", "notes", "createdById", "createdAt"
-      ) VALUES (
-        ${returnId}, ${company.id}, ${sale.id}, ${sale.customerId}, ${sale.warehouseId}, ${returnNumber},
-        ${input.type}, 'COMPLETED', ${reason}, ${input.type === "RETURN" ? input.refundMethod || null : null},
-        ${refundAmount}, ${input.notes?.trim() || null}, ${membership.userId}, NOW()
-      )
-    `;
+    await tx.returnOrder.create({
+      data: {
+        id: returnId,
+        companyId: company.id,
+        saleId: sale.id,
+        customerId: sale.customerId,
+        warehouseId: sale.warehouseId,
+        returnNumber,
+        type: input.type,
+        status: "COMPLETED",
+        reason,
+        refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
+        refundAmount,
+        notes: input.notes?.trim() || null,
+        createdById: membership.userId,
+      },
+    });
 
     for (const row of validated) {
-      await tx.$executeRaw`
-        INSERT INTO "return_items" (
-          "id", "returnOrderId", "saleItemId", "productId", "variantId", "productUnitId",
-          "quantity", "unitPrice", "unitCost", "amount", "createdAt"
-        ) VALUES (
-          ${randomUUID()}, ${returnId}, ${row.item.id}, ${row.item.productId}, ${row.item.variantId}, ${row.unitId},
-          ${row.quantity}, ${Number(row.item.unitPrice)}, ${Number(row.item.unitCost)}, ${row.amount}, NOW()
-        )
-      `;
+      await tx.returnItem.create({
+        data: {
+          id: randomUUID(),
+          returnOrderId: returnId,
+          saleItemId: row.item.id,
+          productId: row.item.productId,
+          variantId: row.item.variantId,
+          productUnitId: row.unitId,
+          quantity: row.quantity,
+          unitPrice: Number(row.item.unitPrice),
+          unitCost: Number(row.item.unitCost),
+          amount: row.amount,
+        },
+      });
 
       if (row.unitId) {
         const updated = await tx.productUnit.updateMany({
           where: { id: row.unitId, companyId: company.id, status: "SOLD" },
           data: { status: "AVAILABLE", warehouseId: sale.warehouseId },
         });
-        if (updated.count !== 1) throw new Error("El estado del IMEI cambió durante la devolución.");
+        if (updated.count !== 1) {
+          throw new Error("El estado del IMEI cambió durante la devolución.");
+        }
 
         await tx.inventoryMovement.create({
           data: {
@@ -319,16 +342,18 @@ export async function createReturnAction(input: CreateReturnInput) {
       const newBalance = roundMoney(Math.max(0, previousBalance - refundAmount));
       const newOriginal = roundMoney(Math.max(paidAmount, previousOriginal - refundAmount));
       const newStatus = newBalance <= 0.01 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "OPEN";
+      const adjustment = `Ajuste por devolución ${returnNumber}: -S/ ${refundAmount.toFixed(2)}`;
+      const notes = [creditReceivable.notes?.trim(), adjustment].filter(Boolean).join(" | ");
 
-      await tx.$executeRaw`
-        UPDATE "accounts_receivable"
-        SET "originalAmount" = ${newOriginal},
-            "balance" = ${newBalance},
-            "status" = ${newStatus}::"AccountReceivableStatus",
-            "updatedAt" = NOW(),
-            "notes" = CONCAT(COALESCE("notes", ''), ${` | Ajuste por devolución ${returnNumber}: -S/ ${refundAmount.toFixed(2)}`})
-        WHERE "id" = ${creditReceivable.id} AND "companyId" = ${company.id}
-      `;
+      await tx.accountReceivable.update({
+        where: { id: creditReceivable.id },
+        data: {
+          originalAmount: newOriginal,
+          balance: newBalance,
+          status: newStatus,
+          notes,
+        },
+      });
     }
 
     await tx.auditLog.create({
