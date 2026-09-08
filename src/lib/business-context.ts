@@ -12,46 +12,35 @@ export type CompanySettings = {
   requireCashSession: boolean;
 };
 
-type SettingsRow = {
-  taxRate: unknown;
-  defaultTaxCondition: string;
-  receiptSeries: string;
-  invoiceSeries: string;
-  salesNoteSeries: string;
-  ticketFooter: string | null;
-  defaultWarrantyDays: number;
-  requireCashSession: boolean;
+const DEFAULT_SETTINGS: CompanySettings = {
+  taxRate: 18,
+  defaultTaxCondition: "TAXED",
+  receiptSeries: "B001",
+  invoiceSeries: "F001",
+  salesNoteSeries: "NV01",
+  ticketFooter: null,
+  defaultWarrantyDays: 0,
+  requireCashSession: true,
 };
 
 export async function getOperationalContext() {
   const auth = await requireAuthContext();
-  const rows = await prisma.$queryRaw<SettingsRow[]>`
-    SELECT "taxRate", "defaultTaxCondition", "receiptSeries", "invoiceSeries", "salesNoteSeries",
-           "ticketFooter", "defaultWarrantyDays", "requireCashSession"
-    FROM "company_settings" WHERE "companyId" = ${auth.company.id} LIMIT 1
-  `;
-  const row = rows[0];
+  const row = await prisma.companySettings.findUnique({
+    where: { companyId: auth.company.id },
+  });
+
   const settings: CompanySettings = row
     ? {
-        taxRate: Number(row.taxRate ?? 18),
-        defaultTaxCondition: row.defaultTaxCondition as CompanySettings["defaultTaxCondition"],
+        taxRate: Number(row.taxRate),
+        defaultTaxCondition: row.defaultTaxCondition,
         receiptSeries: row.receiptSeries,
         invoiceSeries: row.invoiceSeries,
         salesNoteSeries: row.salesNoteSeries,
         ticketFooter: row.ticketFooter,
-        defaultWarrantyDays: Number(row.defaultWarrantyDays ?? 0),
-        requireCashSession: Boolean(row.requireCashSession),
+        defaultWarrantyDays: row.defaultWarrantyDays,
+        requireCashSession: row.requireCashSession,
       }
-    : {
-        taxRate: 18,
-        defaultTaxCondition: "TAXED",
-        receiptSeries: "B001",
-        invoiceSeries: "F001",
-        salesNoteSeries: "NV01",
-        ticketFooter: null,
-        defaultWarrantyDays: 0,
-        requireCashSession: true,
-      };
+    : DEFAULT_SETTINGS;
 
   return {
     company: auth.company,
