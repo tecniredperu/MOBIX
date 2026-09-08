@@ -1,0 +1,152 @@
+name: MOBIX Staging UAT
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 11 * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/staging-uat.yml"
+      - "scripts/uat-staging.ts"
+      - "tests/**"
+
+jobs:
+  staging-uat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mobix
+          POSTGRES_PASSWORD: mobix
+          POSTGRES_DB: mobix_staging
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mobix -d mobix_staging"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mobix:mobix@localhost:5432/mobix_staging?schema=public
+      MOBIX_UAT_ALLOW: "1"
+      NODE_ENV: test
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Generar credenciales efímeras de staging
+        run: |
+          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url'))" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Auditar dependencias de producción
+        run: npm run audit:prod
+
+      - name: Generar y validar Prisma
+        run: |
+          npm run db:generate
+          npm run db:validate
+
+      - name: Crear base staging desde migraciones
+        run: npx prisma migrate deploy
+
+      - name: Cargar datos base
+        run: npm run db:seed
+
+      - name: Ejecutar pruebas unitarias
+        run: npm run test:unit
+
+      - name: Ejecutar pruebas de integración y concurrencia
+        run: npm run test:integration
+
+      - name: Ejecutar UAT integral de negocio
+        run: npm run uat:staging
+
+      - name: Revisar TypeScript
+        run: npm run typecheck
+
+      - name: Compilar aplicación de producción
+        env:
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Iniciar staging en modo producción
+        env:
+          NODE_ENV: production
+        run: |
+          npm run start -- -p 3001 > /tmp/mobix-staging.log 2>&1 &
+          echo $! > /tmp/mobix-staging.pid
+
+      - name: Comprobar health y PostgreSQL
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3001/api/health | tee /tmp/health.json; then
+              node -e "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));if(h.status!=='ok'||h.database!=='ok')process.exit(1)"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/mobix-staging.log || true
+          exit 1
+
+      - name: Crear sesión de UAT web
+        run: |
+          SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
+          echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Smoke UAT de rutas operativas
+        run: |
+          set -e
+          routes=(
+            "/"
+            "/productos"
+            "/equipos"
+            "/compras"
+            "/compras/nueva"
+            "/kardex"
+            "/pos"
+            "/ventas"
+            "/clientes"
+            "/caja"
+            "/devoluciones"
+            "/transferencias"
+            "/servicio-tecnico"
+            "/reportes"
+            "/configuracion"
+          )
+          for route in "${routes[@]}"; do
+            echo "UAT web $route"
+            curl -fsS -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" "http://127.0.0.1:3001${route}" >/dev/null
+          done
+
+      - name: Construir Docker de staging
+        run: docker build -t mobix-staging:${{ github.sha }} .
+
+      - name: Guardar informe UAT
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobix-uat-${{ github.run_number }}
+          path: |
+            artifacts/uat/
+            /tmp/health.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Mostrar diagnóstico si falla
+        if: failure()
+        run: |
+          cat /tmp/mobix-staging.log || true
+          if [ -f artifacts/uat/uat-report.md ]; then cat artifacts/uat/uat-report.md; fi
