@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "prisma migrate deploy && next start",
+    "start": "prisma migrate deploy && npm run db:bootstrap && next start",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "tsx --test tests/unit/*.test.ts",
@@ -20,6 +20,7 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",
+    "db:bootstrap": "tsx prisma/bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"
   },
