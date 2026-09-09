@@ -19,7 +19,8 @@ jobs:
         run: |
           mkdir -p hostinger-package
           cp package.json package-lock.json next.config.ts tsconfig.json prisma.config.ts hostinger-package/
-          cp -R src prisma public scripts hostinger-package/
+          cp -R src prisma scripts hostinger-package/
+          if [ -d public ]; then cp -R public hostinger-package/; fi
           if [ -f next-env.d.ts ]; then cp next-env.d.ts hostinger-package/; fi
           if [ -f postcss.config.mjs ]; then cp postcss.config.mjs hostinger-package/; fi
           if [ -f eslint.config.mjs ]; then cp eslint.config.mjs hostinger-package/; fi
