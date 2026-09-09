@@ -1,0 +1,35 @@
+name: Package MOBIX Hostinger
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar paquete limpio
+        run: |
+          mkdir -p package
+          rsync -a ./ package/ \
+            --exclude='.git' \
+            --exclude='package' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.env' \
+            --exclude='.env.local' \
+            --exclude='.env.production' \
+            --exclude='*.log'
+
+      - name: Subir paquete para Hostinger
+        uses: actions/upload-artifact@v4
+        with:
+          name: MOBIX-Hostinger
+          path: package/
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
