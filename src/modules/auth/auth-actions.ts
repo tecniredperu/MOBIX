@@ -8,8 +8,11 @@ import { developmentBootstrapPassword, hashPassword, verifyPassword } from "@/li
 
 export type AuthState = { error?: string; success?: string };
 
-type LoginLimitRow = { lockedUntil: Date | null };
 const LOGIN_ERROR = "Correo o contraseña incorrectos.";
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const LOGIN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -30,44 +33,68 @@ async function clientIp() {
   return (forwarded || real || "unknown").slice(0, 120);
 }
 async function loginKeyLocked(key: string) {
-  const rows = await prisma.$queryRaw<LoginLimitRow[]>`
-    SELECT "lockedUntil" FROM "auth_login_limits" WHERE "key" = ${key} LIMIT 1
-  `;
-  const lockedUntil = rows[0]?.lockedUntil;
-  return Boolean(lockedUntil && new Date(lockedUntil).getTime() > Date.now());
+  const row = await prisma.authLoginLimit.findUnique({
+    where: { key },
+    select: { lockedUntil: true },
+  });
+  return Boolean(row?.lockedUntil && row.lockedUntil.getTime() > Date.now());
 }
 async function recordFailedLogin(keys: string[]) {
   const unique = [...new Set(keys.filter(Boolean))];
+  if (!unique.length) return;
+
+  const now = new Date();
+  const resetBefore = new Date(now.getTime() - LOGIN_WINDOW_MS);
+  const lockUntil = new Date(now.getTime() + LOGIN_LOCK_MS);
+  const retentionBefore = new Date(now.getTime() - LOGIN_RETENTION_MS);
+
   await prisma.$transaction(async (tx) => {
     for (const key of unique) {
-      await tx.$executeRaw`
-        INSERT INTO "auth_login_limits" ("key","attempts","windowStartedAt","lockedUntil","updatedAt")
-        VALUES (${key},1,NOW(),NULL,NOW())
-        ON CONFLICT ("key") DO UPDATE SET
-          "attempts" = CASE
-            WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN 1
-            ELSE "auth_login_limits"."attempts" + 1
-          END,
-          "windowStartedAt" = CASE
-            WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN NOW()
-            ELSE "auth_login_limits"."windowStartedAt"
-          END,
-          "lockedUntil" = CASE
-            WHEN (CASE WHEN "auth_login_limits"."windowStartedAt" < NOW() - INTERVAL '15 minutes' THEN 1 ELSE "auth_login_limits"."attempts" + 1 END) >= 8
-              THEN NOW() + INTERVAL '15 minutes'
-            ELSE "auth_login_limits"."lockedUntil"
-          END,
-          "updatedAt" = NOW()
-      `;
+      const reset = await tx.authLoginLimit.updateMany({
+        where: { key, windowStartedAt: { lt: resetBefore } },
+        data: {
+          attempts: 1,
+          windowStartedAt: now,
+          lockedUntil: null,
+          updatedAt: now,
+        },
+      });
+
+      if (reset.count > 0) continue;
+
+      const row = await tx.authLoginLimit.upsert({
+        where: { key },
+        create: {
+          key,
+          attempts: 1,
+          windowStartedAt: now,
+          lockedUntil: null,
+          updatedAt: now,
+        },
+        update: {
+          attempts: { increment: 1 },
+          updatedAt: now,
+        },
+        select: { attempts: true, lockedUntil: true },
+      });
+
+      if (row.attempts >= LOGIN_MAX_ATTEMPTS && (!row.lockedUntil || row.lockedUntil.getTime() <= now.getTime())) {
+        await tx.authLoginLimit.update({
+          where: { key },
+          data: { lockedUntil: lockUntil, updatedAt: now },
+        });
+      }
     }
-    await tx.$executeRaw`DELETE FROM "auth_login_limits" WHERE "updatedAt" < NOW() - INTERVAL '30 days'`;
+
+    await tx.authLoginLimit.deleteMany({
+      where: { updatedAt: { lt: retentionBefore } },
+    });
   });
 }
 async function clearLoginLimits(keys: string[]) {
   const unique = [...new Set(keys.filter(Boolean))];
-  for (const key of unique) {
-    await prisma.$executeRaw`DELETE FROM "auth_login_limits" WHERE "key" = ${key}`;
-  }
+  if (!unique.length) return;
+  await prisma.authLoginLimit.deleteMany({ where: { key: { in: unique } } });
 }
 
 export async function loginAction(_previous: AuthState, formData: FormData): Promise<AuthState> {
