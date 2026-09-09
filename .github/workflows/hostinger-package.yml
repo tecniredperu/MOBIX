@@ -1,0 +1,34 @@
+name: MOBIX Hostinger Package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Crear paquete de despliegue
+        run: |
+          mkdir -p hostinger-package
+          cp package.json package-lock.json next.config.ts tsconfig.json prisma.config.ts hostinger-package/
+          cp -R src prisma public scripts hostinger-package/
+          if [ -f next-env.d.ts ]; then cp next-env.d.ts hostinger-package/; fi
+          if [ -f postcss.config.mjs ]; then cp postcss.config.mjs hostinger-package/; fi
+          if [ -f eslint.config.mjs ]; then cp eslint.config.mjs hostinger-package/; fi
+          cd hostinger-package
+          zip -r ../MOBIX-HOSTINGER.zip . -x '*.DS_Store'
+
+      - name: Publicar ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MOBIX-HOSTINGER
+          path: MOBIX-HOSTINGER.zip
+          retention-days: 30
