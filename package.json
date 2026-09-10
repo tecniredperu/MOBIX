@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && prisma migrate deploy && npm run db:bootstrap && next build",
     "start": "prisma migrate deploy && npm run db:bootstrap && next start",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
