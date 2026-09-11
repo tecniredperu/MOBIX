@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 
 export default async function NewPurchasePage() {
   await requirePermission("purchases.create");
-  const { catalog, warehouses } = await getPurchaseContext();
+  const { catalog, warehouses, suppliers } = await getPurchaseContext();
 
   return (
     <AppShell>
-      <PurchaseForm catalog={catalog} warehouses={warehouses} />
+      <PurchaseForm catalog={catalog} warehouses={warehouses} suppliers={suppliers} />
     </AppShell>
   );
 }
