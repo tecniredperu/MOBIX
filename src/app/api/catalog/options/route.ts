@@ -1,6 +1,6 @@
-import { getAuthContext } from "@/lib/auth-context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { readSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +26,41 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(request: Request) {
-  const auth = await getAuthContext({ redirectToLogin: false });
-  if (!auth) return json({ error: "Tu sesión ha expirado. Vuelve a iniciar sesión." }, 401);
+  const session = await readSession();
+  if (!session) return json({ error: "Tu sesión ha expirado. Vuelve a iniciar sesión." }, 401);
 
-  if (!auth.role.isSystem && !auth.permissions.has("inventory.manage")) {
+  const membership = await prisma.companyUser.findFirst({
+    where: {
+      companyId: session.companyId,
+      userId: session.userId,
+      status: "ACTIVE",
+      company: { status: "ACTIVE" },
+      user: { status: "ACTIVE" },
+      role: { status: "ACTIVE" },
+    },
+    select: {
+      companyId: true,
+      userId: true,
+      role: {
+        select: {
+          isSystem: true,
+          permissions: {
+            select: { permission: { select: { code: true } } },
+          },
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    return json({ error: "Tu sesión ya no tiene acceso a esta empresa." }, 401);
+  }
+
+  const canManage =
+    membership.role.isSystem ||
+    membership.role.permissions.some((item) => item.permission.code === "inventory.manage");
+
+  if (!canManage) {
     return json({ error: "No tienes permisos para administrar el catálogo." }, 403);
   }
 
@@ -53,8 +84,8 @@ export async function POST(request: Request) {
   const slug = slugify(name);
   if (!slug) return json({ error: "El nombre ingresado no es válido." }, 400);
 
-  const companyId = auth.company.id;
-  const userId = auth.membership.userId;
+  const companyId = membership.companyId;
+  const userId = membership.userId;
 
   try {
     if (kind === "category") {
