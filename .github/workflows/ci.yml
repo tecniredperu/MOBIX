@@ -107,6 +107,8 @@ jobs:
             "/"
             "/productos"
             "/productos/nuevo"
+            "/productos/categorias"
+            "/productos/marcas"
             "/equipos"
             "/kardex"
             "/compras"
@@ -175,6 +177,40 @@ jobs:
           echo "$PRODUCTS_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA"
           echo "$PRODUCTS_HTML" | grep -q "Producto guardado"
           echo "$PRODUCTS_HTML" | grep -q "CI Caseify"
+
+          CATEGORY_PATCH=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "{\"kind\":\"category\",\"id\":\"${CATEGORY_ID}\",\"name\":\"CI Cases Editadas\"}" \
+            http://127.0.0.1:3001/api/catalog/options)
+          echo "$CATEGORY_PATCH" | grep -q "CI Cases Editadas"
+
+          BRAND_DISABLE=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "{\"kind\":\"brand\",\"id\":\"${BRAND_ID}\",\"status\":\"INACTIVE\"}" \
+            http://127.0.0.1:3001/api/catalog/options)
+          echo "$BRAND_DISABLE" | grep -q '"status":"INACTIVE"'
+
+          BRAND_ENABLE=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "{\"kind\":\"brand\",\"id\":\"${BRAND_ID}\",\"status\":\"ACTIVE\"}" \
+            http://127.0.0.1:3001/api/catalog/options)
+          echo "$BRAND_ENABLE" | grep -q '"status":"ACTIVE"'
+
+          CATEGORIES_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/productos/categorias)
+          echo "$CATEGORIES_HTML" | grep -q "CI Cases Editadas"
+
+          BRANDS_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/productos/marcas)
+          echo "$BRANDS_HTML" | grep -q "CI Caseify"
 
           DUPLICATE_STATUS=$(curl -s \
             -o /tmp/mobix-duplicate-product.json \
