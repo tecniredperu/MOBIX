@@ -74,6 +74,22 @@ function nullableText(value?: string) {
   return value?.trim() || null;
 }
 
+function normalizeLogo(value?: string) {
+  const logo = value?.trim();
+  if (!logo) return null;
+
+  if (logo.startsWith("data:")) {
+    if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(logo)) {
+      throw new Error("El formato del logo no es válido.");
+    }
+    if (logo.length > 800_000) throw new Error("El logo es demasiado pesado.");
+    return logo;
+  }
+
+  if (/^https:\/\//i.test(logo) && logo.length <= 2048) return logo;
+  throw new Error("El logo debe ser una imagen subida en MOBIX o una URL HTTPS válida.");
+}
+
 function refreshSettings() {
   revalidatePaths(SETTINGS_PATHS);
 }
@@ -93,7 +109,7 @@ export async function updateCompanyAction(input: CompanyInput) {
     email: nullableText(input.email),
     phone: nullableText(input.phone),
     address: nullableText(input.address),
-    logoUrl: nullableText(input.logoUrl),
+    logoUrl: normalizeLogo(input.logoUrl),
     currency: input.currency?.trim() || "PEN",
     timezone: input.timezone?.trim() || "America/Lima",
   };
@@ -111,6 +127,7 @@ export async function updateCompanyAction(input: CompanyInput) {
           businessName: companyData.businessName,
           tradeName: companyData.tradeName,
           ruc: companyData.ruc,
+          logoConfigured: Boolean(companyData.logoUrl),
         },
       },
     });
