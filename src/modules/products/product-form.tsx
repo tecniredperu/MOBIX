@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import {
   ArrowLeft,
   Barcode,
@@ -21,6 +21,7 @@ import {
   createProductAction,
   initialProductActionState,
 } from "./product-actions";
+import { createCatalogOptionAction, type CatalogOptionKind } from "./catalog-actions";
 import type { ProductCatalogOption, ProductTypeValue } from "./product-types";
 
 const productTypes: Array<{
@@ -92,6 +93,13 @@ function money(value: number) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function addCatalogOption(current: ProductCatalogOption[], option: ProductCatalogOption) {
+  const next = current.some((item) => item.id === option.id)
+    ? current.map((item) => item.id === option.id ? option : item)
+    : [...current, option];
+  return next.sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
 export function ProductForm({
   categories,
   brands,
@@ -103,8 +111,18 @@ export function ProductForm({
     createProductAction,
     initialProductActionState,
   );
+  const [catalogPending, startCatalogTransition] = useTransition();
   const [type, setType] = useState<ProductTypeValue>("PHONE");
   const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
+  const [categoryOptions, setCategoryOptions] = useState(categories);
+  const [brandOptions, setBrandOptions] = useState(brands);
+  const [categoryId, setCategoryId] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
+  const [catalogErrors, setCatalogErrors] = useState<{ category?: string; brand?: string }>({});
 
   const typeRule = useMemo(() => {
     if (type === "PHONE") {
@@ -158,6 +176,40 @@ export function ProductForm({
     setVariants((current) =>
       current.length === 1 ? current : current.filter((variant) => variant.key !== key),
     );
+  };
+
+  const saveCatalogOption = (kind: CatalogOptionKind) => {
+    const isCategory = kind === "category";
+    const rawName = isCategory ? newCategoryName : newBrandName;
+    const name = rawName.trim();
+    setCatalogErrors((current) => ({ ...current, [kind]: undefined }));
+
+    if (name.length < 2) {
+      setCatalogErrors((current) => ({ ...current, [kind]: "Ingresa un nombre válido." }));
+      return;
+    }
+
+    startCatalogTransition(async () => {
+      try {
+        const option = await createCatalogOptionAction(kind, name);
+        if (isCategory) {
+          setCategoryOptions((current) => addCatalogOption(current, option));
+          setCategoryId(option.id);
+          setNewCategoryName("");
+          setNewCategoryOpen(false);
+        } else {
+          setBrandOptions((current) => addCatalogOption(current, option));
+          setBrandId(option.id);
+          setNewBrandName("");
+          setNewBrandOpen(false);
+        }
+      } catch (error) {
+        setCatalogErrors((current) => ({
+          ...current,
+          [kind]: error instanceof Error ? error.message : "No se pudo crear el registro.",
+        }));
+      }
+    });
   };
 
   const serializedVariants = JSON.stringify(
@@ -254,27 +306,129 @@ export function ProductForm({
                 <FieldError errors={state.fieldErrors?.name} />
               </label>
 
-              <label className="form-field">
+              <div className="form-field">
                 <span>Categoría</span>
-                <select name="categoryId" defaultValue="">
+                <select
+                  name="categoryId"
+                  value={categoryId}
+                  onChange={(event) => {
+                    if (event.target.value === "__create__") {
+                      setCategoryId("");
+                      setNewCategoryOpen(true);
+                      setCatalogErrors((current) => ({ ...current, category: undefined }));
+                    } else {
+                      setCategoryId(event.target.value);
+                      setNewCategoryOpen(false);
+                    }
+                  }}
+                >
                   <option value="">Seleccionar categoría</option>
-                  {categories.map((category) => (
+                  {categoryOptions.map((category) => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
+                  <option value="__create__">＋ Crear nueva categoría…</option>
                 </select>
+                {newCategoryOpen && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    <input
+                      value={newCategoryName}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          saveCatalogOption("category");
+                        }
+                      }}
+                      placeholder="Nombre de la nueva categoría"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={catalogPending}
+                      onClick={() => saveCatalogOption("category")}
+                    >
+                      <Plus size={15} /> Crear
+                    </button>
+                    <button
+                      type="button"
+                      className="cancel-button"
+                      disabled={catalogPending}
+                      onClick={() => {
+                        setNewCategoryOpen(false);
+                        setNewCategoryName("");
+                        setCatalogErrors((current) => ({ ...current, category: undefined }));
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                {catalogErrors.category && <span className="field-error">{catalogErrors.category}</span>}
                 <FieldError errors={state.fieldErrors?.categoryId} />
-              </label>
+              </div>
 
-              <label className="form-field">
+              <div className="form-field">
                 <span>Marca</span>
-                <select name="brandId" defaultValue="">
+                <select
+                  name="brandId"
+                  value={brandId}
+                  onChange={(event) => {
+                    if (event.target.value === "__create__") {
+                      setBrandId("");
+                      setNewBrandOpen(true);
+                      setCatalogErrors((current) => ({ ...current, brand: undefined }));
+                    } else {
+                      setBrandId(event.target.value);
+                      setNewBrandOpen(false);
+                    }
+                  }}
+                >
                   <option value="">Seleccionar marca</option>
-                  {brands.map((brand) => (
+                  {brandOptions.map((brand) => (
                     <option key={brand.id} value={brand.id}>{brand.name}</option>
                   ))}
+                  <option value="__create__">＋ Crear nueva marca…</option>
                 </select>
+                {newBrandOpen && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    <input
+                      value={newBrandName}
+                      onChange={(event) => setNewBrandName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          saveCatalogOption("brand");
+                        }
+                      }}
+                      placeholder="Nombre de la nueva marca"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={catalogPending}
+                      onClick={() => saveCatalogOption("brand")}
+                    >
+                      <Plus size={15} /> Crear
+                    </button>
+                    <button
+                      type="button"
+                      className="cancel-button"
+                      disabled={catalogPending}
+                      onClick={() => {
+                        setNewBrandOpen(false);
+                        setNewBrandName("");
+                        setCatalogErrors((current) => ({ ...current, brand: undefined }));
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                {catalogErrors.brand && <span className="field-error">{catalogErrors.brand}</span>}
                 <FieldError errors={state.fieldErrors?.brandId} />
-              </label>
+              </div>
 
               <label className="form-field">
                 <span>Modelo</span>
@@ -505,7 +659,7 @@ export function ProductForm({
             {!typeRule.stock && <input type="hidden" name="minimumStock" value="0" />}
 
             <div className="editor-actions">
-              <button type="submit" className="primary-button save-button" disabled={pending}>
+              <button type="submit" className="primary-button save-button" disabled={pending || catalogPending}>
                 <Save size={17} /> {pending ? "Guardando..." : "Guardar producto"}
               </button>
               <Link href="/productos" className="cancel-button">Cancelar</Link>
