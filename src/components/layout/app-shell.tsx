@@ -9,6 +9,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <Sidebar
         companyName={auth.company.tradeName ?? auth.company.businessName}
+        companyLogoUrl={auth.company.logoUrl}
         branchName={auth.membership.defaultBranch?.name ?? "Sin sucursal asignada"}
         isSystem={auth.role.isSystem}
         permissions={[...auth.permissions]}
