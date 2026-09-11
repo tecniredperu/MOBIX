@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { requireAuthContext } from "@/lib/auth-context";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +24,11 @@ const DEFAULT_SETTINGS: CompanySettings = {
   requireCashSession: true,
 };
 
-export async function getOperationalContext() {
+/**
+ * El contexto operativo se comparte entre todas las capas de una misma petición.
+ * Así permisos, configuración y módulos no repiten consultas idénticas a Supabase.
+ */
+const loadOperationalContext = cache(async () => {
   const auth = await requireAuthContext();
   const row = await prisma.companySettings.findUnique({
     where: { companyId: auth.company.id },
@@ -49,6 +54,10 @@ export async function getOperationalContext() {
     settings,
     permissions: auth.permissions,
   };
+});
+
+export async function getOperationalContext() {
+  return loadOperationalContext();
 }
 
 export async function requirePermission(code: string) {
