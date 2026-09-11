@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import type { SaleTaxCondition } from "../sale-types";
 import { formatPen } from "./pos-shared";
 
@@ -61,57 +62,36 @@ export function PosTotalCard({
       : pendingAmount > 0.01
         ? `Falta ${formatPen(pendingAmount)}`
         : change > 0.01
-          ? `Entregar vuelto: ${formatPen(change)}`
+          ? `Vuelto ${formatPen(change)}`
           : "Pago completo";
 
   const confirmText = isPending
     ? "Procesando venta..."
     : change > 0.01
-      ? `Confirmar venta · Vuelto ${formatPen(change)}`
+      ? `Cobrar · Vuelto ${formatPen(change)}`
       : creditAmount > 0.01
-        ? `Confirmar venta · Crédito ${formatPen(creditAmount)}`
-        : "Confirmar venta";
+        ? `Confirmar · Crédito ${formatPen(creditAmount)}`
+        : `Cobrar ${formatPen(total)}`;
 
   return (
-    <section className="panel pos-total-card">
-      <label className="discount-row">
-        <span>Descuento</span>
-        <div>
-          <span>S/</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={discount}
-            onChange={(event) => onDiscountChange(Number(event.target.value))}
-          />
-        </div>
-      </label>
-      <div className="summary-row">
-        <span>{taxCondition === "TAXED" ? "Valor de venta" : "Subtotal"}</span>
-        <strong>{formatPen(subtotal)}</strong>
-      </div>
-      <div className="summary-row">
-        <span>IGV {taxCondition === "TAXED" ? "18%" : ""}</span>
-        <strong>{formatPen(tax)}</strong>
-      </div>
-      <div className="summary-row total">
-        <span>Total</span>
+    <section className="panel pos-total-card pos-total-compact">
+      <div className="pos-total-main">
+        <span>Total a cobrar</span>
         <strong>{formatPen(total)}</strong>
       </div>
 
-      <div className="cash-change-box">
+      <div className="cash-change-box pos-cash-compact">
         <div>
-          <span>Total cubierto</span>
+          <span>Cubierto</span>
           <strong>{formatPen(tendered)}</strong>
         </div>
         <div className={change > 0.01 ? "change-value" : ""}>
-          <span>Vuelto a entregar</span>
+          <span>Vuelto</span>
           <strong>{formatPen(change)}</strong>
         </div>
       </div>
 
-      <div className={`payment-balance ${statusClass}`}>
+      <div className={`payment-balance ${statusClass} pos-balance-compact`}>
         <span>
           {statusLabel}
           <small>
@@ -122,20 +102,51 @@ export function PosTotalCard({
         <strong>{statusValue}</strong>
       </div>
 
-      <p className="tax-note">
-        Los precios de MOBIX son precios finales. El crédito genera una cuenta por cobrar vinculada a la venta y al cliente; no se considera ingreso de efectivo hasta que se registre un abono.
-      </p>
       <button
-        className="primary-button wide pos-confirm"
+        className="primary-button wide pos-confirm pos-confirm-compact"
         type="button"
         disabled={isPending || !hasCart || !paymentComplete}
         onClick={onConfirm}
       >
         {confirmText}
       </button>
-      <p className="form-footnote">
-        Stock, IMEI, Kardex, pagos, crédito y auditoría se procesan en una sola transacción. Los abonos posteriores se registran desde la ficha del cliente.
-      </p>
+
+      <details className="pos-breakdown">
+        <summary>
+          <span>Descuento y desglose</span>
+          <ChevronDown size={15} />
+        </summary>
+        <div className="pos-breakdown-body">
+          <label className="discount-row">
+            <span>Descuento</span>
+            <div>
+              <span>S/</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={discount}
+                onChange={(event) => onDiscountChange(Number(event.target.value))}
+              />
+            </div>
+          </label>
+          <div className="summary-row">
+            <span>{taxCondition === "TAXED" ? "Valor de venta" : "Subtotal"}</span>
+            <strong>{formatPen(subtotal)}</strong>
+          </div>
+          <div className="summary-row">
+            <span>IGV {taxCondition === "TAXED" ? "18%" : ""}</span>
+            <strong>{formatPen(tax)}</strong>
+          </div>
+          <div className="summary-row total">
+            <span>Total</span>
+            <strong>{formatPen(total)}</strong>
+          </div>
+          <p className="tax-note">
+            Los precios son finales. El crédito genera una cuenta por cobrar y no se considera ingreso de efectivo hasta registrar un abono.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }
