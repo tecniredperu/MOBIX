@@ -4,7 +4,7 @@ import type { PurchaseCatalogItem } from "./purchase-types";
 
 export async function getPurchaseContext() {
   const company = await getActiveCompany();
-  const [warehouses, variants] = await Promise.all([
+  const [warehouses, variants, suppliers] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE" },
       orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
@@ -18,6 +18,17 @@ export async function getPurchaseContext() {
       },
       orderBy: { product: { name: "asc" } },
       include: { product: { include: { brand: true } } },
+    }),
+    prisma.supplier.findMany({
+      where: { companyId: company.id, status: "ACTIVE" },
+      orderBy: { businessName: "asc" },
+      select: {
+        id: true,
+        documentType: true,
+        documentNumber: true,
+        businessName: true,
+        phone: true,
+      },
     }),
   ]);
 
@@ -42,6 +53,13 @@ export async function getPurchaseContext() {
       id: warehouse.id,
       name: warehouse.name,
       branchName: warehouse.branch.name,
+    })),
+    suppliers: suppliers.map((supplier) => ({
+      id: supplier.id,
+      documentType: supplier.documentType ?? "RUC",
+      documentNumber: supplier.documentNumber ?? "",
+      businessName: supplier.businessName,
+      phone: supplier.phone ?? "",
     })),
     catalog,
   };
