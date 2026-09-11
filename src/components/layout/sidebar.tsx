@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Smartphone,
+  Truck,
   Users,
   Wrench,
 } from "lucide-react";
@@ -44,7 +45,10 @@ const sections = [
   },
   {
     label: "Compras",
-    items: [{ label: "Compras", href: "/compras", icon: ShoppingBag, permission: "purchases.view" }],
+    items: [
+      { label: "Compras", href: "/compras", icon: ShoppingBag, permission: "purchases.view" },
+      { label: "Proveedores", href: "/proveedores", icon: Truck, permission: "purchases.view" },
+    ],
   },
   {
     label: "Clientes",
@@ -66,6 +70,7 @@ const sections = [
 
 type SidebarProps = {
   companyName: string;
+  companyLogoUrl?: string | null;
   branchName: string;
   isSystem: boolean;
   permissions: string[];
@@ -76,7 +81,7 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Sidebar({ companyName, branchName, isSystem, permissions }: SidebarProps) {
+export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, permissions }: SidebarProps) {
   const pathname = usePathname();
   const permissionSet = new Set(permissions);
   const allowed = (permission: string) => isSystem || permissionSet.has(permission);
@@ -94,7 +99,15 @@ export function Sidebar({ companyName, branchName, isSystem, permissions }: Side
       </div>
 
       <div className="company-selector sidebar-company-static">
-        <div className="company-avatar">{companyName.slice(0, 2).toUpperCase()}</div>
+        <div className="company-avatar">
+          {companyLogoUrl ? (
+            <img
+              src={companyLogoUrl}
+              alt={`Logo de ${companyName}`}
+              style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 8, background: "white" }}
+            />
+          ) : companyName.slice(0, 2).toUpperCase()}
+        </div>
         <div className="company-copy">
           <strong>{companyName}</strong>
           <span>{branchName}</span>
