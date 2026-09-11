@@ -2,15 +2,16 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Save, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
 import { createPurchaseAction } from "./purchase-actions";
 import { PURCHASE_TAX_LABELS } from "./purchase-types";
 import type { PurchaseCatalogItem, PurchaseLineInput, PurchaseTaxCondition } from "./purchase-types";
 
 type WarehouseOption = { id: string; name: string; branchName: string };
-
+type SupplierOption = { id: string; documentType: string; documentNumber: string; businessName: string; phone: string };
 type EditableLine = PurchaseLineInput & { key: string };
+type SupplierDocumentType = "RUC" | "DNI" | "CE" | "OTHER";
 
 function money(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(value || 0);
@@ -25,11 +26,16 @@ function emptyUnits(quantity: number) {
   return Array.from({ length: quantity }, () => ({ imei1: "", imei2: "", serial: "" }));
 }
 
-export function PurchaseForm({ catalog, warehouses }: { catalog: PurchaseCatalogItem[]; warehouses: WarehouseOption[] }) {
+function safeSupplierDocumentType(value: string): SupplierDocumentType {
+  return (["RUC", "DNI", "CE", "OTHER"].includes(value) ? value : "OTHER") as SupplierDocumentType;
+}
+
+export function PurchaseForm({ catalog, warehouses, suppliers }: { catalog: PurchaseCatalogItem[]; warehouses: WarehouseOption[]; suppliers: SupplierOption[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [supplierDocumentType, setSupplierDocumentType] = useState<"RUC" | "DNI" | "CE" | "OTHER">("RUC");
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [supplierDocumentType, setSupplierDocumentType] = useState<SupplierDocumentType>("RUC");
   const [supplierDocumentNumber, setSupplierDocumentNumber] = useState("");
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
@@ -47,6 +53,17 @@ export function PurchaseForm({ catalog, warehouses }: { catalog: PurchaseCatalog
   const subtotal = useMemo(() => lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0), [lines]);
   const tax = taxCondition === "TAXED" ? subtotal * 0.18 : 0;
   const total = subtotal + tax;
+
+  function selectSupplier(id: string) {
+    setSelectedSupplierId(id);
+    if (!id) return;
+    const supplier = suppliers.find((item) => item.id === id);
+    if (!supplier) return;
+    setSupplierDocumentType(safeSupplierDocumentType(supplier.documentType));
+    setSupplierDocumentNumber(supplier.documentNumber);
+    setSupplierName(supplier.businessName);
+    setSupplierPhone(supplier.phone);
+  }
 
   function addLine() {
     const item = catalogMap.get(selectedVariantId);
@@ -127,12 +144,14 @@ export function PurchaseForm({ catalog, warehouses }: { catalog: PurchaseCatalog
       <div className="purchase-layout">
         <div className="page-stack">
           <section className="panel mobix-form-section">
-            <div className="section-title"><div><h2>Proveedor</h2><p>Datos del proveedor que entrega la mercadería.</p></div></div>
+            <div className="section-title"><div><h2>Proveedor</h2><p>Selecciona un proveedor registrado o ingresa uno nuevo. Los nuevos datos quedarán guardados automáticamente.</p></div></div>
             <div className="mobix-form-grid four">
-              <label><span>Tipo documento</span><select value={supplierDocumentType} onChange={(e) => setSupplierDocumentType(e.target.value as typeof supplierDocumentType)}><option value="RUC">RUC</option><option value="DNI">DNI</option><option value="CE">Carné de extranjería</option><option value="OTHER">Otro</option></select></label>
-              <label><span>N.º documento</span><input value={supplierDocumentNumber} onChange={(e) => setSupplierDocumentNumber(e.target.value)} placeholder={supplierDocumentType === "RUC" ? "20123456789" : "Documento"} /></label>
-              <label className="span-two"><span>Razón social / nombre</span><input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Distribuciones Perú S.A.C." /></label>
-              <label><span>Teléfono</span><input value={supplierPhone} onChange={(e) => setSupplierPhone(e.target.value)} placeholder="999 999 999" /></label>
+              <label className="span-three"><span>Proveedor registrado</span><select value={selectedSupplierId} onChange={(e) => selectSupplier(e.target.value)}><option value="">Nuevo proveedor / ingreso manual</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.businessName} · {supplier.documentNumber || "Sin documento"}</option>)}</select></label>
+              <div style={{ display: "flex", alignItems: "flex-end" }}><Link href="/proveedores" className="secondary-button" style={{ width: "100%", justifyContent: "center" }}><Truck size={16} /> Administrar</Link></div>
+              <label><span>Tipo documento</span><select value={supplierDocumentType} onChange={(e) => { setSelectedSupplierId(""); setSupplierDocumentType(e.target.value as SupplierDocumentType); }}><option value="RUC">RUC</option><option value="DNI">DNI</option><option value="CE">Carné de extranjería</option><option value="OTHER">Otro</option></select></label>
+              <label><span>N.º documento</span><input value={supplierDocumentNumber} onChange={(e) => { setSelectedSupplierId(""); setSupplierDocumentNumber(e.target.value); }} placeholder={supplierDocumentType === "RUC" ? "20123456789" : "Documento"} /></label>
+              <label className="span-two"><span>Razón social / nombre</span><input value={supplierName} onChange={(e) => { setSelectedSupplierId(""); setSupplierName(e.target.value); }} placeholder="Distribuciones Perú S.A.C." /></label>
+              <label><span>Teléfono</span><input value={supplierPhone} onChange={(e) => { setSelectedSupplierId(""); setSupplierPhone(e.target.value); }} placeholder="999 999 999" /></label>
               <label className="span-three"><span>Almacén de destino</span><select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.branchName} · {warehouse.name}</option>)}</select></label>
             </div>
           </section>
