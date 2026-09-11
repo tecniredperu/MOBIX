@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/business-context";
 
@@ -17,11 +16,6 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-function refreshCatalog() {
-  revalidatePath("/productos");
-  revalidatePath("/productos/nuevo");
 }
 
 export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName: string) {
@@ -43,7 +37,7 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
 
     if (existing) {
       if (existing.status === "INACTIVE") {
-        const restored = await prisma.$transaction(async (tx) => {
+        return prisma.$transaction(async (tx) => {
           const category = await tx.category.update({
             where: { id: existing.id },
             data: { name, status: "ACTIVE" },
@@ -61,13 +55,11 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
           });
           return category;
         });
-        refreshCatalog();
-        return restored;
       }
       return { id: existing.id, name: existing.name };
     }
 
-    const created = await prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx) => {
       const category = await tx.category.create({
         data: { companyId: company.id, name, slug },
         select: { id: true, name: true },
@@ -84,8 +76,6 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
       });
       return category;
     });
-    refreshCatalog();
-    return created;
   }
 
   const existing = await prisma.brand.findFirst({
@@ -95,7 +85,7 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
 
   if (existing) {
     if (existing.status === "INACTIVE") {
-      const restored = await prisma.$transaction(async (tx) => {
+      return prisma.$transaction(async (tx) => {
         const brand = await tx.brand.update({
           where: { id: existing.id },
           data: { name, status: "ACTIVE" },
@@ -113,13 +103,11 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
         });
         return brand;
       });
-      refreshCatalog();
-      return restored;
     }
     return { id: existing.id, name: existing.name };
   }
 
-  const created = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const brand = await tx.brand.create({
       data: { companyId: company.id, name, slug },
       select: { id: true, name: true },
@@ -136,6 +124,4 @@ export async function createCatalogOptionAction(kind: CatalogOptionKind, rawName
     });
     return brand;
   });
-  refreshCatalog();
-  return created;
 }
