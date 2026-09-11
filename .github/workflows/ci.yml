@@ -134,6 +134,25 @@ jobs:
             }
           done
 
+      - name: Probar creación inline de catálogo
+        run: |
+          set -e
+          CATEGORY_RESPONSE=$(curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data '{"kind":"category","name":"CI Cases"}' \
+            http://127.0.0.1:3001/api/catalog/options)
+          echo "$CATEGORY_RESPONSE" | grep -q '"option"'
+
+          BRAND_RESPONSE=$(curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data '{"kind":"brand","name":"CI Caseify"}' \
+            http://127.0.0.1:3001/api/catalog/options)
+          echo "$BRAND_RESPONSE" | grep -q '"option"'
+
       - name: Construir imagen Docker de producción
         run: docker build -t mobix-ci:${{ github.sha }} .
 
