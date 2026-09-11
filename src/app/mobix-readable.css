@@ -1,0 +1,269 @@
+/* MOBIX READABILITY & CATALOG UX ------------------------------------------
+ * Capa final de legibilidad. Se importa al final para corregir la escala
+ * tipográfica histórica sin reescribir cada módulo.
+ */
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Shell y navegación */
+.app-shell { grid-template-columns: 252px minmax(0, 1fr); }
+.sidebar { width: 252px; padding: 18px 13px 15px; }
+.brand-copy strong, .brand strong { font-size: 17px; }
+.brand-copy span, .brand span { font-size: 11px; }
+.company-selector { min-height: 62px; }
+.company-copy strong { font-size: 13px; }
+.company-copy span { font-size: 11px; }
+.nav-section { margin-bottom: 15px; }
+.nav-section > p {
+  margin-bottom: 6px;
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+.nav-item {
+  min-height: 41px;
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-weight: 540;
+}
+.nav-item.active { font-weight: 650; }
+
+.nav-group { margin-bottom: 3px; }
+.nav-parent { cursor: default; margin-bottom: 1px; }
+.nav-submenu {
+  margin: 0 0 7px 20px;
+  padding: 2px 0 2px 12px;
+  border-left: 1px solid rgba(255,255,255,.09);
+  display: grid;
+  gap: 1px;
+}
+.nav-subitem {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #8f9bb0;
+  font-size: 12.5px;
+  font-weight: 520;
+  transition: background .16s ease, color .16s ease;
+}
+.nav-subitem:hover { color: #eef3ff; background: rgba(255,255,255,.045); }
+.nav-subitem.active { color: #dfe8ff; background: rgba(49,94,251,.12); font-weight: 650; }
+.nav-subitem-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 999px;
+  background: #536078;
+}
+.nav-subitem.active .nav-subitem-dot { background: #7d9dff; box-shadow: 0 0 8px rgba(125,157,255,.4); }
+
+/* Topbar */
+.topbar { min-height: 72px; }
+.global-search input { font-size: 13.5px; }
+.user-copy strong { font-size: 12.5px; }
+.user-copy span { font-size: 10.5px; }
+
+/* Jerarquía de títulos */
+.page-heading h1 { font-size: 30px; line-height: 1.16; }
+.page-heading p { font-size: 14px; line-height: 1.58; }
+.eyebrow { font-size: 10.5px; }
+.panel-heading h2 { font-size: 15.5px; }
+.panel-heading p { font-size: 12.5px; line-height: 1.5; }
+.section-title h2, .dashboard-section-heading h2 { font-size: 17px; }
+.section-title p, .dashboard-section-heading p { font-size: 12.5px; }
+
+/* Botones */
+.primary-button,
+.secondary-button,
+.cancel-button,
+.ghost-button,
+.filter-button {
+  font-size: 13px;
+}
+.primary-button, .secondary-button { min-height: 41px; }
+
+/* Resúmenes y tarjetas */
+.stat-card p,
+.mobix-summary-grid article > span:not(.summary-symbol),
+.product-summary span {
+  font-size: 12px;
+}
+.stat-card span,
+.dashboard-quick-copy small {
+  font-size: 11.5px;
+}
+.stat-card strong { font-size: 23px; }
+.product-summary strong { font-size: 20px; }
+.dashboard-quick-copy strong { font-size: 13px; }
+
+/* Formularios: escala común para todos los módulos */
+.page-content input,
+.page-content select,
+.page-content textarea {
+  font-size: 13.5px;
+}
+.page-content input,
+.page-content select {
+  min-height: 41px;
+}
+.page-content textarea { line-height: 1.5; }
+.page-content label > span,
+.mobix-form-grid label > span,
+.line-fields label > span,
+.pos-form-grid label > span,
+.payment-field > span,
+.pos-warehouse span,
+.form-field > span {
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.form-footnote,
+.tax-note,
+.field-help,
+.help-text {
+  font-size: 11.5px;
+}
+.field-error { font-size: 11.5px; line-height: 1.4; }
+
+/* Tablas */
+.data-table th,
+.page-content table th {
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+.data-table td,
+.page-content table td {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.product-cell strong { font-size: 13.2px; }
+.product-cell span { font-size: 11px; }
+.status-badge { min-height: 24px; font-size: 11px; }
+.table-search input { font-size: 13px; }
+.table-footer { font-size: 11.5px; }
+.empty-table-state strong { font-size: 14px; }
+.empty-table-state span { font-size: 12px; }
+
+/* Editor de productos */
+.editor-card-heading h2 { font-size: 16px; }
+.editor-card-heading p { font-size: 12.5px; }
+.product-type-copy strong { font-size: 13.5px; }
+.product-type-copy small { font-size: 11.5px; }
+.variant-card-top strong { font-size: 13.5px; }
+.variant-card-top span { font-size: 11.5px; }
+.rule-list strong { font-size: 12.5px; }
+.rule-list small, .rule-note { font-size: 11.5px; }
+
+/* Gestión de marcas y categorías */
+.catalog-manager-page { max-width: 1320px; }
+.catalog-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.catalog-summary-grid article {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm, var(--shadow));
+}
+.catalog-summary-grid span,
+.catalog-summary-grid strong,
+.catalog-summary-grid small { display: block; }
+.catalog-summary-grid span { color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.catalog-summary-grid strong { margin-top: 5px; color: var(--text); font-size: 25px; letter-spacing: -.03em; }
+.catalog-summary-grid small { margin-top: 5px; color: var(--muted-2); font-size: 11.5px; }
+
+.catalog-create-panel {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.catalog-create-copy { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.catalog-create-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft, #eef3ff);
+  color: var(--primary);
+}
+.catalog-create-copy strong,
+.catalog-create-copy span { display: block; }
+.catalog-create-copy strong { font-size: 14px; color: var(--text); }
+.catalog-create-copy span { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.catalog-create-controls { display: flex; align-items: center; gap: 8px; width: min(470px, 48%); }
+.catalog-create-controls input {
+  width: 100%;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 9px;
+  padding: 0 11px;
+  background: #fff;
+  outline: none;
+}
+.catalog-create-controls input:focus,
+.catalog-inline-edit input:focus {
+  border-color: #9db4ff;
+  box-shadow: 0 0 0 3px rgba(49,94,251,.075);
+}
+.catalog-alert { margin-bottom: 14px; }
+.catalog-toolbar-note { align-self: center; color: var(--muted); font-size: 11.5px; text-align: right; }
+.catalog-table { min-width: 850px; }
+.catalog-name-cell strong,
+.catalog-name-cell span { display: block; }
+.catalog-name-cell strong { color: var(--text); font-size: 13.5px; }
+.catalog-name-cell span { margin-top: 3px; color: var(--muted-2); font-size: 11.5px; }
+.catalog-inline-edit { display: flex; align-items: center; gap: 6px; min-width: 290px; }
+.catalog-inline-edit input {
+  width: min(320px, 100%);
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  padding: 0 10px;
+  outline: none;
+}
+.catalog-icon-button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+}
+.catalog-icon-button:hover { background: #f8fafc; color: var(--text); }
+.catalog-icon-button.success { color: var(--success); background: var(--success-soft); border-color: #b7ebcf; }
+.catalog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 7px; }
+.compact-action { min-height: 34px; height: 34px; padding: 0 10px; }
+.compact-action.danger-soft { color: #b42318; background: #fff7f6; border-color: #fecdca; }
+.compact-action.success-soft { color: #067647; background: #f2fbf6; border-color: #b7ebcf; }
+
+@media (max-width: 1050px) {
+  .app-shell { grid-template-columns: 82px minmax(0, 1fr); }
+  .sidebar { width: 82px; }
+  .nav-submenu { display: none; }
+  .catalog-create-panel { align-items: stretch; flex-direction: column; }
+  .catalog-create-controls { width: 100%; }
+}
+
+@media (max-width: 760px) {
+  body { font-size: 14px; }
+  .page-heading h1 { font-size: 27px; }
+  .page-heading p { font-size: 13.5px; }
+  .catalog-summary-grid { grid-template-columns: 1fr; }
+  .catalog-create-controls { flex-direction: column; align-items: stretch; }
+  .catalog-create-controls .primary-button { width: 100%; }
+  .catalog-toolbar-note { display: none; }
+}
