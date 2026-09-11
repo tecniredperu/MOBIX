@@ -21,7 +21,26 @@ import {
   Wrench,
 } from "lucide-react";
 
-const sections = [
+type NavChild = {
+  label: string;
+  href: string;
+  permission: string;
+};
+
+type NavItem = {
+  label: string;
+  href?: string;
+  icon: typeof LayoutDashboard;
+  permission: string;
+  children?: NavChild[];
+};
+
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
+
+const sections: NavSection[] = [
   {
     label: "Inicio",
     items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" }],
@@ -37,7 +56,16 @@ const sections = [
   {
     label: "Inventario",
     items: [
-      { label: "Productos", href: "/productos", icon: Boxes, permission: "inventory.view" },
+      {
+        label: "Productos",
+        icon: Boxes,
+        permission: "inventory.view",
+        children: [
+          { label: "Todos los productos", href: "/productos", permission: "inventory.view" },
+          { label: "Categorías", href: "/productos/categorias", permission: "inventory.view" },
+          { label: "Marcas", href: "/productos/marcas", permission: "inventory.view" },
+        ],
+      },
       { label: "Equipos / IMEI", href: "/equipos", icon: Smartphone, permission: "inventory.view" },
       { label: "Kardex", href: "/kardex", icon: PackageSearch, permission: "inventory.view" },
       { label: "Transferencias", href: "/transferencias", icon: ArrowLeftRight, permission: "inventory.transfer" },
@@ -124,6 +152,41 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
               <p>{section.label}</p>
               {items.map((item) => {
                 const Icon = item.icon;
+
+                if (item.children?.length) {
+                  const children = item.children.filter((child) => allowed(child.permission));
+                  if (!children.length) return null;
+                  const active = pathname === "/productos" || pathname.startsWith("/productos/");
+
+                  return (
+                    <div className="nav-group" key={item.label}>
+                      <div className={`nav-item nav-parent${active ? " active" : ""}`}>
+                        <Icon size={18} strokeWidth={1.9} />
+                        <span>{item.label}</span>
+                      </div>
+                      <div className="nav-submenu" aria-label={`Submenú ${item.label}`}>
+                        {children.map((child) => {
+                          const childActive = child.href === "/productos"
+                            ? pathname === "/productos"
+                            : isActivePath(pathname, child.href);
+                          return (
+                            <Link
+                              href={child.href}
+                              className={`nav-subitem${childActive ? " active" : ""}`}
+                              aria-current={childActive ? "page" : undefined}
+                              key={child.label}
+                            >
+                              <span className="nav-subitem-dot" />
+                              <span>{child.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!item.href) return null;
                 const active = isActivePath(pathname, item.href);
                 return (
                   <Link
@@ -132,7 +195,7 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
                     aria-current={active ? "page" : undefined}
                     key={item.label}
                   >
-                    <Icon size={17} strokeWidth={1.9} />
+                    <Icon size={18} strokeWidth={1.9} />
                     <span>{item.label}</span>
                   </Link>
                 );
@@ -148,7 +211,7 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
             className={`nav-item${isActivePath(pathname, "/administracion") ? " active" : ""}`}
             href={adminHref}
           >
-            <ShieldCheck size={17} />
+            <ShieldCheck size={18} />
             <span>Administración</span>
           </Link>
         )}
@@ -157,7 +220,7 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
             className={`nav-item${isActivePath(pathname, "/configuracion") ? " active" : ""}`}
             href="/configuracion"
           >
-            <Settings size={17} />
+            <Settings size={18} />
             <span>Configuración</span>
           </Link>
         )}
