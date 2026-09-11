@@ -110,6 +110,7 @@ jobs:
             "/kardex"
             "/compras"
             "/compras/nueva"
+            "/proveedores"
             "/pos"
             "/ventas"
             "/clientes"
