@@ -9,27 +9,24 @@ export type SupplierFilters = {
 export async function getSuppliers(filters: SupplierFilters = {}) {
   const company = await getActiveCompany();
   const q = filters.q?.trim();
-  const status = filters.status === "ACTIVE" || filters.status === "INACTIVE" ? filters.status : undefined;
-
-  const where = {
-    companyId: company.id,
-    ...(status ? { status } : {}),
-    ...(q
-      ? {
-          OR: [
-            { businessName: { contains: q, mode: "insensitive" as const } },
-            { contactName: { contains: q, mode: "insensitive" as const } },
-            { documentNumber: { contains: q, mode: "insensitive" as const } },
-            { phone: { contains: q, mode: "insensitive" as const } },
-            { email: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-  };
+  const status: "ACTIVE" | "INACTIVE" | undefined =
+    filters.status === "ACTIVE" || filters.status === "INACTIVE" ? filters.status : undefined;
 
   const [suppliers, total, active] = await Promise.all([
     prisma.supplier.findMany({
-      where,
+      where: {
+        companyId: company.id,
+        status,
+        OR: q
+          ? [
+              { businessName: { contains: q, mode: "insensitive" } },
+              { contactName: { contains: q, mode: "insensitive" } },
+              { documentNumber: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+            ]
+          : undefined,
+      },
       orderBy: [{ status: "asc" }, { businessName: "asc" }],
       take: 200,
       include: {
