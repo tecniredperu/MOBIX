@@ -11,7 +11,13 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({
+  connectionString,
+  // Prisma 7 + pg cierra conexiones ociosas a los 10 s por defecto.
+  // En MOBIX conviene conservarlas para evitar reconexiones TLS frecuentes a Supabase.
+  idleTimeoutMillis: 300_000,
+  connectionTimeoutMillis: 5_000,
+});
 
 export const prisma =
   globalForPrisma.prisma ??
