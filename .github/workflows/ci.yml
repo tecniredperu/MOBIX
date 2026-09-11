@@ -106,6 +106,7 @@ jobs:
           routes=(
             "/"
             "/productos"
+            "/productos/nuevo"
             "/equipos"
             "/kardex"
             "/compras"
@@ -134,16 +135,17 @@ jobs:
             }
           done
 
-      - name: Probar creación inline de catálogo
+      - name: Probar alta completa de catálogo y producto
         run: |
-          set -e
+          set -euo pipefail
+
           CATEGORY_RESPONSE=$(curl -fsS \
             -X POST \
             -H "Content-Type: application/json" \
             -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
             --data '{"kind":"category","name":"CI Cases"}' \
             http://127.0.0.1:3001/api/catalog/options)
-          echo "$CATEGORY_RESPONSE" | grep -q '"option"'
+          CATEGORY_ID=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.option?.id) process.exit(1); process.stdout.write(x.option.id)' "$CATEGORY_RESPONSE")
 
           BRAND_RESPONSE=$(curl -fsS \
             -X POST \
@@ -151,7 +153,56 @@ jobs:
             -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
             --data '{"kind":"brand","name":"CI Caseify"}' \
             http://127.0.0.1:3001/api/catalog/options)
-          echo "$BRAND_RESPONSE" | grep -q '"option"'
+          BRAND_ID=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.option?.id) process.exit(1); process.stdout.write(x.option.id)' "$BRAND_RESPONSE")
+
+          PRODUCT_PAYLOAD=$(cat <<JSON
+          {"type":"ACCESSORY","categoryId":"${CATEGORY_ID}","brandId":"${BRAND_ID}","name":"CI CASE IPHONE 17 PRO MAX SILICONA","model":"CI-CASE-17PM","sku":"CI-CASE-17PM","barcode":"CI170001","description":"Producto creado por prueba E2E de MOBIX","warrantyDays":"30","minimumStock":"2","variants":[{"sku":"CI-CASE-17PM-BLK","barcode":"CI170001-BLK","color":"Negro","ram":"","storage":"","purchasePrice":15.5,"salePrice":29.9,"minimumSalePrice":24.9}]}
+          JSON
+          )
+
+          PRODUCT_RESPONSE=$(curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$PRODUCT_PAYLOAD" \
+            http://127.0.0.1:3001/api/products)
+          PRODUCT_ID=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.product?.id) process.exit(1); process.stdout.write(x.product.id)' "$PRODUCT_RESPONSE")
+          test -n "$PRODUCT_ID"
+
+          PRODUCTS_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/productos?created=1")
+          echo "$PRODUCTS_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA"
+          echo "$PRODUCTS_HTML" | grep -q "Producto guardado"
+          echo "$PRODUCTS_HTML" | grep -q "CI Caseify"
+
+          DUPLICATE_STATUS=$(curl -s \
+            -o /tmp/mobix-duplicate-product.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$PRODUCT_PAYLOAD" \
+            http://127.0.0.1:3001/api/products)
+          if [ "$DUPLICATE_STATUS" != "409" ]; then
+            echo "Se esperaba HTTP 409 para SKU duplicado y se recibió $DUPLICATE_STATUS"
+            cat /tmp/mobix-duplicate-product.json || true
+            exit 1
+          fi
+
+          INVALID_STATUS=$(curl -s \
+            -o /tmp/mobix-invalid-product.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data '{"type":"ACCESSORY","name":"X","warrantyDays":"0","minimumStock":"0","variants":[]}' \
+            http://127.0.0.1:3001/api/products)
+          if [ "$INVALID_STATUS" != "400" ]; then
+            echo "Se esperaba HTTP 400 para producto inválido y se recibió $INVALID_STATUS"
+            cat /tmp/mobix-invalid-product.json || true
+            exit 1
+          fi
 
       - name: Construir imagen Docker de producción
         run: docker build -t mobix-ci:${{ github.sha }} .
