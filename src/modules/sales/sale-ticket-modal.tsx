@@ -2,6 +2,12 @@
 
 import { Printer, X } from "lucide-react";
 
+const DOCUMENT_LABELS: Record<string, string> = {
+  RECEIPT: "BOLETA DE VENTA",
+  INVOICE: "FACTURA",
+  SALES_NOTE: "NOTA DE VENTA",
+};
+
 const PAYMENT_LABELS: Record<string, string> = {
   CASH: "Efectivo",
   YAPE: "Yape",
@@ -30,10 +36,22 @@ function limaDate(value: string) {
 
 export type SaleTicketData = {
   saleNumber: string;
+  documentType: string;
   documentSeries: string | null;
   documentNumber: string | null;
+  taxCondition: string;
   createdAt: string;
   branch: string;
+  company: {
+    businessName: string;
+    tradeName: string | null;
+    ruc: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    logoUrl: string | null;
+  };
+  ticketFooter: string | null;
   customer: {
     name: string;
     documentType: string | null;
@@ -75,6 +93,11 @@ export function SaleTicketModal({
   }
 
   const customer = ticket.customer?.name ?? "Consumidor final";
+  const companyName = ticket.company.tradeName || ticket.company.businessName;
+  const documentNumber = ticket.documentSeries && ticket.documentNumber
+    ? `${ticket.documentSeries}-${ticket.documentNumber}`
+    : ticket.saleNumber;
+  const contact = [ticket.company.phone, ticket.company.email].filter(Boolean).join(" · ");
 
   return (
     <div className="ticket-modal" role="dialog" aria-modal="true" aria-label="Vista previa del ticket">
@@ -83,7 +106,7 @@ export function SaleTicketModal({
         <div className="ticket-modal-toolbar no-print">
           <div>
             <strong>Vista previa del ticket</strong>
-            <span>80 mm · {ticket.saleNumber}</span>
+            <span>80 mm · {documentNumber}</span>
           </div>
           <div>
             <button className="secondary-button" type="button" onClick={printTicket}><Printer size={16} /> Imprimir ticket</button>
@@ -94,13 +117,20 @@ export function SaleTicketModal({
         <div className="ticket-modal-scroll">
           <div className="ticket-page">
             <header className="ticket-header">
-              <strong>MOBIX</strong>
-              <span>Gestión móvil</span>
+              {ticket.company.logoUrl && <img className="ticket-company-logo" src={ticket.company.logoUrl} alt={`Logo de ${companyName}`} />}
+              <strong className="ticket-company-name">{companyName}</strong>
+              {ticket.company.businessName !== companyName && <span className="ticket-company-legal">{ticket.company.businessName}</span>}
+              {ticket.company.ruc && <span>RUC {ticket.company.ruc}</span>}
+              {ticket.company.address && <p>{ticket.company.address}</p>}
+              {contact && <span className="ticket-company-contact">{contact}</span>}
               <p>{ticket.branch}</p>
             </header>
+            <div className="ticket-document-box">
+              <strong>{DOCUMENT_LABELS[ticket.documentType] ?? ticket.documentType}</strong>
+              <span>{documentNumber}</span>
+            </div>
             <div className="ticket-meta">
               <span>Venta: {ticket.saleNumber}</span>
-              {ticket.documentSeries && ticket.documentNumber && <span>{ticket.documentSeries}-{ticket.documentNumber}</span>}
               <span>{limaDate(ticket.createdAt)}</span>
               <span>Cliente: {customer}</span>
               {ticket.customer?.documentNumber && <span>{ticket.customer.documentType}: {ticket.customer.documentNumber}</span>}
@@ -133,8 +163,7 @@ export function SaleTicketModal({
             </div>
             <footer className="ticket-footer">
               <strong>¡Gracias por tu compra!</strong>
-              <span>Documento generado por MOBIX.</span>
-              <small>La facturación electrónica SUNAT se habilitará en una etapa posterior.</small>
+              {ticket.ticketFooter && <small className="ticket-custom-footer">{ticket.ticketFooter}</small>}
             </footer>
           </div>
         </div>
