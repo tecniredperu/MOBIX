@@ -4,13 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
-import {
-  calculatePaymentCoverage,
-  calculateSaleTotals,
-} from "./sales-calculations";
+import { calculatePaymentCoverage, calculateSaleTotals } from "./sales-calculations";
 import type {
   PosCatalogItem,
   PosCustomer,
+  PosUnit,
   PosWarehouse,
   SaleDocumentType,
   SalePaymentMethod,
@@ -22,18 +20,9 @@ import { PosCustomerCard } from "./pos/pos-customer-card";
 import { PosCustomerModal } from "./pos/pos-customer-modal";
 import { PosPaymentCard } from "./pos/pos-payment-card";
 import { PosTotalCard } from "./pos/pos-total-card";
-import {
-  stockFor,
-  unitLabel,
-  type CartLine,
-  type PaymentLine,
-} from "./pos/pos-shared";
+import { stockFor, unitLabel, type CartLine, type PaymentLine } from "./pos/pos-shared";
 
-export function PosFormV4({
-  warehouses,
-  catalog,
-  customers,
-}: {
+export function PosFormV4({ warehouses, catalog, customers }: {
   warehouses: PosWarehouse[];
   catalog: PosCatalogItem[];
   customers: PosCustomer[];
@@ -44,6 +33,8 @@ export function PosFormV4({
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
+  const [unitsByVariant, setUnitsByVariant] = useState<Record<string, PosUnit[]>>({});
+  const [loadingUnits, setLoadingUnits] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<SaleDocumentType>("RECEIPT");
   const [taxCondition, setTaxCondition] = useState<SaleTaxCondition>("TAXED");
   const [discount, setDiscount] = useState(0);
@@ -57,13 +48,10 @@ export function PosFormV4({
 
   const filteredCatalog = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return catalog;
-    return catalog.filter((item) =>
-      [item.name, item.brand, item.variant, item.sku ?? "", item.category]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
-    );
+    const source = normalized
+      ? catalog.filter((item) => [item.name, item.brand, item.variant, item.sku ?? "", item.category].join(" ").toLowerCase().includes(normalized))
+      : catalog;
+    return source.slice(0, 80);
   }, [catalog, query]);
 
   const selectedCustomer = useMemo(
@@ -71,28 +59,45 @@ export function PosFormV4({
     [availableCustomers, customerId],
   );
 
-  const totals = useMemo(
-    () => calculateSaleTotals({
-      lines: cart.map((line) => ({
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-      })),
-      discount,
-      taxCondition,
-      taxRatePercent: 18,
-    }),
-    [cart, discount, taxCondition],
-  );
+  const totals = useMemo(() => calculateSaleTotals({
+    lines: cart.map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice })),
+    discount,
+    taxCondition,
+    taxRatePercent: 18,
+  }), [cart, discount, taxCondition]);
 
-  const coverage = useMemo(
-    () => calculatePaymentCoverage({
-      total: totals.total,
-      payments,
-      creditEnabled: selectedCustomer?.creditEnabled,
-      availableCredit: selectedCustomer?.availableCredit,
-    }),
-    [payments, selectedCustomer, totals.total],
-  );
+  const coverage = useMemo(() => calculatePaymentCoverage({
+    total: totals.total,
+    payments,
+    creditEnabled: selectedCustomer?.creditEnabled,
+    availableCredit: selectedCustomer?.availableCredit,
+  }), [payments, selectedCustomer, totals.total]);
+
+  async function loadUnits(variantId: string): Promise<PosUnit[]> {
+    const cacheKey = `${variantId}:${warehouseId}`;
+    if (unitsByVariant[cacheKey]) return unitsByVariant[cacheKey];
+    if (loadingUnits[cacheKey]) return [];
+
+    setLoadingUnits((current) => ({ ...current, [cacheKey]: true }));
+    try {
+      const response = await fetch(`/api/pos/units?variantId=${encodeURIComponent(variantId)}&warehouseId=${encodeURIComponent(warehouseId)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("No se pudieron cargar los IMEI disponibles.");
+      const data = await response.json() as { units: PosUnit[] };
+      setUnitsByVariant((current) => ({ ...current, [cacheKey]: data.units }));
+      if (data.units[0]) {
+        setUnitSelections((current) => ({ ...current, [variantId]: current[variantId] || data.units[0].id }));
+      }
+      return data.units;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudieron cargar los equipos disponibles.");
+      return [];
+    } finally {
+      setLoadingUnits((current) => ({ ...current, [cacheKey]: false }));
+    }
+  }
 
   function selectExistingCustomer(id: string) {
     setCustomerId(id);
@@ -100,104 +105,78 @@ export function PosFormV4({
   }
 
   function handleCustomerCreated(customer: PosCustomer) {
-    setAvailableCustomers((current) => {
-      const exists = current.some((item) => item.id === customer.id);
-      return exists ? current : [customer, ...current];
-    });
+    setAvailableCustomers((current) => current.some((item) => item.id === customer.id) ? current : [customer, ...current]);
     setCustomerId(customer.id);
     setError("");
   }
 
-  function addItem(item: PosCatalogItem) {
+  async function addItem(item: PosCatalogItem) {
     const stock = stockFor(item, warehouseId);
     if (item.type !== "SERVICE" && stock <= 0) return;
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
-      const availableUnits = item.units.filter((unit) => unit.warehouseId === warehouseId);
+      const cacheKey = `${item.variantId}:${warehouseId}`;
+      const availableUnits = unitsByVariant[cacheKey] ?? await loadUnits(item.variantId);
       const selectedId = unitSelections[item.variantId] || availableUnits[0]?.id;
       const selected = availableUnits.find((unit) => unit.id === selectedId);
-      if (!selected) return;
+      if (!selected) {
+        setError("Selecciona un IMEI o serie disponible.");
+        return;
+      }
       if (cart.some((line) => line.selectedUnitIds.includes(selected.id))) {
         setError("Ese IMEI/equipo ya está agregado a la venta.");
         return;
       }
-
-      setCart((current) => [
-        ...current,
-        {
-          key: selected.id,
-          variantId: item.variantId,
-          type: item.type,
-          name: item.name,
-          variant: item.variant,
-          quantity: 1,
-          unitPrice: item.salePrice,
-          minimumSalePrice: item.minimumSalePrice,
-          selectedUnitIds: [selected.id],
-          unitLabel: unitLabel(selected),
-        },
-      ]);
+      setCart((current) => [...current, {
+        key: selected.id,
+        variantId: item.variantId,
+        type: item.type,
+        name: item.name,
+        variant: item.variant,
+        quantity: 1,
+        unitPrice: item.salePrice,
+        minimumSalePrice: item.minimumSalePrice,
+        selectedUnitIds: [selected.id],
+        unitLabel: unitLabel(selected),
+      }]);
       setError("");
       return;
     }
 
     setCart((current) => {
-      const existing = current.find(
-        (line) => line.variantId === item.variantId && line.type === item.type,
-      );
+      const existing = current.find((line) => line.variantId === item.variantId && line.type === item.type);
       if (existing) {
-        return current.map((line) =>
-          line.key === existing.key
-            ? {
-                ...line,
-                quantity: item.type === "SERVICE"
-                  ? line.quantity + 1
-                  : Math.min(stock, line.quantity + 1),
-              }
-            : line,
-        );
+        return current.map((line) => line.key === existing.key ? {
+          ...line,
+          quantity: item.type === "SERVICE" ? line.quantity + 1 : Math.min(stock, line.quantity + 1),
+        } : line);
       }
-
-      return [
-        ...current,
-        {
-          key: item.variantId,
-          variantId: item.variantId,
-          type: item.type,
-          name: item.name,
-          variant: item.variant,
-          quantity: 1,
-          unitPrice: item.salePrice,
-          minimumSalePrice: item.minimumSalePrice,
-          selectedUnitIds: [],
-        },
-      ];
+      return [...current, {
+        key: item.variantId,
+        variantId: item.variantId,
+        type: item.type,
+        name: item.name,
+        variant: item.variant,
+        quantity: 1,
+        unitPrice: item.salePrice,
+        minimumSalePrice: item.minimumSalePrice,
+        selectedUnitIds: [],
+      }];
     });
     setError("");
   }
 
   function updateQuantity(key: string, quantity: number) {
-    setCart((current) =>
-      current.map((line) => {
-        if (line.key !== key || line.type === "PHONE" || line.type === "SERIALIZED") {
-          return line;
-        }
-        const item = catalog.find((catalogItem) => catalogItem.variantId === line.variantId);
-        const max = item && line.type !== "SERVICE" ? stockFor(item, warehouseId) : 999999;
-        return {
-          ...line,
-          quantity: Math.max(1, Math.min(max, Math.floor(quantity || 1))),
-        };
-      }),
-    );
+    setCart((current) => current.map((line) => {
+      if (line.key !== key || line.type === "PHONE" || line.type === "SERIALIZED") return line;
+      const item = catalog.find((catalogItem) => catalogItem.variantId === line.variantId);
+      const max = item && line.type !== "SERVICE" ? stockFor(item, warehouseId) : 999999;
+      return { ...line, quantity: Math.max(1, Math.min(max, Math.floor(quantity || 1))) };
+    }));
   }
 
   function updatePrice(key: string, value: number) {
-    setCart((current) =>
-      current.map((line) =>
-        line.key === key ? { ...line, unitPrice: Math.max(0, value || 0) } : line,
-      ),
-    );
+    setCart((current) => current.map((line) => line.key === key ? { ...line, unitPrice: Math.max(0, value || 0) } : line));
   }
 
   function removeLine(key: string) {
@@ -205,47 +184,31 @@ export function PosFormV4({
   }
 
   function addPayment() {
-    setPayments((current) => [
-      ...current,
-      { id: `payment-${Date.now()}`, method: "YAPE", amount: 0, reference: "" },
-    ]);
+    setPayments((current) => [...current, { id: `payment-${Date.now()}`, method: "YAPE", amount: 0, reference: "" }]);
   }
 
   function setPaymentAmount(id: string, amount: number) {
-    setPayments((current) =>
-      current.map((payment) =>
-        payment.id === id ? { ...payment, amount: Math.max(0, amount || 0) } : payment,
-      ),
-    );
+    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, amount: Math.max(0, amount || 0) } : payment));
   }
 
   function updatePaymentMethod(id: string, method: SalePaymentMethod) {
-    if (method === "CREDIT" && !selectedCustomer?.creditEnabled) {
-      setError("Selecciona un cliente con línea de crédito habilitada antes de usar Crédito.");
-    } else {
-      setError("");
-    }
-    setPayments((current) =>
-      current.map((payment) => (payment.id === id ? { ...payment, method } : payment)),
-    );
+    setError(method === "CREDIT" && !selectedCustomer?.creditEnabled
+      ? "Selecciona un cliente con línea de crédito habilitada antes de usar Crédito."
+      : "");
+    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, method } : payment));
   }
 
   function updatePaymentReference(id: string, reference: string) {
-    setPayments((current) =>
-      current.map((payment) => (payment.id === id ? { ...payment, reference } : payment)),
-    );
+    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, reference } : payment));
   }
 
   function completePaymentBalance(id: string) {
-    const otherPaid = payments
-      .filter((payment) => payment.id !== id)
-      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const otherPaid = payments.filter((payment) => payment.id !== id).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     setPaymentAmount(id, Math.max(0, roundMoney(totals.total - otherPaid)));
   }
 
   function submitSale() {
     setError("");
-
     if (totals.total > 0.01 && !payments.some((payment) => Number(payment.amount) > 0.009)) {
       setError("Ingresa el monto recibido antes de confirmar la venta.");
       return;
@@ -269,11 +232,7 @@ export function PosFormV4({
             unitPrice: Number(line.unitPrice),
             selectedUnitIds: line.selectedUnitIds,
           })),
-          payments: payments.map((payment) => ({
-            method: payment.method,
-            amount: Number(payment.amount),
-            reference: payment.reference,
-          })),
+          payments: payments.map((payment) => ({ method: payment.method, amount: Number(payment.amount), reference: payment.reference })),
         });
         router.push(`/ventas/${result.id}?created=1&change=${result.change.toFixed(2)}`);
         router.refresh();
@@ -293,26 +252,17 @@ export function PosFormV4({
         </div>
         <label className="pos-warehouse">
           <span>Sucursal / almacén</span>
-          <select
-            value={warehouseId}
-            onChange={(event) => setWarehouseId(event.target.value)}
-            disabled={cart.length > 0}
-          >
-            {warehouses.map((warehouse) => (
-              <option key={warehouse.id} value={warehouse.id}>
-                {warehouse.branchName} · {warehouse.name}
-              </option>
-            ))}
+          <select value={warehouseId} onChange={(event) => {
+            setWarehouseId(event.target.value);
+            setUnitsByVariant({});
+            setUnitSelections({});
+          }} disabled={cart.length > 0}>
+            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.branchName} · {warehouse.name}</option>)}
           </select>
         </label>
       </section>
 
-      {error && (
-        <div className="error-banner">
-          <strong>No se pudo completar la operación</strong>
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <div className="error-banner"><strong>No se pudo completar la operación</strong><span>{error}</span></div>}
 
       <div className="pos-layout">
         <PosCatalogPanel
@@ -320,20 +270,16 @@ export function PosFormV4({
           query={query}
           warehouseId={warehouseId}
           unitSelections={unitSelections}
+          unitsByVariant={unitsByVariant}
+          loadingUnits={loadingUnits}
           onQueryChange={setQuery}
-          onUnitSelectionChange={(variantId, unitId) =>
-            setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
+          onLoadUnits={loadUnits}
+          onUnitSelectionChange={(variantId, unitId) => setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
           onAdd={addItem}
         />
 
         <aside className="pos-checkout">
-          <PosCartCard
-            cart={cart}
-            onQuantityChange={updateQuantity}
-            onPriceChange={updatePrice}
-            onRemove={removeLine}
-          />
-
+          <PosCartCard cart={cart} onQuantityChange={updateQuantity} onPriceChange={updatePrice} onRemove={removeLine} />
           <PosCustomerCard
             customers={availableCustomers}
             customerId={customerId}
@@ -345,7 +291,6 @@ export function PosFormV4({
             onDocumentTypeChange={setDocumentType}
             onTaxConditionChange={setTaxCondition}
           />
-
           <PosPaymentCard
             payments={payments}
             selectedCustomer={selectedCustomer}
@@ -358,7 +303,6 @@ export function PosFormV4({
             onCompleteBalance={completePaymentBalance}
             onRemove={(id) => setPayments((current) => current.filter((item) => item.id !== id))}
           />
-
           <PosTotalCard
             taxCondition={taxCondition}
             discount={discount}
@@ -381,11 +325,7 @@ export function PosFormV4({
         </aside>
       </div>
 
-      <PosCustomerModal
-        open={customerModalOpen}
-        onClose={() => setCustomerModalOpen(false)}
-        onCreated={handleCustomerCreated}
-      />
+      <PosCustomerModal open={customerModalOpen} onClose={() => setCustomerModalOpen(false)} onCreated={handleCustomerCreated} />
     </div>
   );
 }
