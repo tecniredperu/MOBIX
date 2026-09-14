@@ -1,12 +1,10 @@
-import { ChevronDown, UserRound } from "lucide-react";
+import { ChevronDown, Plus, UserRound } from "lucide-react";
 import type {
   PosCustomer,
   SaleDocumentType,
   SaleTaxCondition,
 } from "../sale-types";
 import { formatPen } from "./pos-shared";
-
-type CustomerDocumentType = "DNI" | "RUC" | "CE" | "OTHER";
 
 const DOCUMENT_LABELS: Record<SaleDocumentType, string> = {
   RECEIPT: "Boleta",
@@ -24,38 +22,24 @@ export function PosCustomerCard({
   customers,
   customerId,
   selectedCustomer,
-  customerDocumentType,
-  customerDocument,
-  customerName,
-  customerPhone,
   documentType,
   taxCondition,
   onExistingCustomerChange,
-  onCustomerDocumentTypeChange,
-  onCustomerDocumentChange,
-  onCustomerNameChange,
-  onCustomerPhoneChange,
+  onAddCustomer,
   onDocumentTypeChange,
   onTaxConditionChange,
 }: {
   customers: PosCustomer[];
   customerId: string;
   selectedCustomer: PosCustomer | null;
-  customerDocumentType: CustomerDocumentType;
-  customerDocument: string;
-  customerName: string;
-  customerPhone: string;
   documentType: SaleDocumentType;
   taxCondition: SaleTaxCondition;
   onExistingCustomerChange: (id: string) => void;
-  onCustomerDocumentTypeChange: (type: CustomerDocumentType) => void;
-  onCustomerDocumentChange: (value: string) => void;
-  onCustomerNameChange: (value: string) => void;
-  onCustomerPhoneChange: (value: string) => void;
+  onAddCustomer: () => void;
   onDocumentTypeChange: (type: SaleDocumentType) => void;
   onTaxConditionChange: (condition: SaleTaxCondition) => void;
 }) {
-  const customerLabel = selectedCustomer?.name || customerName.trim() || "Consumidor final";
+  const customerLabel = selectedCustomer?.name || "Consumidor final";
 
   return (
     <details className="panel pos-collapsible pos-customer-card">
@@ -70,17 +54,22 @@ export function PosCustomerCard({
 
       <div className="pos-collapsible-body">
         <div className="pos-form-grid">
-          <label>
-            <span>Cliente existente</span>
-            <select value={customerId} onChange={(event) => onExistingCustomerChange(event.target.value)}>
-              <option value="">Consumidor final / nuevo cliente</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}{customer.documentNumber ? ` · ${customer.documentNumber}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="pos-customer-select-row">
+            <label>
+              <span>Cliente</span>
+              <select value={customerId} onChange={(event) => onExistingCustomerChange(event.target.value)}>
+                <option value="">Consumidor final</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}{customer.documentNumber ? ` · ${customer.documentNumber}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="secondary-button pos-add-customer-button" type="button" onClick={onAddCustomer}>
+              <Plus size={15} /> Agregar cliente
+            </button>
+          </div>
 
           {selectedCustomer && (
             <div className={`pos-credit-profile ${selectedCustomer.creditEnabled ? "enabled" : "disabled"}`}>
@@ -99,8 +88,14 @@ export function PosCustomerCard({
               <small>
                 {selectedCustomer.creditEnabled
                   ? `Plazo habitual: ${selectedCustomer.creditDays} días`
-                  : "Configura el crédito desde Clientes."}
+                  : "La línea de crédito puede configurarse desde Clientes."}
               </small>
+            </div>
+          )}
+
+          {documentType === "INVOICE" && !selectedCustomer && (
+            <div className="pos-customer-required-note">
+              Para emitir factura debes seleccionar o agregar un cliente con RUC válido.
             </div>
           )}
 
@@ -128,37 +123,6 @@ export function PosCustomerCard({
               </select>
             </label>
           </div>
-
-          {!customerId && (
-            <div className="pos-new-customer-fields">
-              <div className="pos-doc-row">
-                <select
-                  value={customerDocumentType}
-                  onChange={(event) => onCustomerDocumentTypeChange(event.target.value as CustomerDocumentType)}
-                >
-                  <option value="DNI">DNI</option>
-                  <option value="RUC">RUC</option>
-                  <option value="CE">CE</option>
-                  <option value="OTHER">Otro</option>
-                </select>
-                <input
-                  value={customerDocument}
-                  onChange={(event) => onCustomerDocumentChange(event.target.value)}
-                  placeholder="N.º documento"
-                />
-              </div>
-              <input
-                value={customerName}
-                onChange={(event) => onCustomerNameChange(event.target.value)}
-                placeholder={customerDocumentType === "RUC" ? "Razón social" : "Nombres del cliente"}
-              />
-              <input
-                value={customerPhone}
-                onChange={(event) => onCustomerPhoneChange(event.target.value)}
-                placeholder="Celular / WhatsApp (opcional)"
-              />
-            </div>
-          )}
         </div>
       </div>
     </details>
