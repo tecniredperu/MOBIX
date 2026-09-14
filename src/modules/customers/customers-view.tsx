@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, CircleDollarSign, Plus, Search, UserRound, Users } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 
 function money(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(value || 0);
@@ -9,6 +10,7 @@ export function CustomersView({
   customers,
   summary,
   filters,
+  pagination,
 }: {
   customers: Array<{
     id: string;
@@ -28,6 +30,7 @@ export function CustomersView({
     updatedAt: string;
   }>;
   summary: { total: number; creditEnabled: number; outstanding: number; overdue: number };
+  pagination: { page: number; pageSize: number; total: number };
   filters: { q?: string; credit?: string };
 }) {
   return (
@@ -81,6 +84,8 @@ export function CustomersView({
             </tbody>
           </table>
         </div>
+        <div className="table-footer"><span>{pagination.total} cliente{pagination.total === 1 ? "" : "s"} encontrado{pagination.total === 1 ? "" : "s"}</span><span>Mostrando hasta {pagination.pageSize} por página.</span></div>
+        <Pagination pathname="/clientes" page={pagination.page} pageSize={pagination.pageSize} total={pagination.total} query={{ q: filters.q, credit: filters.credit }} />
       </section>
     </div>
   );

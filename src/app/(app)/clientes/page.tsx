@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { CustomersView } from "@/modules/customers/customers-view";
 import { getCustomers } from "@/modules/customers/customers.repository";
@@ -13,12 +12,14 @@ function single(value: string | string[] | undefined) {
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePermission("customers.manage");
   const params = await searchParams;
-  const filters = { q: single(params.q), credit: single(params.credit) };
-  const { items, summary } = await getCustomers(filters);
+  const pageValue = Number(single(params.page));
+  const filters = {
+    q: single(params.q),
+    credit: single(params.credit),
+    page: Number.isInteger(pageValue) && pageValue > 0 ? pageValue : 1,
+    pageSize: 50,
+  };
+  const { items, summary, pagination } = await getCustomers(filters);
 
-  return (
-    <AppShell>
-      <CustomersView customers={items} summary={summary} filters={filters} />
-    </AppShell>
-  );
+  return <CustomersView customers={items} summary={summary} pagination={pagination} filters={filters} />;
 }
