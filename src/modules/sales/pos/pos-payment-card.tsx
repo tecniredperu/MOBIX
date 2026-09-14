@@ -93,9 +93,11 @@ export function PosPaymentCard({
                 />
               </label>
               <div className="payment-actions">
-                <button className="ghost-button" type="button" onClick={() => onCompleteBalance(payment.id)}>
-                  Completar saldo
-                </button>
+                {payment.method !== "CASH" && (
+                  <button className="ghost-button" type="button" onClick={() => onCompleteBalance(payment.id)}>
+                    Completar saldo
+                  </button>
+                )}
                 {payments.length > 1 && (
                   <button
                     className="row-menu danger"
