@@ -28,3 +28,4 @@
 /* Overrides finales: login premium + responsive transversal. */
 @import "./mobix-login-premium.css";
 @import "./mobix-responsive.css";
+@import "./mobix-login-no-scroll.css";
