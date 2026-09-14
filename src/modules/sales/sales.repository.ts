@@ -1,14 +1,6 @@
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
-import type { PosCatalogItem, PosCustomer, PosWarehouse } from "./sale-types";
-
-type CreditProfileRow = {
-  id: string;
-  creditEnabled: boolean;
-  creditLimit: unknown;
-  creditDays: number;
-  outstanding: unknown;
-};
+import type { PosCatalogItem, PosCustomer, PosUnit, PosWarehouse } from "./sale-types";
 
 function variantLabel(input: { ram: string | null; storage: string | null; color: string | null }) {
   return [input.ram, input.storage, input.color].filter(Boolean).join(" / ") || "Variante base";
@@ -37,85 +29,172 @@ function getLimaDayBounds() {
   return { start, end: new Date(start.getTime() + 86_400_000) };
 }
 
+function normalizePage(value: number | undefined) {
+  return Number.isFinite(value) && Number(value) > 0 ? Math.floor(Number(value)) : 1;
+}
+
+async function buildPosCatalog(companyId: string, query = "", limit = 80): Promise<PosCatalogItem[]> {
+  const q = query.trim();
+  const products = await prisma.product.findMany({
+    where: {
+      companyId,
+      status: "ACTIVE",
+      deletedAt: null,
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { model: { contains: q, mode: "insensitive" as const } },
+              { sku: { contains: q, mode: "insensitive" as const } },
+              { barcode: { contains: q, mode: "insensitive" as const } },
+              { brand: { name: { contains: q, mode: "insensitive" as const } } },
+              {
+                variants: {
+                  some: {
+                    OR: [
+                      { sku: { contains: q, mode: "insensitive" as const } },
+                      { barcode: { contains: q, mode: "insensitive" as const } },
+                      { color: { contains: q, mode: "insensitive" as const } },
+                      { ram: { contains: q, mode: "insensitive" as const } },
+                      { storage: { contains: q, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { name: "asc" },
+    take: Math.min(Math.max(limit, 1), 120),
+    include: {
+      brand: { select: { name: true } },
+      category: { select: { name: true } },
+      variants: {
+        where: { status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        include: { inventoryBalances: true },
+      },
+    },
+  });
+
+  const serializedVariantIds = products.flatMap((product) =>
+    product.type === "PHONE" || product.type === "SERIALIZED"
+      ? product.variants.map((variant) => variant.id)
+      : [],
+  );
+
+  const unitCounts = serializedVariantIds.length
+    ? await prisma.productUnit.groupBy({
+        by: ["variantId", "warehouseId"],
+        where: {
+          companyId,
+          status: "AVAILABLE",
+          variantId: { in: serializedVariantIds },
+        },
+        _count: { _all: true },
+      })
+    : [];
+
+  const countMap = new Map<string, number>();
+  for (const row of unitCounts) {
+    countMap.set(`${row.variantId}:${row.warehouseId}`, row._count._all);
+  }
+
+  return products.flatMap((product) =>
+    product.variants.map((variant) => {
+      const serialized = product.type === "PHONE" || product.type === "SERIALIZED";
+      const balances = serialized
+        ? unitCounts
+            .filter((row) => row.variantId === variant.id)
+            .map((row) => ({
+              warehouseId: row.warehouseId,
+              quantity: countMap.get(`${variant.id}:${row.warehouseId}`) ?? 0,
+            }))
+        : variant.inventoryBalances.map((balance) => ({
+            warehouseId: balance.warehouseId,
+            quantity: Number(balance.quantity),
+          }));
+
+      return {
+        productId: product.id,
+        variantId: variant.id,
+        type: product.type,
+        name: product.name,
+        brand: product.brand?.name ?? "Sin marca",
+        category: product.category?.name ?? "Sin categoría",
+        sku: variant.sku ?? product.sku,
+        variant: variantLabel(variant),
+        salePrice: Number(variant.salePrice),
+        minimumSalePrice: Number(variant.minimumSalePrice),
+        units: [],
+        balances,
+      } satisfies PosCatalogItem;
+    }),
+  );
+}
+
+export async function searchPosCatalog(query = "", limit = 80) {
+  const company = await getActiveCompany();
+  return buildPosCatalog(company.id, query, limit);
+}
+
+export async function getPosUnits(input: { variantId: string; warehouseId: string }): Promise<PosUnit[]> {
+  const company = await getActiveCompany();
+  const units = await prisma.productUnit.findMany({
+    where: {
+      companyId: company.id,
+      variantId: input.variantId,
+      warehouseId: input.warehouseId,
+      status: "AVAILABLE",
+    },
+    orderBy: { createdAt: "asc" },
+    take: 120,
+    include: { identifiers: true },
+  });
+
+  return units.map((unit) => {
+    const identifiers = identifierMap(unit.identifiers);
+    return {
+      id: unit.id,
+      warehouseId: unit.warehouseId,
+      imei1: identifiers.get("IMEI_1") ?? null,
+      imei2: identifiers.get("IMEI_2") ?? null,
+      serial: identifiers.get("SERIAL") ?? null,
+    };
+  });
+}
+
 export async function getPosContext() {
   const company = await getActiveCompany();
 
-  const [warehouses, products, customers, creditProfiles] = await Promise.all([
+  const [warehouses, catalog, customers] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, branch: { select: { name: true } } },
     }),
-    prisma.product.findMany({
-      where: { companyId: company.id, status: "ACTIVE", deletedAt: null },
-      orderBy: { name: "asc" },
-      include: {
-        brand: true,
-        category: true,
-        variants: {
-          where: { status: "ACTIVE" },
-          orderBy: { createdAt: "asc" },
-          include: {
-            units: {
-              where: { status: "AVAILABLE" },
-              include: { identifiers: true },
-              orderBy: { createdAt: "asc" },
-            },
-            inventoryBalances: true,
-          },
-        },
-      },
-    }),
+    buildPosCatalog(company.id, "", 80),
     prisma.customer.findMany({
       where: { companyId: company.id, status: "ACTIVE" },
       orderBy: { updatedAt: "desc" },
-      take: 100,
+      take: 60,
     }),
-    prisma.$queryRaw<CreditProfileRow[]>`
-      SELECT
-        c."id",
-        c."creditEnabled",
-        c."creditLimit",
-        c."creditDays",
-        COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN', 'PARTIAL')), 0) AS "outstanding"
-      FROM "customers" c
-      LEFT JOIN "accounts_receivable" ar
-        ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
-      WHERE c."companyId" = ${company.id}
-      GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
-    `,
   ]);
 
-  const creditMap = new Map(creditProfiles.map((profile) => [profile.id, profile]));
-
-  const catalog: PosCatalogItem[] = products.flatMap((product) =>
-    product.variants.map((variant) => ({
-      productId: product.id,
-      variantId: variant.id,
-      type: product.type,
-      name: product.name,
-      brand: product.brand?.name ?? "Sin marca",
-      category: product.category?.name ?? "Sin categoría",
-      sku: variant.sku ?? product.sku,
-      variant: variantLabel(variant),
-      salePrice: Number(variant.salePrice),
-      minimumSalePrice: Number(variant.minimumSalePrice),
-      units: variant.units.map((unit) => {
-        const identifiers = identifierMap(unit.identifiers);
-        return {
-          id: unit.id,
-          warehouseId: unit.warehouseId,
-          imei1: identifiers.get("IMEI_1") ?? null,
-          imei2: identifiers.get("IMEI_2") ?? null,
-          serial: identifiers.get("SERIAL") ?? null,
-        };
-      }),
-      balances: variant.inventoryBalances.map((balance) => ({
-        warehouseId: balance.warehouseId,
-        quantity: Number(balance.quantity),
-      })),
-    })),
-  );
+  const customerIds = customers.map((customer) => customer.id);
+  const debts = customerIds.length
+    ? await prisma.accountReceivable.groupBy({
+        by: ["customerId"],
+        where: {
+          companyId: company.id,
+          customerId: { in: customerIds },
+          status: { in: ["OPEN", "PARTIAL"] },
+        },
+        _sum: { balance: true },
+      })
+    : [];
+  const debtMap = new Map(debts.map((row) => [row.customerId, Number(row._sum.balance ?? 0)]));
 
   const warehouseOptions: PosWarehouse[] = warehouses.map((warehouse) => ({
     id: warehouse.id,
@@ -124,18 +203,17 @@ export async function getPosContext() {
   }));
 
   const customerOptions: PosCustomer[] = customers.map((customer) => {
-    const profile = creditMap.get(customer.id);
-    const creditLimit = Number(profile?.creditLimit ?? 0);
-    const outstanding = Number(profile?.outstanding ?? 0);
+    const creditLimit = Number(customer.creditLimit ?? 0);
+    const outstanding = debtMap.get(customer.id) ?? 0;
     return {
       id: customer.id,
       documentType: customer.documentType,
       documentNumber: customer.documentNumber,
       name: customerDisplayName(customer, "Cliente"),
       phone: customer.whatsapp ?? customer.phone,
-      creditEnabled: Boolean(profile?.creditEnabled),
+      creditEnabled: customer.creditEnabled,
       creditLimit,
-      creditDays: Number(profile?.creditDays ?? 30),
+      creditDays: customer.creditDays,
       outstanding,
       availableCredit: Math.max(0, creditLimit - outstanding),
     };
@@ -144,11 +222,13 @@ export async function getPosContext() {
   return { company, warehouses: warehouseOptions, catalog, customers: customerOptions };
 }
 
-export async function getSales(filters: { q?: string; status?: string; documentType?: string } = {}) {
+export async function getSales(filters: { q?: string; status?: string; documentType?: string; page?: number } = {}) {
   const company = await getActiveCompany();
   const q = filters.q?.trim();
   const allowedStatuses = ["DRAFT", "COMPLETED", "CANCELLED", "REFUNDED"];
   const allowedDocuments = ["RECEIPT", "INVOICE", "SALES_NOTE"];
+  const page = normalizePage(filters.page);
+  const pageSize = 50;
 
   const where = {
     companyId: company.id,
@@ -172,11 +252,12 @@ export async function getSales(filters: { q?: string; status?: string; documentT
   };
 
   const { start, end } = getLimaDayBounds();
-  const [sales, todaySales] = await Promise.all([
+  const [sales, totalItems, today] = await Promise.all([
     prisma.sale.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 150,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: {
         customer: true,
         warehouse: { include: { branch: true } },
@@ -185,9 +266,11 @@ export async function getSales(filters: { q?: string; status?: string; documentT
         payments: true,
       },
     }),
-    prisma.sale.findMany({
+    prisma.sale.count({ where }),
+    prisma.sale.aggregate({
       where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: start, lt: end } },
-      select: { total: true },
+      _sum: { total: true },
+      _count: { _all: true },
     }),
   ]);
 
@@ -208,14 +291,21 @@ export async function getSales(filters: { q?: string; status?: string; documentT
     createdAt: sale.createdAt.toISOString(),
   }));
 
-  const todayTotal = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  const todayTotal = Number(today._sum.total ?? 0);
+  const todayCount = today._count._all;
   return {
     items,
     summary: {
       todayTotal,
-      todayCount: todaySales.length,
-      averageTicket: todaySales.length ? todayTotal / todaySales.length : 0,
-      listed: items.length,
+      todayCount,
+      averageTicket: todayCount ? todayTotal / todayCount : 0,
+      listed: totalItems,
+    },
+    pagination: {
+      page,
+      pageSize,
+      totalItems,
+      totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
     },
   };
 }
