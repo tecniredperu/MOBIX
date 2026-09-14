@@ -9,6 +9,7 @@ export function PosCatalogPanel({
   unitSelections,
   unitsByVariant,
   loadingUnits,
+  isSearching,
   onQueryChange,
   onLoadUnits,
   onUnitSelectionChange,
@@ -20,6 +21,7 @@ export function PosCatalogPanel({
   unitSelections: Record<string, string>;
   unitsByVariant: Record<string, PosUnit[]>;
   loadingUnits: Record<string, boolean>;
+  isSearching: boolean;
   onQueryChange: (value: string) => void;
   onLoadUnits: (variantId: string) => Promise<PosUnit[]>;
   onUnitSelectionChange: (variantId: string, unitId: string) => void;
@@ -28,7 +30,7 @@ export function PosCatalogPanel({
   return (
     <section className="pos-catalog-panel panel">
       <div className="pos-search">
-        <Search size={18} />
+        {isSearching ? <LoaderCircle className="mobix-spin" size={18} /> : <Search size={18} />}
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
@@ -36,9 +38,10 @@ export function PosCatalogPanel({
           autoComplete="off"
           spellCheck={false}
         />
+        {isSearching && <span className="pos-search-state">Buscando…</span>}
       </div>
 
-      <div className="pos-catalog-list">
+      <div className="pos-catalog-list" aria-busy={isSearching}>
         {items.map((item) => {
           const stock = stockFor(item, warehouseId);
           const serialized = item.type === "PHONE" || item.type === "SERIALIZED";
@@ -55,9 +58,7 @@ export function PosCatalogPanel({
               <div className="pos-product-copy">
                 <strong>{item.name}</strong>
                 <span>{item.brand} · {item.variant}</span>
-                <small>
-                  {item.type === "SERVICE" ? "Servicio" : `${stock} disponible${stock === 1 ? "" : "s"}`}
-                </small>
+                <small>{item.type === "SERVICE" ? "Servicio" : `${stock} disponible${stock === 1 ? "" : "s"}`}</small>
               </div>
 
               {serialized && (
@@ -93,7 +94,7 @@ export function PosCatalogPanel({
           );
         })}
 
-        {!items.length && (
+        {!isSearching && !items.length && (
           <div className="purchase-empty">
             <Search size={22} />
             <strong>No encontramos productos</strong>
