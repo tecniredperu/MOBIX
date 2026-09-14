@@ -146,14 +146,28 @@ export async function getReports(filters: { from?: string; to?: string }) {
     }),
     prisma.$queryRaw<ReturnSummaryRow[]>`
       SELECT
-        COALESCE(SUM(ro."refundAmount"), 0) AS "total",
-        COUNT(DISTINCT ro."id") AS "count",
-        COALESCE(SUM(ri."unitCost" * ri."quantity"), 0) AS "cost"
-      FROM "return_orders" ro
-      LEFT JOIN "return_items" ri ON ri."returnOrderId" = ro."id"
-      WHERE ro."companyId" = ${company.id}
-        AND ro."status" = 'COMPLETED'
-        AND ro."createdAt" BETWEEN ${from} AND ${to}
+        COALESCE((
+          SELECT SUM(ro."refundAmount")
+          FROM "return_orders" ro
+          WHERE ro."companyId" = ${company.id}
+            AND ro."status" = 'COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ), 0) AS "total",
+        (
+          SELECT COUNT(*)
+          FROM "return_orders" ro
+          WHERE ro."companyId" = ${company.id}
+            AND ro."status" = 'COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ) AS "count",
+        COALESCE((
+          SELECT SUM(ri."unitCost" * ri."quantity")
+          FROM "return_items" ri
+          INNER JOIN "return_orders" ro ON ro."id" = ri."returnOrderId"
+          WHERE ro."companyId" = ${company.id}
+            AND ro."status" = 'COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ), 0) AS "cost"
     `,
   ]);
 
