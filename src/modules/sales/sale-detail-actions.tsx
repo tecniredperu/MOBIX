@@ -42,7 +42,16 @@ export function SaleDetailActions({
   const documentNumber = ticket.documentSeries && ticket.documentNumber
     ? `${ticket.documentSeries}-${ticket.documentNumber}`
     : saleNumber;
-  const plainMessage = `Hola ${customerName}. Gracias por tu compra en ${companyName}. Adjunto tu comprobante ${documentNumber} por S/ ${total.toFixed(2)}.`;
+  const greetingName = customerName?.trim() || "cliente";
+  const plainMessage = [
+    `Hola ${greetingName} 👋`,
+    "",
+    `Muchas gracias por tu compra en ${companyName}.`,
+    `Tu comprobante N.° ${documentNumber} corresponde a un total de S/ ${total.toFixed(2)}.`,
+    "",
+    "Adjuntamos tu comprobante en PDF para que puedas conservarlo.",
+    "¡Gracias por tu preferencia! Esperamos atenderte nuevamente.",
+  ].join("\n");
   const message = encodeURIComponent(plainMessage);
 
   function printA4() {
@@ -76,7 +85,7 @@ export function SaleDetailActions({
         ? `https://wa.me/${phone}?text=${message}`
         : `https://wa.me/?text=${message}`;
       window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-      window.alert("El PDF del comprobante se descargó. Este navegador no permite adjuntar archivos automáticamente a WhatsApp; adjunta el PDF descargado en el chat que se acaba de abrir.");
+      window.alert("El PDF del comprobante se descargó y el mensaje de agradecimiento se abrió en WhatsApp con el número de comprobante. Adjunta el PDF descargado al chat antes de enviarlo.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       console.error(error);
