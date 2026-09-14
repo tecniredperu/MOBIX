@@ -36,6 +36,14 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Restaurar caché de Next.js
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-
+
       - name: Generar credenciales efímeras de CI
         run: |
           node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url'))" >> "$GITHUB_ENV"
