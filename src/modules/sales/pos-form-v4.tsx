@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
@@ -19,6 +19,7 @@ import type {
 import { PosCartCard } from "./pos/pos-cart-card";
 import { PosCatalogPanel } from "./pos/pos-catalog-panel";
 import { PosCustomerCard } from "./pos/pos-customer-card";
+import { PosCustomerModal } from "./pos/pos-customer-modal";
 import { PosPaymentCard } from "./pos/pos-payment-card";
 import { PosTotalCard } from "./pos/pos-total-card";
 import {
@@ -27,8 +28,6 @@ import {
   type CartLine,
   type PaymentLine,
 } from "./pos/pos-shared";
-
-type CustomerDocumentType = "DNI" | "RUC" | "CE" | "OTHER";
 
 export function PosFormV4({
   warehouses,
@@ -49,10 +48,8 @@ export function PosFormV4({
   const [taxCondition, setTaxCondition] = useState<SaleTaxCondition>("TAXED");
   const [discount, setDiscount] = useState(0);
   const [customerId, setCustomerId] = useState("");
-  const [customerDocumentType, setCustomerDocumentType] = useState<CustomerDocumentType>("DNI");
-  const [customerDocument, setCustomerDocument] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [availableCustomers, setAvailableCustomers] = useState<PosCustomer[]>(customers);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentLine[]>([
     { id: "payment-1", method: "CASH", amount: 0, reference: "" },
   ]);
@@ -70,8 +67,8 @@ export function PosFormV4({
   }, [catalog, query]);
 
   const selectedCustomer = useMemo(
-    () => customers.find((customer) => customer.id === customerId) ?? null,
-    [customers, customerId],
+    () => availableCustomers.find((customer) => customer.id === customerId) ?? null,
+    [availableCustomers, customerId],
   );
 
   const totals = useMemo(
@@ -97,27 +94,17 @@ export function PosFormV4({
     [payments, selectedCustomer, totals.total],
   );
 
-  useEffect(() => {
-    if (payments.length === 1) {
-      setPayments((current) => [{ ...current[0], amount: totals.total }]);
-    }
-  }, [totals.total, payments.length]);
-
   function selectExistingCustomer(id: string) {
     setCustomerId(id);
-    if (!id) {
-      setError("");
-      return;
-    }
+    setError("");
+  }
 
-    const customer = customers.find((item) => item.id === id);
-    if (!customer) return;
-    if (["RUC", "DNI", "CE"].includes(customer.documentType ?? "")) {
-      setCustomerDocumentType(customer.documentType as CustomerDocumentType);
-    }
-    setCustomerDocument(customer.documentNumber ?? "");
-    setCustomerName(customer.name);
-    setCustomerPhone(customer.phone ?? "");
+  function handleCustomerCreated(customer: PosCustomer) {
+    setAvailableCustomers((current) => {
+      const exists = current.some((item) => item.id === customer.id);
+      return exists ? current : [customer, ...current];
+    });
+    setCustomerId(customer.id);
     setError("");
   }
 
@@ -258,19 +245,21 @@ export function PosFormV4({
 
   function submitSale() {
     setError("");
+
+    if (totals.total > 0.01 && !payments.some((payment) => Number(payment.amount) > 0.009)) {
+      setError("Ingresa el monto recibido antes de confirmar la venta.");
+      return;
+    }
+    if (!coverage.paymentComplete) {
+      setError(`El cobro está incompleto. Falta S/ ${coverage.pendingAmount.toFixed(2)}.`);
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await createSaleWithChangeAction({
           warehouseId,
           customerId: customerId || undefined,
-          customer: customerId
-            ? undefined
-            : {
-                documentType: customerDocumentType,
-                documentNumber: customerDocument,
-                name: customerName,
-                phone: customerPhone,
-              },
           documentType,
           taxCondition,
           discount: Number(discount || 0),
@@ -346,20 +335,13 @@ export function PosFormV4({
           />
 
           <PosCustomerCard
-            customers={customers}
+            customers={availableCustomers}
             customerId={customerId}
             selectedCustomer={selectedCustomer}
-            customerDocumentType={customerDocumentType}
-            customerDocument={customerDocument}
-            customerName={customerName}
-            customerPhone={customerPhone}
             documentType={documentType}
             taxCondition={taxCondition}
             onExistingCustomerChange={selectExistingCustomer}
-            onCustomerDocumentTypeChange={setCustomerDocumentType}
-            onCustomerDocumentChange={setCustomerDocument}
-            onCustomerNameChange={setCustomerName}
-            onCustomerPhoneChange={setCustomerPhone}
+            onAddCustomer={() => setCustomerModalOpen(true)}
             onDocumentTypeChange={setDocumentType}
             onTaxConditionChange={setTaxCondition}
           />
@@ -398,6 +380,12 @@ export function PosFormV4({
           />
         </aside>
       </div>
+
+      <PosCustomerModal
+        open={customerModalOpen}
+        onClose={() => setCustomerModalOpen(false)}
+        onCreated={handleCustomerCreated}
+      />
     </div>
   );
 }
