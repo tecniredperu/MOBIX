@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Save, UserPlus, X } from "lucide-react";
-import { createPosCustomerAction } from "../sale-actions";
+import { createPosCustomerAction } from "../pos-customer-action";
 import type { PosCustomer } from "../sale-types";
 
 type CustomerDocumentType = "DNI" | "RUC" | "CE" | "OTHER";
