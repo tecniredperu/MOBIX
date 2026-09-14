@@ -51,65 +51,68 @@ function asServiceType(value: string): ServiceType {
   return SERVICE_TYPES.has(value as ServiceType) ? (value as ServiceType) : "TECHNICAL_SERVICE";
 }
 
-export async function getServiceContext() {
-  const company = await getActiveCompany();
-  const [customersRaw, unitsRaw, activeRows, usersRaw] = await Promise.all([
-    prisma.customer.findMany({
-      where: { companyId: company.id, status: "ACTIVE" },
-      orderBy: { updatedAt: "desc" },
-      take: 300,
-    }),
-    prisma.productUnit.findMany({
-      where: { companyId: company.id, status: "SOLD" },
-      orderBy: { updatedAt: "desc" },
-      take: 300,
-      include: {
-        product: { include: { brand: true } },
-        variant: true,
-        identifiers: true,
-        saleLinks: {
-          include: {
-            saleItem: {
-              include: { sale: { include: { customer: true } } },
-            },
-          },
-        },
-      },
-    }),
-    prisma.serviceOrder.findMany({
-      where: {
-        companyId: company.id,
-        productUnitId: { not: null },
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
-      },
-      select: { productUnitId: true },
-    }),
-    prisma.companyUser.findMany({
-      where: { companyId: company.id, status: "ACTIVE", user: { status: "ACTIVE" } },
-      orderBy: { createdAt: "asc" },
-      select: { user: { select: { id: true, name: true } } },
-    }),
-  ]);
-
-  const activeUnitIds = new Set(activeRows.flatMap((row) => row.productUnitId ? [row.productUnitId] : []));
-
-  const customers: ServiceCustomerOption[] = customersRaw.map((customer) => ({
+async function loadServiceCustomers(companyId: string, q = "", take = 20): Promise<ServiceCustomerOption[]> {
+  const query = q.trim();
+  const rows = await prisma.customer.findMany({
+    where: {
+      companyId,
+      status: "ACTIVE",
+      ...(query ? {
+        OR: [
+          { documentNumber: { contains: query, mode: "insensitive" } },
+          { businessName: { contains: query, mode: "insensitive" } },
+          { firstName: { contains: query, mode: "insensitive" } },
+          { lastName: { contains: query, mode: "insensitive" } },
+          { phone: { contains: query, mode: "insensitive" } },
+          { whatsapp: { contains: query, mode: "insensitive" } },
+        ],
+      } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take,
+  });
+  return rows.map((customer) => ({
     id: customer.id,
     name: displayCustomer(customer),
-    document: customer.documentNumber
-      ? `${customer.documentType ?? "Doc."} ${customer.documentNumber}`
-      : null,
+    document: customer.documentNumber ? `${customer.documentType ?? "Doc."} ${customer.documentNumber}` : null,
     phone: customer.whatsapp ?? customer.phone,
   }));
+}
 
-  const soldUnits: SoldUnitOption[] = unitsRaw.flatMap((unit) => {
-    if (activeUnitIds.has(unit.id)) return [];
-    const links = [...unit.saleLinks].sort(
-      (a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt,
-    );
+async function loadSoldUnits(companyId: string, q = "", take = 20): Promise<SoldUnitOption[]> {
+  const query = q.trim();
+  const rows = await prisma.productUnit.findMany({
+    where: {
+      companyId,
+      status: "SOLD",
+      serviceOrders: { none: { companyId, status: { notIn: ["DELIVERED", "CANCELLED"] } } },
+      ...(query ? {
+        OR: [
+          { product: { name: { contains: query, mode: "insensitive" } } },
+          { product: { model: { contains: query, mode: "insensitive" } } },
+          { variant: { sku: { contains: query, mode: "insensitive" } } },
+          { identifiers: { some: { value: { contains: query, mode: "insensitive" } } } },
+        ],
+      } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take,
+    include: {
+      product: { include: { brand: true } },
+      variant: true,
+      identifiers: true,
+      saleLinks: {
+        include: {
+          saleItem: { include: { sale: { include: { customer: true } } } },
+        },
+      },
+    },
+  });
+
+  return rows.flatMap((unit) => {
+    const links = [...unit.saleLinks].sort((a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt);
     const latest = links[0]?.saleItem.sale;
     if (!latest?.customerId || !latest.customer) return [];
-
     const warrantyDays = unit.product.warrantyDays ?? 0;
     const expires = warrantyExpiry(latest.createdAt, warrantyDays);
     return [{
@@ -130,48 +133,82 @@ export async function getServiceContext() {
       withinWarranty: Boolean(expires && expires.getTime() >= Date.now()),
     }];
   });
+}
 
-  return {
-    companyName: company.tradeName ?? company.businessName,
-    customers,
-    soldUnits,
-    technicians: usersRaw.map((membership) => membership.user),
-  };
+export async function searchServiceCustomers(q = "") {
+  const company = await getActiveCompany();
+  return loadServiceCustomers(company.id, q, 20);
+}
+
+export async function searchServiceSoldUnits(q = "") {
+  const company = await getActiveCompany();
+  return loadSoldUnits(company.id, q, 20);
+}
+
+export async function getServiceTechnicians() {
+  const company = await getActiveCompany();
+  const rows = await prisma.companyUser.findMany({
+    where: { companyId: company.id, status: "ACTIVE", user: { status: "ACTIVE" } },
+    orderBy: { createdAt: "asc" },
+    select: { user: { select: { id: true, name: true } } },
+  });
+  return rows.map((membership) => membership.user);
+}
+
+export async function getServiceContext() {
+  const company = await getActiveCompany();
+  const [customers, soldUnits] = await Promise.all([
+    loadServiceCustomers(company.id, "", 20),
+    loadSoldUnits(company.id, "", 20),
+  ]);
+  return { companyName: company.tradeName ?? company.businessName, customers, soldUnits };
 }
 
 export async function getServiceOrders(filters: {
   q?: string;
   status?: string;
   type?: string;
+  page?: number;
+  pageSize?: number;
 } = {}) {
   const company = await getActiveCompany();
   const q = filters.q?.trim();
   const status = SERVICE_STATUSES.has(filters.status as ServiceStatus) ? filters.status : undefined;
   const serviceType = SERVICE_TYPES.has(filters.type as ServiceType) ? filters.type : undefined;
+  const pageSize = Math.min(100, Math.max(20, filters.pageSize ?? 50));
+  const page = Math.max(1, filters.page ?? 1);
 
-  const rows = await prisma.serviceOrder.findMany({
-    where: {
-      companyId: company.id,
-      ...(status ? { status } : {}),
-      ...(serviceType ? { serviceType } : {}),
-      ...(q ? {
-        OR: [
-          { serviceNumber: { contains: q, mode: "insensitive" } },
-          { deviceName: { contains: q, mode: "insensitive" } },
-          { identifier: { contains: q, mode: "insensitive" } },
-          { customer: { is: { businessName: { contains: q, mode: "insensitive" } } } },
-          { customer: { is: { firstName: { contains: q, mode: "insensitive" } } } },
-          { customer: { is: { lastName: { contains: q, mode: "insensitive" } } } },
-        ],
-      } : {}),
-    },
-    include: {
-      customer: true,
-      technician: { select: { name: true } },
-    },
-    orderBy: { receivedAt: "desc" },
-    take: 250,
-  });
+  const where = {
+    companyId: company.id,
+    ...(status ? { status } : {}),
+    ...(serviceType ? { serviceType } : {}),
+    ...(q ? {
+      OR: [
+        { serviceNumber: { contains: q, mode: "insensitive" as const } },
+        { deviceName: { contains: q, mode: "insensitive" as const } },
+        { identifier: { contains: q, mode: "insensitive" as const } },
+        { customer: { is: { businessName: { contains: q, mode: "insensitive" as const } } } },
+        { customer: { is: { firstName: { contains: q, mode: "insensitive" as const } } } },
+        { customer: { is: { lastName: { contains: q, mode: "insensitive" as const } } } },
+      ],
+    } : {}),
+  };
+
+  const [rows, total, grouped] = await Promise.all([
+    prisma.serviceOrder.findMany({
+      where,
+      include: { customer: true, technician: { select: { name: true } } },
+      orderBy: { receivedAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.serviceOrder.count({ where }),
+    prisma.serviceOrder.groupBy({
+      by: ["status", "serviceType"],
+      where: { companyId: company.id, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+      _count: { _all: true },
+    }),
+  ]);
 
   const items: ServiceListItem[] = rows.map((row) => ({
     id: row.id,
@@ -190,15 +227,16 @@ export async function getServiceOrders(filters: {
     expectedAt: row.expectedAt?.toISOString() ?? null,
   }));
 
-  const open = items.filter((item) => !["DELIVERED", "CANCELLED"].includes(item.status));
+  const countBy = (predicate: (row: (typeof grouped)[number]) => boolean) => grouped.filter(predicate).reduce((sum, row) => sum + row._count._all, 0);
   return {
     items,
     summary: {
-      active: open.length,
-      warranty: open.filter((item) => item.serviceType === "WARRANTY").length,
-      repairing: open.filter((item) => item.status === "IN_REPAIR").length,
-      ready: open.filter((item) => item.status === "READY").length,
+      active: countBy(() => true),
+      warranty: countBy((row) => row.serviceType === "WARRANTY"),
+      repairing: countBy((row) => row.status === "IN_REPAIR"),
+      ready: countBy((row) => row.status === "READY"),
     },
+    pagination: { page, pageSize, total },
   };
 }
 

@@ -27,7 +27,18 @@ export async function getReports(filters: { from?: string; to?: string }) {
   const to = endOfDay(filters.to, now);
   if (from > to) throw new Error("El rango de fechas del reporte no es válido.");
 
-  const sales = await prisma.sale.findMany({
+  const warnings: string[] = [];
+  async function safe<T>(label: string, fallback: T, task: () => Promise<T>): Promise<T> {
+    try {
+      return await task();
+    } catch (error) {
+      console.error(`[MOBIX reportes] ${label}`, error);
+      warnings.push(label);
+      return fallback;
+    }
+  }
+
+  const sales = await safe("Ventas del periodo", [], () => prisma.sale.findMany({
     where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: from, lte: to } },
     include: {
       items: { include: { product: { include: { brand: true, category: true } }, variant: true } },
@@ -36,7 +47,7 @@ export async function getReports(filters: { from?: string; to?: string }) {
       branch: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
-  });
+  }));
 
   let grossSalesTotal = 0;
   let grossCostTotal = 0;
@@ -89,28 +100,32 @@ export async function getReports(filters: { from?: string; to?: string }) {
     }
   }
 
-  const baseQueries = [
-    prisma.$queryRaw<ReceivableRow[]>`SELECT "balance", "dueDate" FROM "accounts_receivable" WHERE "companyId" = ${company.id} AND "status" IN ('OPEN', 'PARTIAL')`,
-    prisma.cashSession.findMany({ where: { companyId: company.id, status: "CLOSED", closedAt: { gte: from, lte: to } }, select: { difference: true } }),
-    prisma.$queryRaw<ReturnSummaryRow[]>`
+  const [receivables, cashClosures, returnRows] = await Promise.all([
+    safe<ReceivableRow[]>("Cuentas por cobrar", [], () => prisma.$queryRaw<ReceivableRow[]>`SELECT "balance", "dueDate" FROM "accounts_receivable" WHERE "companyId" = ${company.id} AND "status" IN ('OPEN', 'PARTIAL')`),
+    safe("Cierres de caja", [], () => prisma.cashSession.findMany({ where: { companyId: company.id, status: "CLOSED", closedAt: { gte: from, lte: to } }, select: { difference: true } })),
+    safe<ReturnSummaryRow[]>("Devoluciones", [], () => prisma.$queryRaw<ReturnSummaryRow[]>`
       SELECT
         COALESCE((SELECT SUM(ro."refundAmount") FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "total",
         (SELECT COUNT(*) FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}) AS "count",
         COALESCE((SELECT SUM(ri."unitCost" * ri."quantity") FROM "return_items" ri INNER JOIN "return_orders" ro ON ro."id"=ri."returnOrderId" WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "cost"
-    `,
-  ] as const;
-  const [receivables, cashClosures, returnRows] = await Promise.all(baseQueries);
+    `),
+  ]);
 
   let purchasesTotal: number | null = null;
   let inventoryValue: number | null = null;
   if (canSeeCosts) {
-    const [purchases, accessoryBalances, availableUnits] = await Promise.all([
-      prisma.purchase.aggregate({ where: { companyId: company.id, status: "RECEIVED", issueDate: { gte: from, lte: to } }, _sum: { total: true } }),
-      prisma.inventoryBalance.findMany({ where: { companyId: company.id }, select: { quantity: true, averageCost: true } }),
-      prisma.productUnit.findMany({ where: { companyId: company.id, status: "AVAILABLE" }, select: { purchaseCost: true } }),
-    ]);
-    purchasesTotal = Number(purchases._sum.total ?? 0);
-    inventoryValue = accessoryBalances.reduce((sum, item) => sum + Number(item.quantity) * Number(item.averageCost), 0) + availableUnits.reduce((sum, item) => sum + Number(item.purchaseCost), 0);
+    purchasesTotal = await safe("Compras", 0, async () => {
+      const purchases = await prisma.purchase.aggregate({ where: { companyId: company.id, status: "RECEIVED", issueDate: { gte: from, lte: to } }, _sum: { total: true } });
+      return Number(purchases._sum.total ?? 0);
+    });
+    inventoryValue = await safe("Stock valorizado", 0, async () => {
+      const [accessoryBalances, availableUnits] = await Promise.all([
+        prisma.inventoryBalance.findMany({ where: { companyId: company.id }, select: { quantity: true, averageCost: true } }),
+        prisma.productUnit.findMany({ where: { companyId: company.id, status: "AVAILABLE" }, select: { purchaseCost: true } }),
+      ]);
+      return accessoryBalances.reduce((sum, item) => sum + Number(item.quantity) * Number(item.averageCost), 0)
+        + availableUnits.reduce((sum, item) => sum + Number(item.purchaseCost), 0);
+    });
   }
 
   const receivableTotal = receivables.reduce((sum, item) => sum + Number(item.balance), 0);
@@ -124,6 +139,7 @@ export async function getReports(filters: { from?: string; to?: string }) {
 
   return {
     canSeeCosts,
+    warnings,
     range: { from: isoDate(from), to: isoDate(to) },
     summary: {
       grossSalesTotal,
