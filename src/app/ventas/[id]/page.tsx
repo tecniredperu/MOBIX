@@ -13,15 +13,29 @@ export default async function SaleDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requirePermission("sales.view");
+  const context = await requirePermission("sales.view");
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
   const created = (Array.isArray(query.created) ? query.created[0] : query.created) === "1";
+  const company = {
+    businessName: context.company.businessName,
+    tradeName: context.company.tradeName,
+    ruc: context.company.ruc,
+    email: context.company.email,
+    phone: context.company.phone,
+    address: context.company.address,
+    logoUrl: context.company.logoUrl,
+  };
 
   return (
     <AppShell>
-      <SaleDetailView sale={sale} created={created} />
+      <SaleDetailView
+        sale={sale}
+        created={created}
+        company={company}
+        ticketFooter={context.settings.ticketFooter}
+      />
     </AppShell>
   );
 }
