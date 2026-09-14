@@ -5,13 +5,8 @@
   background: #f5f7fb;
 }
 
-.mobix-loading-sidebar {
-  background: #0f172a;
-}
-
-.mobix-loading-main {
-  padding: 32px;
-}
+.mobix-loading-sidebar { background: #0f172a; }
+.mobix-loading-main { padding: 32px; }
 
 .mobix-skeleton {
   border-radius: 12px;
@@ -50,6 +45,42 @@
 .mobix-error-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: #fff7ed; color: #c2410c; }
 .mobix-spin { animation: mobix-spin .8s linear infinite; }
 
+.mobix-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid #e8edf4;
+}
+
+.mobix-page-button,
+.mobix-page-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.mobix-page-button { padding: 0 12px; }
+.mobix-page-number { min-width: 36px; padding: 0 9px; }
+.mobix-page-button:hover,
+.mobix-page-number:hover { border-color: #94a3b8; background: #f8fafc; }
+.mobix-page-number.active { background: #0f172a; border-color: #0f172a; color: #fff; }
+.mobix-page-button.disabled { pointer-events: none; opacity: .42; }
+.mobix-page-numbers { display: flex; align-items: center; gap: 6px; }
+.mobix-page-slot { display: inline-flex; align-items: center; gap: 6px; }
+.mobix-page-ellipsis { color: #94a3b8; font-weight: 700; }
+
 @keyframes mobix-shimmer { to { background-position: -200% 0; } }
 @keyframes mobix-spin { to { transform: rotate(360deg); } }
 
@@ -58,6 +89,12 @@
   .mobix-loading-sidebar { display: none; }
   .mobix-loading-main { padding: 22px 16px; }
   .mobix-loading-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .mobix-pagination { align-items: stretch; flex-wrap: wrap; }
+  .mobix-page-numbers { order: 3; width: 100%; justify-content: center; }
+  .mobix-page-button { flex: 1; }
 }
 
 @media (max-width: 560px) {
