@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
@@ -31,6 +31,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const [isPending, startTransition] = useTransition();
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PosCatalogItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
   const [unitsByVariant, setUnitsByVariant] = useState<Record<string, PosUnit[]>>({});
@@ -46,13 +48,52 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   ]);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const normalized = query.trim();
+    if (normalized.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/api/pos/catalog?q=${encodeURIComponent(normalized)}`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("No se pudo buscar el catálogo.");
+        const data = await response.json() as { items: PosCatalogItem[] };
+        setSearchResults(data.items);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setError(cause instanceof Error ? cause.message : "No se pudo buscar el catálogo.");
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [query]);
+
   const filteredCatalog = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    const source = normalized
-      ? catalog.filter((item) => [item.name, item.brand, item.variant, item.sku ?? "", item.category].join(" ").toLowerCase().includes(normalized))
-      : catalog;
-    return source.slice(0, 80);
-  }, [catalog, query]);
+    const normalized = query.trim();
+    if (normalized.length >= 2) return searchResults.slice(0, 80);
+    return catalog.slice(0, 80);
+  }, [catalog, query, searchResults]);
+
+  const knownCatalog = useMemo(() => {
+    const merged = new Map<string, PosCatalogItem>();
+    for (const item of catalog) merged.set(item.variantId, item);
+    for (const item of searchResults) merged.set(item.variantId, item);
+    return merged;
+  }, [catalog, searchResults]);
 
   const selectedCustomer = useMemo(
     () => availableCustomers.find((customer) => customer.id === customerId) ?? null,
@@ -169,7 +210,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   function updateQuantity(key: string, quantity: number) {
     setCart((current) => current.map((line) => {
       if (line.key !== key || line.type === "PHONE" || line.type === "SERIALIZED") return line;
-      const item = catalog.find((catalogItem) => catalogItem.variantId === line.variantId);
+      const item = knownCatalog.get(line.variantId);
       const max = item && line.type !== "SERVICE" ? stockFor(item, warehouseId) : 999999;
       return { ...line, quantity: Math.max(1, Math.min(max, Math.floor(quantity || 1))) };
     }));
@@ -272,6 +313,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
           unitSelections={unitSelections}
           unitsByVariant={unitsByVariant}
           loadingUnits={loadingUnits}
+          isSearching={isSearching}
           onQueryChange={setQuery}
           onLoadUnits={loadUnits}
           onUnitSelectionChange={(variantId, unitId) => setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
