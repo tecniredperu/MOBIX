@@ -5,6 +5,22 @@ import { getSaleDetail } from "@/modules/sales/sales.repository";
 
 export const dynamic = "force-dynamic";
 
+const DOCUMENT_LABELS: Record<string, string> = {
+  RECEIPT: "BOLETA DE VENTA",
+  INVOICE: "FACTURA",
+  SALES_NOTE: "NOTA DE VENTA",
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  CASH: "Efectivo",
+  YAPE: "Yape",
+  PLIN: "Plin",
+  CARD: "Tarjeta",
+  TRANSFER: "Transferencia",
+  CREDIT: "Crédito",
+  OTHER: "Otro",
+};
+
 function money(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 }).format(value);
 }
@@ -14,23 +30,37 @@ function limaDate(value: string) {
 }
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("sales.view");
+  const context = await requirePermission("sales.view");
   const { id } = await params;
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
 
   const customer = sale.customer?.name ?? "Consumidor final";
+  const company = context.company;
+  const companyName = company.tradeName || company.businessName;
+  const contact = [company.phone, company.email].filter(Boolean).join(" · ");
+  const documentNumber = sale.documentSeries && sale.documentNumber
+    ? `${sale.documentSeries}-${sale.documentNumber}`
+    : sale.saleNumber;
+
   return (
     <main className="ticket-screen">
       <div className="ticket-page">
         <header className="ticket-header">
-          <strong>MOBIX</strong>
-          <span>Gestión móvil</span>
+          {company.logoUrl && <img className="ticket-company-logo" src={company.logoUrl} alt={`Logo de ${companyName}`} />}
+          <strong className="ticket-company-name">{companyName}</strong>
+          {company.businessName !== companyName && <span className="ticket-company-legal">{company.businessName}</span>}
+          {company.ruc && <span>RUC {company.ruc}</span>}
+          {company.address && <p>{company.address}</p>}
+          {contact && <span className="ticket-company-contact">{contact}</span>}
           <p>{sale.branch}</p>
         </header>
+        <div className="ticket-document-box">
+          <strong>{DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</strong>
+          <span>{documentNumber}</span>
+        </div>
         <div className="ticket-meta">
           <span>Venta: {sale.saleNumber}</span>
-          <span>{sale.documentSeries}-{sale.documentNumber}</span>
           <span>{limaDate(sale.createdAt)}</span>
           <span>Cliente: {customer}</span>
           {sale.customer?.documentNumber && <span>{sale.customer.documentType}: {sale.customer.documentNumber}</span>}
@@ -40,7 +70,11 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
             <div className="ticket-item" key={item.id}>
               <strong>{item.product}</strong>
               <span>{item.variant}</span>
-              {item.identifiers.map((identifier, index) => <span key={index}>{identifier.imei1 ? `IMEI: ${identifier.imei1}` : identifier.serial ? `Serie: ${identifier.serial}` : ""}</span>)}
+              {item.identifiers.map((identifier, index) => (
+                <span key={index}>
+                  {[identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : "", identifier.imei2 ? `IMEI 2: ${identifier.imei2}` : "", identifier.serial ? `Serie: ${identifier.serial}` : ""].filter(Boolean).join(" · ")}
+                </span>
+              ))}
               <div><span>{item.quantity} x {money(item.unitPrice)}</span><strong>{money(item.total)}</strong></div>
             </div>
           ))}
@@ -52,9 +86,12 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           <div className="ticket-total"><span>TOTAL</span><strong>{money(sale.total)}</strong></div>
         </div>
         <div className="ticket-payments">
-          {sale.payments.map((payment) => <div key={payment.id}><span>{payment.method}</span><strong>{money(payment.amount)}</strong></div>)}
+          {sale.payments.map((payment) => <div key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span><strong>{money(payment.amount)}</strong></div>)}
         </div>
-        <footer className="ticket-footer"><strong>¡Gracias por tu compra!</strong><span>Documento generado por MOBIX.</span><small>Comprobante interno. La emisión electrónica SUNAT se integrará en una etapa posterior.</small></footer>
+        <footer className="ticket-footer">
+          <strong>¡Gracias por tu compra!</strong>
+          {context.settings.ticketFooter && <small className="ticket-custom-footer">{context.settings.ticketFooter}</small>}
+        </footer>
       </div>
       <PrintTicketButton />
     </main>
