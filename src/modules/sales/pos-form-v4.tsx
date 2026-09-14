@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
@@ -11,6 +11,7 @@ import {
 import type {
   PosCatalogItem,
   PosCustomer,
+  PosUnit,
   PosWarehouse,
   SaleDocumentType,
   SalePaymentMethod,
@@ -29,6 +30,10 @@ import {
   type PaymentLine,
 } from "./pos/pos-shared";
 
+function registryFrom(items: PosCatalogItem[]) {
+  return Object.fromEntries(items.map((item) => [item.variantId, item]));
+}
+
 export function PosFormV4({
   warehouses,
   catalog,
@@ -42,8 +47,13 @@ export function PosFormV4({
   const [isPending, startTransition] = useTransition();
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  const [catalogItems, setCatalogItems] = useState<PosCatalogItem[]>(catalog);
+  const [catalogRegistry, setCatalogRegistry] = useState<Record<string, PosCatalogItem>>(() => registryFrom(catalog));
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
+  const [unitCache, setUnitCache] = useState<Record<string, PosUnit[]>>({});
+  const [unitLoading, setUnitLoading] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<SaleDocumentType>("RECEIPT");
   const [taxCondition, setTaxCondition] = useState<SaleTaxCondition>("TAXED");
   const [discount, setDiscount] = useState(0);
@@ -55,16 +65,61 @@ export function PosFormV4({
   ]);
   const [error, setError] = useState("");
 
-  const filteredCatalog = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return catalog;
-    return catalog.filter((item) =>
-      [item.name, item.brand, item.variant, item.sku ?? "", item.category]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
-    );
+  useEffect(() => {
+    const normalized = query.trim();
+
+    if (!normalized) {
+      setCatalogItems(catalog);
+      setCatalogLoading(false);
+      return;
+    }
+
+    if (normalized.length < 2) {
+      const local = catalog.filter((item) =>
+        [item.name, item.brand, item.variant, item.sku ?? "", item.category]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalized.toLowerCase()),
+      );
+      setCatalogItems(local);
+      setCatalogLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCatalogLoading(true);
+      try {
+        const response = await fetch(`/api/pos/catalog?q=${encodeURIComponent(normalized)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "No se pudo buscar el catálogo.");
+        const items = (body.items ?? []) as PosCatalogItem[];
+        setCatalogItems(items);
+        setCatalogRegistry((current) => ({ ...current, ...registryFrom(items) }));
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setError(cause instanceof Error ? cause.message : "No se pudo buscar el catálogo.");
+      } finally {
+        setCatalogLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [catalog, query]);
+
+  const visibleCatalog = useMemo(
+    () => catalogItems.map((item) => ({
+      ...item,
+      units: unitCache[`${item.variantId}:${warehouseId}`] ?? [],
+    })),
+    [catalogItems, unitCache, warehouseId],
+  );
 
   const selectedCustomer = useMemo(
     () => availableCustomers.find((customer) => customer.id === customerId) ?? null,
@@ -108,36 +163,69 @@ export function PosFormV4({
     setError("");
   }
 
-  function addItem(item: PosCatalogItem) {
+  async function loadUnits(item: PosCatalogItem) {
+    const cacheKey = `${item.variantId}:${warehouseId}`;
+    const cached = unitCache[cacheKey];
+    if (cached) return cached;
+
+    setUnitLoading((current) => ({ ...current, [cacheKey]: true }));
+    try {
+      const response = await fetch(
+        `/api/pos/units?variantId=${encodeURIComponent(item.variantId)}&warehouseId=${encodeURIComponent(warehouseId)}`,
+        { cache: "no-store" },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "No se pudieron cargar los IMEI disponibles.");
+      const units = (body.units ?? []) as PosUnit[];
+      setUnitCache((current) => ({ ...current, [cacheKey]: units }));
+      if (units[0]) {
+        setUnitSelections((current) => current[item.variantId]
+          ? current
+          : { ...current, [item.variantId]: units[0].id });
+      }
+      return units;
+    } finally {
+      setUnitLoading((current) => ({ ...current, [cacheKey]: false }));
+    }
+  }
+
+  async function addItem(item: PosCatalogItem) {
     const stock = stockFor(item, warehouseId);
     if (item.type !== "SERVICE" && stock <= 0) return;
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
-      const availableUnits = item.units.filter((unit) => unit.warehouseId === warehouseId);
-      const selectedId = unitSelections[item.variantId] || availableUnits[0]?.id;
-      const selected = availableUnits.find((unit) => unit.id === selectedId);
-      if (!selected) return;
-      if (cart.some((line) => line.selectedUnitIds.includes(selected.id))) {
-        setError("Ese IMEI/equipo ya está agregado a la venta.");
-        return;
-      }
+      try {
+        const availableUnits = await loadUnits(item);
+        const selectedId = unitSelections[item.variantId] || availableUnits[0]?.id;
+        const selected = availableUnits.find((unit) => unit.id === selectedId) ?? availableUnits[0];
+        if (!selected) {
+          setError("No quedan equipos disponibles en este almacén. Actualiza la venta e inténtalo nuevamente.");
+          return;
+        }
+        if (cart.some((line) => line.selectedUnitIds.includes(selected.id))) {
+          setError("Ese IMEI/equipo ya está agregado a la venta.");
+          return;
+        }
 
-      setCart((current) => [
-        ...current,
-        {
-          key: selected.id,
-          variantId: item.variantId,
-          type: item.type,
-          name: item.name,
-          variant: item.variant,
-          quantity: 1,
-          unitPrice: item.salePrice,
-          minimumSalePrice: item.minimumSalePrice,
-          selectedUnitIds: [selected.id],
-          unitLabel: unitLabel(selected),
-        },
-      ]);
-      setError("");
+        setCart((current) => [
+          ...current,
+          {
+            key: selected.id,
+            variantId: item.variantId,
+            type: item.type,
+            name: item.name,
+            variant: item.variant,
+            quantity: 1,
+            unitPrice: item.salePrice,
+            minimumSalePrice: item.minimumSalePrice,
+            selectedUnitIds: [selected.id],
+            unitLabel: unitLabel(selected),
+          },
+        ]);
+        setError("");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "No se pudo consultar el IMEI del equipo.");
+      }
       return;
     }
 
@@ -182,7 +270,7 @@ export function PosFormV4({
         if (line.key !== key || line.type === "PHONE" || line.type === "SERIALIZED") {
           return line;
         }
-        const item = catalog.find((catalogItem) => catalogItem.variantId === line.variantId);
+        const item = catalogRegistry[line.variantId];
         const max = item && line.type !== "SERVICE" ? stockFor(item, warehouseId) : 999999;
         return {
           ...line,
@@ -316,10 +404,12 @@ export function PosFormV4({
 
       <div className="pos-layout">
         <PosCatalogPanel
-          items={filteredCatalog}
+          items={visibleCatalog}
           query={query}
           warehouseId={warehouseId}
           unitSelections={unitSelections}
+          loading={catalogLoading}
+          unitLoading={unitLoading}
           onQueryChange={setQuery}
           onUnitSelectionChange={(variantId, unitId) =>
             setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
