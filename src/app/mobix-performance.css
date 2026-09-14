@@ -45,6 +45,20 @@
 .mobix-error-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: #fff7ed; color: #c2410c; }
 .mobix-spin { animation: mobix-spin .8s linear infinite; }
 
+/* Legibilidad profesional: evita microtipografía inferior a 10 px en datos operativos. */
+body { font-size: 14.5px; }
+.page-heading p { font-size: 13px; }
+.data-table th { font-size: 10px; }
+.data-table td { font-size: 12px; }
+.product-cell strong { font-size: 12.5px; }
+.product-cell span,
+.table-footer,
+.status-badge,
+.user-copy span,
+.company-copy span,
+.panel-heading p { font-size: 10.5px; }
+.nav-section > p { font-size: 10px; }
+
 .mobix-pagination {
   display: flex;
   align-items: center;
