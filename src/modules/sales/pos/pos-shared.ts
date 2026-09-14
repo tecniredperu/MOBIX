@@ -1,4 +1,4 @@
-import type { PosCatalogItem, SalePaymentMethod } from "../sale-types";
+import type { PosCatalogItem, PosUnit, SalePaymentMethod } from "../sale-types";
 
 export type CartLine = {
   key: string;
@@ -42,13 +42,10 @@ export function formatPen(value: number) {
 
 export function stockFor(item: PosCatalogItem, warehouseId: string) {
   if (item.type === "SERVICE") return 999999;
-  if (item.type === "PHONE" || item.type === "SERIALIZED") {
-    return item.units.filter((unit) => unit.warehouseId === warehouseId).length;
-  }
   return item.balances.find((balance) => balance.warehouseId === warehouseId)?.quantity ?? 0;
 }
 
-export function unitLabel(unit: PosCatalogItem["units"][number]) {
+export function unitLabel(unit: PosUnit) {
   if (unit.imei1) return `IMEI ${unit.imei1}`;
   if (unit.serial) return `Serie ${unit.serial}`;
   return "Equipo serializado";
