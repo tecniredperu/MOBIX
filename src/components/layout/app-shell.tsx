@@ -1,12 +1,22 @@
 import type { ReactNode } from "react";
 import { requireAuthContext } from "@/lib/auth-context";
 import { Sidebar } from "./sidebar";
+import { MobileNavigation } from "./mobile-navigation";
 import { Topbar } from "./topbar";
 
 export async function AppShell({ children }: { children: ReactNode }) {
   const auth = await requireAuthContext();
   return (
     <div className="app-shell">
+      <MobileNavigation
+        companyName={auth.company.tradeName ?? auth.company.businessName}
+        companyLogoUrl={auth.company.logoUrl}
+        branchName={auth.membership.defaultBranch?.name ?? "Sin sucursal asignada"}
+        userName={auth.user.name}
+        roleName={auth.role.name}
+        isSystem={auth.role.isSystem}
+        permissions={[...auth.permissions]}
+      />
       <Sidebar
         companyName={auth.company.tradeName ?? auth.company.businessName}
         companyLogoUrl={auth.company.logoUrl}
