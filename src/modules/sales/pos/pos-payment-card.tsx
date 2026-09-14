@@ -32,7 +32,7 @@ export function PosPaymentCard({
     : PAYMENT_LABELS[firstMethod];
 
   return (
-    <details className="panel pos-collapsible pos-payment-card">
+    <details className="panel pos-collapsible pos-payment-card" open>
       <summary className="pos-collapsible-summary">
         <div className="pos-summary-icon"><CreditCard size={17} /></div>
         <div className="pos-summary-copy">
@@ -44,7 +44,7 @@ export function PosPaymentCard({
 
       <div className="pos-collapsible-body">
         <div className="pos-payment-toolbar">
-          <span>Configura solo si usarás Yape, Plin, tarjeta, transferencia, crédito o pago mixto.</span>
+          <span>Ingresa el monto realmente recibido. La venta no se confirmará hasta cubrir el total.</span>
           <button className="ghost-button" type="button" onClick={onAdd}>
             <Plus size={14} /> Agregar medio
           </button>
@@ -68,7 +68,7 @@ export function PosPaymentCard({
               <label className="payment-field">
                 <span>
                   {payment.method === "CASH"
-                    ? "Recibido"
+                    ? "Monto recibido"
                     : payment.method === "CREDIT"
                       ? "A crédito"
                       : "Importe"}
@@ -77,7 +77,8 @@ export function PosPaymentCard({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={payment.amount}
+                  value={payment.amount || ""}
+                  placeholder="0.00"
                   onChange={(event) => onAmountChange(payment.id, Number(event.target.value))}
                 />
               </label>
