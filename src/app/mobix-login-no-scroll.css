@@ -1,0 +1,111 @@
+/* Login MOBIX: ocupa exactamente el viewport y nunca genera scroll horizontal/vertical. */
+.mobix-login-showroom{
+  position:fixed!important;
+  inset:0!important;
+  width:auto!important;
+  height:100vh!important;
+  height:100dvh!important;
+  min-height:0!important;
+  max-height:100dvh!important;
+  overflow:hidden!important;
+  overscroll-behavior:none;
+}
+
+.mobix-login-showroom .mobix-login-access-panel{
+  width:100%;
+  height:100%!important;
+  min-height:0!important;
+  max-height:100%!important;
+  overflow:hidden!important;
+  padding:clamp(12px,3vh,30px) clamp(14px,4vw,56px)!important;
+}
+
+.mobix-login-showroom .mobix-login-glass-card{
+  max-width:min(520px,calc(100vw - 28px));
+  max-height:calc(100dvh - 24px);
+}
+
+/* Portátiles, zoom del navegador y pantallas con poca altura. */
+@media(max-height:900px){
+  .mobix-login-showroom .mobix-login-glass-card{padding:30px 40px 24px;border-radius:26px}
+  .mobix-login-showroom .login-mobix-logo{margin-bottom:16px}
+  .mobix-login-showroom .login-phone-mark{width:49px;height:36px;margin-bottom:-6px;border-width:3px}
+  .mobix-login-showroom .login-mobix-logo strong{font-size:36px}
+  .mobix-login-showroom .login-mobix-logo small{margin-top:7px;font-size:9px}
+  .mobix-login-showroom .login-card-copy{margin-bottom:15px}
+  .mobix-login-showroom .login-card-copy h1{font-size:23px}
+  .mobix-login-showroom .mobix-login-form{gap:10px}
+  .mobix-login-showroom .mobix-login-form label{gap:5px}
+  .mobix-login-showroom .auth-input{height:48px}
+  .mobix-login-showroom .auth-submit{height:50px;min-height:50px}
+  .mobix-login-showroom .login-card-footer{margin-top:15px}
+  .login-showroom-copy{top:clamp(34px,5vh,62px);gap:34px}
+  .login-showroom-benefits{gap:17px}
+  .login-showroom-tagline{bottom:5%}
+}
+
+@media(max-height:700px){
+  .mobix-login-showroom .mobix-login-access-panel{padding-block:10px!important}
+  .mobix-login-showroom .mobix-login-glass-card{padding:22px 34px 18px;border-radius:22px}
+  .mobix-login-showroom .login-mobix-logo{margin-bottom:10px}
+  .mobix-login-showroom .login-phone-mark{width:43px;height:31px}
+  .mobix-login-showroom .login-mobix-logo strong{font-size:32px}
+  .mobix-login-showroom .login-mobix-logo small{margin-top:5px;font-size:8px;letter-spacing:.22em}
+  .mobix-login-showroom .login-card-copy{margin-bottom:10px}
+  .mobix-login-showroom .login-card-copy .eyebrow{margin-bottom:5px}
+  .mobix-login-showroom .login-card-copy h1{margin:3px 0;font-size:21px}
+  .mobix-login-showroom .login-card-copy p{font-size:10.5px}
+  .mobix-login-showroom .mobix-login-form{gap:8px}
+  .mobix-login-showroom .mobix-login-form label{gap:4px}
+  .mobix-login-showroom .mobix-login-form label>span{font-size:9.5px}
+  .mobix-login-showroom .auth-input{height:44px}
+  .mobix-login-showroom .auth-submit{height:46px;min-height:46px}
+  .mobix-login-showroom .auth-security-note{font-size:9px}
+  .mobix-login-showroom .login-card-footer{display:none}
+  .login-showroom-benefits,.login-showroom-tagline{display:none}
+  .login-device-phone{bottom:-20%;transform:rotate(-10deg) scale(.78)}
+  .login-device-buds,.login-device-watch{opacity:.55}
+}
+
+/* Tablet y móvil: la pantalla de acceso sigue fija, sin scroll. */
+@media(max-width:700px){
+  .mobix-login-showroom{overflow:hidden!important}
+  .mobix-login-showroom .mobix-login-access-panel{
+    height:100dvh!important;
+    min-height:0!important;
+    padding:clamp(10px,2.5vh,20px) 12px!important;
+  }
+  .mobix-login-showroom .mobix-login-glass-card{
+    width:min(100%,480px);
+    max-width:100%;
+    max-height:calc(100dvh - 20px);
+    padding:clamp(20px,4vh,30px) 22px clamp(18px,3vh,25px);
+  }
+  .mobix-login-showroom .login-mobix-logo{margin-bottom:clamp(10px,2.5vh,20px)}
+  .mobix-login-showroom .login-card-copy{margin-bottom:clamp(10px,2vh,18px)}
+  .mobix-login-showroom .mobix-login-form{gap:clamp(8px,1.8vh,13px)}
+  .mobix-login-showroom .auth-input{height:clamp(44px,7vh,52px)}
+  .mobix-login-showroom .auth-submit{height:clamp(46px,7.5vh,54px);min-height:46px}
+  .mobix-login-showroom .login-card-footer{margin-top:clamp(10px,2vh,18px)}
+}
+
+/* Landscape y móviles bajos: prioriza formulario y elimina decoración secundaria. */
+@media(max-height:560px){
+  .login-showroom-copy,.login-showroom-message,.login-showroom-shelf,.login-device{display:none!important}
+  .mobix-login-showroom .mobix-login-glass-card{padding:14px 22px 13px;border-radius:18px}
+  .mobix-login-showroom .login-mobix-logo{margin-bottom:6px}
+  .mobix-login-showroom .login-phone-mark{width:34px;height:24px;margin-bottom:-5px;border-width:3px;border-radius:9px 9px 0 0}
+  .mobix-login-showroom .login-phone-mark i{top:5px;width:13px;height:2px}
+  .mobix-login-showroom .login-mobix-logo strong{font-size:27px}
+  .mobix-login-showroom .login-mobix-logo small{margin-top:3px;font-size:7px}
+  .mobix-login-showroom .login-card-copy{margin-bottom:6px}
+  .mobix-login-showroom .login-card-copy .eyebrow{display:none}
+  .mobix-login-showroom .login-card-copy h1{font-size:18px}
+  .mobix-login-showroom .login-card-copy p{display:none}
+  .mobix-login-showroom .mobix-login-form{gap:6px}
+  .mobix-login-showroom .mobix-login-form label{gap:3px}
+  .mobix-login-showroom .mobix-login-form label>span{font-size:8.5px}
+  .mobix-login-showroom .auth-input{height:40px}
+  .mobix-login-showroom .auth-submit{height:42px;min-height:42px;margin-top:0}
+  .mobix-login-showroom .auth-security-note,.mobix-login-showroom .login-card-footer{display:none}
+}
