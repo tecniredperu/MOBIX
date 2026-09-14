@@ -23,5 +23,8 @@
 @import "./mobix-pos-customer-modal.css";
 @import "./mobix-receipts.css";
 @import "./mobix-performance.css";
-
 @import "./mobix-ui-system.css";
+
+/* Overrides finales: login premium + responsive transversal. */
+@import "./mobix-login-premium.css";
+@import "./mobix-responsive.css";
