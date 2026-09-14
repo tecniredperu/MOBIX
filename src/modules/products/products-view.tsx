@@ -1,17 +1,8 @@
 import Link from "next/link";
-import {
-  CheckCircle2,
-  ChevronDown,
-  Plus,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
+import { CheckCircle2, ChevronDown, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 import { PRODUCT_TYPE_LABELS } from "./product-types";
-import type {
-  ProductCatalogOption,
-  ProductListItem,
-  ProductTypeValue,
-} from "./product-types";
+import type { ProductCatalogOption, ProductListItem, ProductTypeValue } from "./product-types";
 
 type ProductSummary = {
   activeProducts: number;
@@ -28,25 +19,16 @@ type ActiveFilters = {
   status?: string;
 };
 
+type PaginationInfo = { page: number; pageSize: number; total: number };
+
 function formatMoney(value: number) {
-  return new Intl.NumberFormat("es-PE", {
-    style: "currency",
-    currency: "PEN",
-    minimumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 }).format(value);
 }
 
-export function ProductsView({
-  products,
-  summary,
-  brands,
-  categories,
-  filters,
-  created,
-  canManage,
-}: {
+export function ProductsView({ products, summary, pagination, brands, categories, filters, created, canManage }: {
   products: ProductListItem[];
   summary: ProductSummary;
+  pagination: PaginationInfo;
   brands: ProductCatalogOption[];
   categories: ProductCatalogOption[];
   filters: ActiveFilters;
@@ -67,10 +49,7 @@ export function ProductsView({
       {created && canManage && (
         <div className="success-banner">
           <CheckCircle2 size={18} />
-          <div>
-            <strong>Producto guardado</strong>
-            <span>El producto y sus variantes ya están registrados en PostgreSQL.</span>
-          </div>
+          <div><strong>Producto guardado</strong><span>El producto y sus variantes ya están registrados en PostgreSQL.</span></div>
         </div>
       )}
 
@@ -88,43 +67,10 @@ export function ProductsView({
             <input name="q" defaultValue={filters.q} placeholder="Buscar por producto, SKU, modelo..." />
           </div>
           <div className="filters">
-            <label className="filter-select">
-              <span className="sr-only">Tipo</span>
-              <select name="type" defaultValue={filters.type ?? ""}>
-                <option value="">Todos los tipos</option>
-                {Object.entries(PRODUCT_TYPE_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
-
-            <label className="filter-select">
-              <span className="sr-only">Marca</span>
-              <select name="brandId" defaultValue={filters.brandId ?? ""}>
-                <option value="">Todas las marcas</option>
-                {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
-
-            <label className="filter-select">
-              <span className="sr-only">Categoría</span>
-              <select name="categoryId" defaultValue={filters.categoryId ?? ""}>
-                <option value="">Todas las categorías</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
-
-            <label className="filter-select">
-              <span className="sr-only">Estado</span>
-              <select name="status" defaultValue={filters.status ?? ""}>
-                <option value="">Todos los estados</option>
-                <option value="ACTIVE">Activo</option>
-                <option value="INACTIVE">Inactivo</option>
-              </select>
-              <ChevronDown size={15} />
-            </label>
-
+            <label className="filter-select"><span className="sr-only">Tipo</span><select name="type" defaultValue={filters.type ?? ""}><option value="">Todos los tipos</option>{Object.entries(PRODUCT_TYPE_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><ChevronDown size={15} /></label>
+            <label className="filter-select"><span className="sr-only">Marca</span><select name="brandId" defaultValue={filters.brandId ?? ""}><option value="">Todas las marcas</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select><ChevronDown size={15} /></label>
+            <label className="filter-select"><span className="sr-only">Categoría</span><select name="categoryId" defaultValue={filters.categoryId ?? ""}><option value="">Todas las categorías</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><ChevronDown size={15} /></label>
+            <label className="filter-select"><span className="sr-only">Estado</span><select name="status" defaultValue={filters.status ?? ""}><option value="">Todos los estados</option><option value="ACTIVE">Activo</option><option value="INACTIVE">Inactivo</option></select><ChevronDown size={15} /></label>
             <button className="icon-button" type="submit" aria-label="Aplicar filtros"><SlidersHorizontal size={17} /></button>
             {(filters.q || filters.type || filters.brandId || filters.categoryId || filters.status) && <Link href="/productos" className="clear-filter">Limpiar</Link>}
           </div>
@@ -151,10 +97,18 @@ export function ProductsView({
             </tbody>
           </table>
         </div>
+
         <div className="table-footer">
-          <span>{products.length} producto{products.length === 1 ? "" : "s"} encontrado{products.length === 1 ? "" : "s"}</span>
-          <span>Stock de celulares calculado por unidades disponibles; accesorios por saldo de almacén.</span>
+          <span>{pagination.total} producto{pagination.total === 1 ? "" : "s"} encontrado{pagination.total === 1 ? "" : "s"}</span>
+          <span>Mostrando hasta {pagination.pageSize} por página · stock optimizado por almacén.</span>
         </div>
+        <Pagination
+          pathname="/productos"
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          query={{ q: filters.q, type: filters.type, brandId: filters.brandId, categoryId: filters.categoryId, status: filters.status }}
+        />
       </section>
     </div>
   );

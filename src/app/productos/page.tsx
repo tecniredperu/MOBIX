@@ -1,10 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ProductsView } from "@/modules/products/products-view";
-import {
-  getProductCatalogContext,
-  getProducts,
-} from "@/modules/products/products.repository";
+import { getProductCatalogContext, getProducts } from "@/modules/products/products.repository";
 import type { ProductTypeValue } from "@/modules/products/product-types";
 
 export const dynamic = "force-dynamic";
@@ -15,29 +12,29 @@ function single(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
+function positiveInt(value: string | undefined, fallback = 1) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const auth = await requirePermission("inventory.view");
   const canManage = auth.membership.role.isSystem || auth.permissions.has("inventory.manage");
   const params = await searchParams;
   const type = single(params.type);
   const status = single(params.status);
-  const normalizedStatus: "ACTIVE" | "INACTIVE" | undefined =
-    status === "ACTIVE" || status === "INACTIVE" ? status : undefined;
+  const normalizedStatus: "ACTIVE" | "INACTIVE" | undefined = status === "ACTIVE" || status === "INACTIVE" ? status : undefined;
   const filters = {
     q: single(params.q),
-    type: (["PHONE", "SERIALIZED", "ACCESSORY", "SERVICE"] as string[]).includes(type ?? "")
-      ? (type as ProductTypeValue)
-      : undefined,
+    type: (["PHONE", "SERIALIZED", "ACCESSORY", "SERVICE"] as string[]).includes(type ?? "") ? (type as ProductTypeValue) : undefined,
     brandId: single(params.brandId),
     categoryId: single(params.categoryId),
     status: normalizedStatus,
+    page: positiveInt(single(params.page)),
+    pageSize: 50,
   };
 
-  const [{ items, summary }, { brands, categories }] = await Promise.all([
+  const [{ items, summary, pagination }, { brands, categories }] = await Promise.all([
     getProducts(filters),
     getProductCatalogContext(),
   ]);
@@ -47,6 +44,7 @@ export default async function ProductsPage({
       <ProductsView
         products={items}
         summary={summary}
+        pagination={pagination}
         brands={brands}
         categories={categories}
         filters={filters}

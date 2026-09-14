@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Eye, Plus, ReceiptText, Search, ShoppingBag, WalletCards } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 
 const DOCUMENT_LABELS: Record<string, string> = {
   RECEIPT: "Boleta",
@@ -36,11 +37,7 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
-export function SalesView({
-  sales,
-  summary,
-  filters,
-}: {
+export function SalesView({ sales, summary, pagination, filters }: {
   sales: Array<{
     id: string;
     saleNumber: string;
@@ -58,6 +55,7 @@ export function SalesView({
     createdAt: string;
   }>;
   summary: { todayTotal: number; todayCount: number; averageTicket: number; listed: number };
+  pagination: { page: number; pageSize: number; total: number };
   filters: { q?: string; status?: string; documentType?: string };
 }) {
   return (
@@ -75,7 +73,7 @@ export function SalesView({
         <article><span className="summary-symbol">S/</span><span>Ventas de hoy</span><strong>{money(summary.todayTotal)}</strong></article>
         <article><ShoppingBag size={18} /><span>Operaciones hoy</span><strong>{summary.todayCount}</strong></article>
         <article><WalletCards size={18} /><span>Ticket promedio</span><strong>{money(summary.averageTicket)}</strong></article>
-        <article><ReceiptText size={18} /><span>Resultados mostrados</span><strong>{summary.listed}</strong></article>
+        <article><ReceiptText size={18} /><span>Resultados encontrados</span><strong>{summary.listed}</strong></article>
       </section>
 
       <section className="panel table-panel">
@@ -109,7 +107,14 @@ export function SalesView({
             </tbody>
           </table>
         </div>
-        <div className="table-footer"><span>{sales.length} venta{sales.length === 1 ? "" : "s"}</span><span>Hora y fecha mostradas en zona horaria de Perú (America/Lima).</span></div>
+        <div className="table-footer"><span>{pagination.total} venta{pagination.total === 1 ? "" : "s"}</span><span>Mostrando hasta {pagination.pageSize} por página · zona horaria America/Lima.</span></div>
+        <Pagination
+          pathname="/ventas"
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          query={{ q: filters.q, status: filters.status, documentType: filters.documentType }}
+        />
       </section>
     </div>
   );
