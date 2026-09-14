@@ -40,7 +40,7 @@ function getLimaDayBounds() {
 export async function getPosContext() {
   const company = await getActiveCompany();
 
-  const [warehouses, products, customers, creditProfiles] = await Promise.all([
+  const [warehouses, products, customers, creditProfiles, serializedStock] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
       orderBy: { name: "asc" },
@@ -49,19 +49,27 @@ export async function getPosContext() {
     prisma.product.findMany({
       where: { companyId: company.id, status: "ACTIVE", deletedAt: null },
       orderBy: { name: "asc" },
-      include: {
-        brand: true,
-        category: true,
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        sku: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
         variants: {
           where: { status: "ACTIVE" },
           orderBy: { createdAt: "asc" },
-          include: {
-            units: {
-              where: { status: "AVAILABLE" },
-              include: { identifiers: true },
-              orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            sku: true,
+            ram: true,
+            storage: true,
+            color: true,
+            salePrice: true,
+            minimumSalePrice: true,
+            inventoryBalances: {
+              select: { warehouseId: true, quantity: true },
             },
-            inventoryBalances: true,
           },
         },
       },
@@ -84,37 +92,46 @@ export async function getPosContext() {
       WHERE c."companyId" = ${company.id}
       GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
     `,
+    prisma.productUnit.groupBy({
+      by: ["variantId", "warehouseId"],
+      where: { companyId: company.id, status: "AVAILABLE" },
+      _count: { _all: true },
+    }),
   ]);
 
   const creditMap = new Map(creditProfiles.map((profile) => [profile.id, profile]));
+  const serializedStockMap = new Map(
+    serializedStock.map((row) => [`${row.variantId}:${row.warehouseId}`, row._count._all]),
+  );
 
   const catalog: PosCatalogItem[] = products.flatMap((product) =>
-    product.variants.map((variant) => ({
-      productId: product.id,
-      variantId: variant.id,
-      type: product.type,
-      name: product.name,
-      brand: product.brand?.name ?? "Sin marca",
-      category: product.category?.name ?? "Sin categoría",
-      sku: variant.sku ?? product.sku,
-      variant: variantLabel(variant),
-      salePrice: Number(variant.salePrice),
-      minimumSalePrice: Number(variant.minimumSalePrice),
-      units: variant.units.map((unit) => {
-        const identifiers = identifierMap(unit.identifiers);
-        return {
-          id: unit.id,
-          warehouseId: unit.warehouseId,
-          imei1: identifiers.get("IMEI_1") ?? null,
-          imei2: identifiers.get("IMEI_2") ?? null,
-          serial: identifiers.get("SERIAL") ?? null,
-        };
-      }),
-      balances: variant.inventoryBalances.map((balance) => ({
-        warehouseId: balance.warehouseId,
-        quantity: Number(balance.quantity),
-      })),
-    })),
+    product.variants.map((variant) => {
+      const serialized = product.type === "PHONE" || product.type === "SERIALIZED";
+      const balances = serialized
+        ? warehouses.map((warehouse) => ({
+            warehouseId: warehouse.id,
+            quantity: serializedStockMap.get(`${variant.id}:${warehouse.id}`) ?? 0,
+          }))
+        : variant.inventoryBalances.map((balance) => ({
+            warehouseId: balance.warehouseId,
+            quantity: Number(balance.quantity),
+          }));
+
+      return {
+        productId: product.id,
+        variantId: variant.id,
+        type: product.type,
+        name: product.name,
+        brand: product.brand?.name ?? "Sin marca",
+        category: product.category?.name ?? "Sin categoría",
+        sku: variant.sku ?? product.sku,
+        variant: variantLabel(variant),
+        salePrice: Number(variant.salePrice),
+        minimumSalePrice: Number(variant.minimumSalePrice),
+        units: [],
+        balances,
+      };
+    }),
   );
 
   const warehouseOptions: PosWarehouse[] = warehouses.map((warehouse) => ({
@@ -172,7 +189,7 @@ export async function getSales(filters: { q?: string; status?: string; documentT
   };
 
   const { start, end } = getLimaDayBounds();
-  const [sales, todaySales] = await Promise.all([
+  const [sales, todaySummary] = await Promise.all([
     prisma.sale.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -185,9 +202,10 @@ export async function getSales(filters: { q?: string; status?: string; documentT
         payments: true,
       },
     }),
-    prisma.sale.findMany({
+    prisma.sale.aggregate({
       where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: start, lt: end } },
-      select: { total: true },
+      _sum: { total: true },
+      _count: { _all: true },
     }),
   ]);
 
@@ -208,13 +226,14 @@ export async function getSales(filters: { q?: string; status?: string; documentT
     createdAt: sale.createdAt.toISOString(),
   }));
 
-  const todayTotal = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  const todayTotal = Number(todaySummary._sum.total ?? 0);
+  const todayCount = todaySummary._count._all;
   return {
     items,
     summary: {
       todayTotal,
-      todayCount: todaySales.length,
-      averageTicket: todaySales.length ? todayTotal / todaySales.length : 0,
+      todayCount,
+      averageTicket: todayCount ? todayTotal / todayCount : 0,
       listed: items.length,
     },
   };
