@@ -1,5 +1,6 @@
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
+import { AccountReceivableStatus, type Prisma } from "../../../generated/prisma/client";
 
 type CustomerCreditRow = {
   id: string;
@@ -51,16 +52,17 @@ export async function getCustomers(filters: { q?: string; credit?: string; page?
   const pageSize = Math.min(100, Math.max(20, filters.pageSize ?? 50));
   const page = Math.max(1, filters.page ?? 1);
   const now = new Date();
+  const openStatuses = [AccountReceivableStatus.OPEN, AccountReceivableStatus.PARTIAL];
 
-  const creditWhere = filters.credit === "enabled"
+  const creditWhere: Prisma.CustomerWhereInput = filters.credit === "enabled"
     ? { creditEnabled: true }
     : filters.credit === "debt"
-      ? { receivables: { some: { companyId: company.id, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 } } } }
+      ? { receivables: { some: { companyId: company.id, status: { in: openStatuses }, balance: { gt: 0 } } } }
       : filters.credit === "overdue"
-        ? { receivables: { some: { companyId: company.id, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 }, dueDate: { lt: now } } } }
+        ? { receivables: { some: { companyId: company.id, status: { in: openStatuses }, balance: { gt: 0 }, dueDate: { lt: now } } } }
         : {};
 
-  const where = {
+  const where: Prisma.CustomerWhereInput = {
     companyId: company.id,
     ...creditWhere,
     ...(q
@@ -89,11 +91,11 @@ export async function getCustomers(filters: { q?: string; credit?: string; page?
     prisma.customer.count({ where: { companyId: company.id, status: "ACTIVE" } }),
     prisma.customer.count({ where: { companyId: company.id, status: "ACTIVE", creditEnabled: true } }),
     prisma.accountReceivable.aggregate({
-      where: { companyId: company.id, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 } },
+      where: { companyId: company.id, status: { in: openStatuses }, balance: { gt: 0 } },
       _sum: { balance: true },
     }),
     prisma.accountReceivable.aggregate({
-      where: { companyId: company.id, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 }, dueDate: { lt: now } },
+      where: { companyId: company.id, status: { in: openStatuses }, balance: { gt: 0 }, dueDate: { lt: now } },
       _sum: { balance: true },
     }),
   ]);
@@ -103,12 +105,12 @@ export async function getCustomers(filters: { q?: string; credit?: string; page?
     ? await Promise.all([
         prisma.accountReceivable.groupBy({
           by: ["customerId"],
-          where: { companyId: company.id, customerId: { in: customerIds }, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 } },
+          where: { companyId: company.id, customerId: { in: customerIds }, status: { in: openStatuses }, balance: { gt: 0 } },
           _sum: { balance: true },
         }),
         prisma.accountReceivable.groupBy({
           by: ["customerId"],
-          where: { companyId: company.id, customerId: { in: customerIds }, status: { in: ["OPEN", "PARTIAL"] }, balance: { gt: 0 }, dueDate: { lt: now } },
+          where: { companyId: company.id, customerId: { in: customerIds }, status: { in: openStatuses }, balance: { gt: 0 }, dueDate: { lt: now } },
           _sum: { balance: true },
         }),
       ])
