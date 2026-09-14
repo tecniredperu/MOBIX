@@ -8,6 +8,12 @@ const DOCUMENT_LABELS: Record<string, string> = {
   SALES_NOTE: "Nota de venta",
 };
 
+const PRINT_DOCUMENT_LABELS: Record<string, string> = {
+  RECEIPT: "BOLETA DE VENTA",
+  INVOICE: "FACTURA",
+  SALES_NOTE: "NOTA DE VENTA",
+};
+
 const TAX_LABELS: Record<string, string> = {
   TAXED: "Gravado",
   EXEMPT: "Exonerado",
@@ -24,6 +30,16 @@ const PAYMENT_LABELS: Record<string, string> = {
   OTHER: "Otro",
 };
 
+type ReceiptCompany = {
+  businessName: string;
+  tradeName: string | null;
+  ruc: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  logoUrl: string | null;
+};
+
 function money(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 }).format(value);
 }
@@ -36,14 +52,32 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
-export function SaleDetailView({ sale, created }: { sale: any; created: boolean }) {
+export function SaleDetailView({
+  sale,
+  created,
+  company,
+  ticketFooter,
+}: {
+  sale: any;
+  created: boolean;
+  company: ReceiptCompany;
+  ticketFooter: string | null;
+}) {
   const customerName = sale.customer?.name ?? "Consumidor final";
+  const companyName = company.tradeName || company.businessName;
+  const documentNumber = sale.documentSeries && sale.documentNumber
+    ? `${sale.documentSeries}-${sale.documentNumber}`
+    : sale.saleNumber;
   const ticket = {
     saleNumber: sale.saleNumber,
+    documentType: sale.documentType,
     documentSeries: sale.documentSeries,
     documentNumber: sale.documentNumber,
+    taxCondition: sale.taxCondition,
     createdAt: sale.createdAt,
     branch: sale.branch,
+    company,
+    ticketFooter,
     customer: sale.customer
       ? {
           name: customerName,
@@ -92,7 +126,7 @@ export function SaleDetailView({ sale, created }: { sale: any; created: boolean 
         </article>
         <article className="panel sale-info-card">
           <div className="sale-info-icon"><Building2 size={18} /></div>
-          <div><span>Comprobante</span><strong>{sale.documentSeries && sale.documentNumber ? `${sale.documentSeries}-${sale.documentNumber}` : sale.saleNumber}</strong><small>{TAX_LABELS[sale.taxCondition] ?? sale.taxCondition}</small></div>
+          <div><span>Comprobante</span><strong>{documentNumber}</strong><small>{TAX_LABELS[sale.taxCondition] ?? sale.taxCondition}</small></div>
         </article>
         <article className="panel sale-info-card">
           <div className="sale-info-icon"><CreditCard size={18} /></div>
@@ -135,6 +169,86 @@ export function SaleDetailView({ sale, created }: { sale: any; created: boolean 
           <div className="summary-row total"><span>Total</span><strong>{money(sale.total)}</strong></div>
         </section>
       </div>
+
+      <section className="sale-receipt-a4" aria-label="Comprobante A4">
+        <header className="receipt-a4-header">
+          <div className="receipt-company-block">
+            {company.logoUrl && <img className="receipt-company-logo" src={company.logoUrl} alt={`Logo de ${companyName}`} />}
+            <div className="receipt-company-copy">
+              <h2>{companyName}</h2>
+              {company.businessName !== companyName && <strong>{company.businessName}</strong>}
+              {company.address && <span>{company.address}</span>}
+              {company.phone && <span>Tel.: {company.phone}</span>}
+              {company.email && <span>{company.email}</span>}
+            </div>
+          </div>
+          <div className="receipt-document-box">
+            <span>RUC {company.ruc || "—"}</span>
+            <h1>{PRINT_DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
+            <strong>{documentNumber}</strong>
+          </div>
+        </header>
+
+        <div className="receipt-a4-info">
+          <div className="receipt-info-row"><span>Cliente</span><strong>{customerName}</strong></div>
+          <div className="receipt-info-row"><span>Fecha</span><strong>{limaDate(sale.createdAt)}</strong></div>
+          <div className="receipt-info-row"><span>Documento</span><strong>{sale.customer?.documentNumber ? `${sale.customer.documentType || "Doc."} ${sale.customer.documentNumber}` : "Sin documento"}</strong></div>
+          <div className="receipt-info-row"><span>Sucursal</span><strong>{sale.branch}</strong></div>
+          <div className="receipt-info-row"><span>Condición</span><strong>{TAX_LABELS[sale.taxCondition] ?? sale.taxCondition}</strong></div>
+          <div className="receipt-info-row"><span>Vendedor</span><strong>{sale.seller}</strong></div>
+        </div>
+
+        <table className="receipt-a4-table">
+          <thead>
+            <tr><th>Cant.</th><th>Descripción</th><th className="right">P. unitario</th><th className="right">Descuento</th><th className="right">Total</th></tr>
+          </thead>
+          <tbody>
+            {sale.items.map((item: any) => (
+              <tr key={`print-${item.id}`}>
+                <td>{item.quantity}</td>
+                <td>
+                  <div className="receipt-item-copy">
+                    <strong>{item.product}</strong>
+                    <span>{item.brand} · {item.variant}</span>
+                    {item.identifiers.map((identifier: any, index: number) => (
+                      <small key={index}>
+                        {[identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : "", identifier.imei2 ? `IMEI 2: ${identifier.imei2}` : "", identifier.serial ? `Serie: ${identifier.serial}` : ""].filter(Boolean).join(" · ")}
+                      </small>
+                    ))}
+                  </div>
+                </td>
+                <td className="right">{money(item.unitPrice)}</td>
+                <td className="right">{item.discount ? money(item.discount) : "—"}</td>
+                <td className="right"><strong>{money(item.total)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="receipt-a4-bottom">
+          <div className="receipt-payment-box">
+            <h3>Forma de pago</h3>
+            {sale.payments.map((payment: any) => (
+              <div className="receipt-payment-row" key={`print-payment-${payment.id}`}>
+                <span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span>
+                <strong>{money(payment.amount)}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="receipt-summary-box">
+            <div className="receipt-summary-row"><span>Valor de venta</span><strong>{money(sale.subtotal)}</strong></div>
+            <div className="receipt-summary-row"><span>IGV</span><strong>{money(sale.tax)}</strong></div>
+            {sale.discount > 0 && <div className="receipt-summary-row"><span>Descuento</span><strong>-{money(sale.discount)}</strong></div>}
+            <div className="receipt-summary-row total"><span>TOTAL</span><strong>{money(sale.total)}</strong></div>
+          </div>
+        </div>
+
+        <footer className="receipt-a4-footer">
+          <strong>¡Gracias por su compra!</strong>
+          {ticketFooter && <span>{ticketFooter}</span>}
+          <small>Venta {sale.saleNumber} · {companyName}</small>
+        </footer>
+      </section>
     </div>
   );
 }
