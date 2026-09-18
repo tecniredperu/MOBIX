@@ -404,11 +404,6 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
   const candidate = extractIdentifierCandidate(rawValue);
   if (!candidate || candidate.length < 3 || !warehouseId) return null;
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
-    select: { id: true },
-  });
-
   const identifierHit = candidate.length >= 6
     ? await prisma.productUnitIdentifier.findFirst({
         where: {
@@ -427,10 +422,29 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
           productUnit: {
             select: {
               id: true,
-              productId: true,
-              variantId: true,
               warehouseId: true,
               identifiers: { select: { type: true, value: true } },
+              product: {
+                select: {
+                  id: true,
+                  type: true,
+                  name: true,
+                  sku: true,
+                  brand: { select: { name: true } },
+                  category: { select: { name: true } },
+                },
+              },
+              variant: {
+                select: {
+                  id: true,
+                  sku: true,
+                  ram: true,
+                  storage: true,
+                  color: true,
+                  salePrice: true,
+                  minimumSalePrice: true,
+                },
+              },
             },
           },
         },
@@ -448,15 +462,29 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
       serial: identifiers.get("SERIAL") ?? null,
     };
 
-    const products = await loadProducts(company.id, undefined, [unit.productId]);
-    const catalog = await mapCatalog(
-      company.id,
-      warehouses,
-      products,
-      new Map([[unit.variantId, matchedUnit]]),
-    );
-    const item = catalog.find((entry) => entry.variantId === unit.variantId);
-    if (!item) return null;
+    const availableCount = await prisma.productUnit.count({
+      where: {
+        companyId: company.id,
+        warehouseId,
+        variantId: unit.variant.id,
+        status: "AVAILABLE",
+      },
+    });
+
+    const item: PosCatalogItem = {
+      productId: unit.product.id,
+      variantId: unit.variant.id,
+      type: unit.product.type,
+      name: unit.product.name,
+      brand: unit.product.brand?.name ?? "Sin marca",
+      category: unit.product.category?.name ?? "Sin categoría",
+      sku: unit.variant.sku ?? unit.product.sku,
+      variant: variantLabel(unit.variant),
+      salePrice: Number(unit.variant.salePrice),
+      minimumSalePrice: Number(unit.variant.minimumSalePrice),
+      units: [matchedUnit],
+      balances: [{ warehouseId, quantity: availableCount }],
+    };
 
     return {
       matchType: "IDENTIFIER" as const,
@@ -465,6 +493,11 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
       item,
     };
   }
+
+  const warehouses = await prisma.warehouse.findMany({
+    where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+    select: { id: true },
+  });
 
   const variantHit = await prisma.productVariant.findFirst({
     where: {
