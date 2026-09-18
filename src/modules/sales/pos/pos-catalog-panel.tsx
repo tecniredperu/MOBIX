@@ -58,7 +58,7 @@ export function PosCatalogPanel({
   onToggleFavorite: (variantId: string) => void;
   onLoadUnits: (variantId: string) => Promise<PosUnit[]>;
   onUnitSelectionChange: (variantId: string, unitId: string) => void;
-  onAdd: (item: PosCatalogItem) => void | Promise<void>;
+  onAdd: (item: PosCatalogItem) => unknown | Promise<unknown>;
   onSubmitSearch: (value: string, fallback?: PosCatalogItem) => void | Promise<void>;
 }) {
   function focusSearch() {
