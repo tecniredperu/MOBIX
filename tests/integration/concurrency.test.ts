@@ -335,6 +335,98 @@ test("postventa respeta la máquina de estados", async () => {
   assert.equal(closed.status, "DELIVERED");
 });
 
+
+test("un vale de cambio no puede gastarse dos veces en cajas concurrentes", async () => {
+  const fixture = await createFixture();
+  const originalSale = await createSale(fixture, 100);
+  const [replacementA, replacementB] = await Promise.all([
+    createSale(fixture, 120),
+    createSale(fixture, 130),
+  ]);
+
+  const returnOrder = await testDb.returnOrder.create({
+    data: {
+      id: randomUUID(),
+      companyId: fixture.company.id,
+      saleId: originalSale.id,
+      customerId: fixture.customer.id,
+      warehouseId: fixture.warehouse.id,
+      returnNumber: unique("DV-X"),
+      type: "EXCHANGE",
+      status: "COMPLETED",
+      reason: "Cambio concurrente UAT",
+      refundAmount: 0,
+      createdById: fixture.user.id,
+    },
+  });
+
+  const credit = await testDb.exchangeCredit.create({
+    data: {
+      companyId: fixture.company.id,
+      returnOrderId: returnOrder.id,
+      customerId: fixture.customer.id,
+      originalAmount: 100,
+      balance: 100,
+      status: "OPEN",
+    },
+  });
+
+  async function consume(saleId: string, amount: number) {
+    return testDb.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string; balance: unknown; status: string }>>`
+        SELECT "id", "balance", "status"
+        FROM "exchange_credits"
+        WHERE "id" = ${credit.id}
+          AND "companyId" = ${fixture.company.id}
+          AND "status" IN ('OPEN','PARTIAL')
+        LIMIT 1
+        FOR UPDATE
+      `;
+
+      const locked = rows[0];
+      if (!locked) throw new Error("Vale no disponible.");
+
+      const balance = Number(locked.balance ?? 0);
+      if (amount > balance + 0.01) {
+        throw new Error("Saldo insuficiente.");
+      }
+
+      const nextBalance = Math.round((balance - amount) * 100) / 100;
+      await tx.exchangeCredit.update({
+        where: { id: credit.id },
+        data: {
+          balance: nextBalance,
+          status: nextBalance <= 0.01 ? "USED" : "PARTIAL",
+        },
+      });
+      await tx.exchangeCreditUsage.create({
+        data: {
+          exchangeCreditId: credit.id,
+          saleId,
+          amount,
+        },
+      });
+    });
+  }
+
+  const attempts = await Promise.allSettled([
+    consume(replacementA.id, 80),
+    consume(replacementB.id, 80),
+  ]);
+
+  assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+
+  const current = await testDb.exchangeCredit.findUniqueOrThrow({
+    where: { id: credit.id },
+    include: { usages: true },
+  });
+  assert.equal(Number(current.balance), 20);
+  assert.equal(current.status, "PARTIAL");
+  assert.equal(current.usages.length, 1);
+  assert.equal(Number(current.usages[0].amount), 80);
+});
+
 test.after(async () => {
   await testDb.$disconnect();
 });
