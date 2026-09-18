@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Building2, CreditCard, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, Smartphone, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { SaleDetailActions } from "./sale-detail-actions";
 
@@ -142,6 +142,48 @@ export function SaleDetailView({
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
+
+      {sale.exchangeOrigins?.length ? (
+        <section className="panel sale-exchange-origin-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Venta vinculada a cambio</h2>
+              <p>Valor reconocido por equipo(s) entregado(s) anteriormente.</p>
+            </div>
+            <Repeat2 size={20} />
+          </div>
+          <div className="sale-exchange-origin-list">
+            {sale.exchangeOrigins.map((origin: any) => (
+              <article className="sale-exchange-origin-row" key={origin.exchangeCreditId}>
+                <div className="sale-exchange-origin-icon"><WalletCards size={18} /></div>
+                <div className="sale-exchange-origin-copy">
+                  <span>Vale de {origin.returnNumber}</span>
+                  <strong>{money(origin.amount)} aplicado en esta venta</strong>
+                  <small>
+                    Valor original {money(origin.originalAmount)}
+                    {origin.balance > 0.01
+                      ? " · Saldo actual " + money(origin.balance)
+                      : origin.refundedAmount > 0.01
+                        ? " · Saldo restante devuelto al cliente"
+                        : " · Vale utilizado"}
+                  </small>
+                </div>
+                <div className="sale-exchange-origin-units">
+                  {origin.returnedUnits.map((unit: any) => (
+                    <Link href={"/equipos/" + unit.id} key={unit.id}>
+                      <Smartphone size={13} />
+                      <span>
+                        <strong>{unit.product}</strong>
+                        <code>{unit.identifier}</code>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="sale-detail-grid">
         <article className="panel sale-info-card">
