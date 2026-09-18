@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronDown, Search, Smartphone, ShieldCheck, Wrench } from "lucide-react";
+import { ChevronDown, Eye, Search, Smartphone, ShieldCheck, Wrench } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   AVAILABLE: "Disponible",
@@ -77,19 +77,19 @@ export function DevicesView({
 
         <div className="table-wrap">
           <table className="data-table devices-table">
-            <thead><tr><th>Equipo</th><th>IMEI / Serie</th><th>Ubicación</th><th>Compra</th><th className="right">Costo</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Equipo</th><th>IMEI / Serie</th><th>Ubicación</th><th>Compra</th><th className="right">Costo</th><th>Estado</th><th className="right">Ficha</th></tr></thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td><div className="product-cell"><div className="product-thumb">{item.product.slice(0, 1).toUpperCase()}</div><div><strong>{item.product}</strong><span>{item.brand} · {item.variant}</span></div></div></td>
+                  <td><div className="product-cell"><div className="product-thumb">{item.product.slice(0, 1).toUpperCase()}</div><div><Link href={"/equipos/" + item.id}><strong>{item.product}</strong></Link><span>{item.brand} · {item.variant}</span></div></div></td>
                   <td><div className="identifier-stack"><span><b>IMEI 1</b> <code>{item.imei1}</code></span><span><b>IMEI 2</b> <code>{item.imei2}</code></span><span><b>Serie</b> <code>{item.serial}</code></span></div></td>
                   <td><div className="stacked-cell"><strong>{item.warehouse}</strong><span>{item.branch}</span></div></td>
                   <td><div className="stacked-cell"><strong>{item.purchaseNumber}</strong><span>{item.supplier}</span></div></td>
                   <td className="right"><strong>{money(item.cost)}</strong></td>
-                  <td><span className={`status-badge device-${item.status.toLowerCase()}`}>{STATUS_LABELS[item.status] ?? item.status}</span></td>
+                  <td><span className={`status-badge device-${item.status.toLowerCase()}`}>{STATUS_LABELS[item.status] ?? item.status}</span></td><td className="right"><Link href={"/equipos/" + item.id} className="table-action-link"><Eye size={14} /> Ver ficha</Link></td>
                 </tr>
               ))}
-              {!items.length && <tr><td colSpan={6}><div className="empty-table-state"><Smartphone size={22} /><strong>No encontramos equipos</strong><span>Registra una compra con celulares o cambia los filtros.</span></div></td></tr>}
+              {!items.length && <tr><td colSpan={7}><div className="empty-table-state"><Smartphone size={22} /><strong>No encontramos equipos</strong><span>Registra una compra con celulares o cambia los filtros.</span></div></td></tr>}
             </tbody>
           </table>
         </div>
