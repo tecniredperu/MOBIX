@@ -18,6 +18,9 @@ export default async function SaleDetailPage({
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
   const created = (Array.isArray(query.created) ? query.created[0] : query.created) === "1";
+  const changeParam = Array.isArray(query.change) ? query.change[0] : query.change;
+  const parsedChange = Number(changeParam ?? 0);
+  const change = Number.isFinite(parsedChange) ? Math.max(0, parsedChange) : 0;
   const company = {
     businessName: context.company.businessName,
     tradeName: context.company.tradeName,
@@ -33,6 +36,7 @@ export default async function SaleDetailPage({
       <SaleDetailView
         sale={sale}
         created={created}
+        change={change}
         company={company}
         ticketFooter={context.settings.ticketFooter}
       />
