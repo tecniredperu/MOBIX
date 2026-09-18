@@ -279,9 +279,14 @@ export function ReturnsView({ items }: { items: any[] }) {
                       )}
                     </td>
                     <td>
-                      {item.type === "EXCHANGE"
-                        ? "Valor para cambio"
-                        : METHODS[item.refundMethod || ""] || "—"}
+                      {item.type === "EXCHANGE" ? (
+                        "Valor para cambio"
+                      ) : (
+                        <div className="return-refund-method-cell">
+                          <span>{METHODS[item.refundMethod || ""] || "—"}</span>
+                          {item.refundReference && <small>Ref. {item.refundReference}</small>}
+                        </div>
+                      )}
                     </td>
                     <td className="right">
                       <strong>
