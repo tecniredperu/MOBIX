@@ -113,20 +113,13 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
 
   if (!session) throw new Error("La sesión de caja ya no existe.");
 
-  const saleDateFilter = {
-    gte: session.openedAt,
-    ...(session.closedAt ? { lte: session.closedAt } : {}),
-  };
-
   const [payments, saleAggregate, collections, directRefunds, exchangeRefunds] = await Promise.all([
     prisma.salePayment.findMany({
       where: {
         sale: {
           companyId: company.id,
-          branchId: session.branchId,
-          sellerId: session.userId,
+          cashSessionId: session.id,
           status: { in: ["COMPLETED", "REFUNDED"] },
-          createdAt: saleDateFilter,
         },
       },
       orderBy: { createdAt: "desc" },
@@ -137,10 +130,8 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     prisma.sale.aggregate({
       where: {
         companyId: company.id,
-        branchId: session.branchId,
-        sellerId: session.userId,
+        cashSessionId: session.id,
         status: { in: ["COMPLETED", "REFUNDED"] },
-        createdAt: saleDateFilter,
       },
       _sum: { total: true },
       _count: { id: true },
