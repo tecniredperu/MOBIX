@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, RotateCcw, Smartphone, UserRound, WalletCards } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, RotateCcw, Smartphone, UserRound, WalletCards, Wrench } from "lucide-react";
 import Link from "next/link";
 import { SaleDetailActions } from "./sale-detail-actions";
 
@@ -174,6 +174,35 @@ export function SaleDetailView({
                     <strong>{money(entry.exchangeCredit.balance)} saldo</strong>
                   </div>
                 )}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {sale.serviceOrders?.length ? (
+        <section className="panel sale-service-history-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Postventa y garantía</h2>
+              <p>Atenciones técnicas vinculadas directamente a esta venta.</p>
+            </div>
+            <Wrench size={20} />
+          </div>
+          <div className="sale-service-history-list">
+            {sale.serviceOrders.map((order: any) => (
+              <Link href={"/servicio-tecnico/" + order.id} className="sale-service-history-row" key={order.id}>
+                <div className="sale-service-history-icon"><Wrench size={16} /></div>
+                <div className="sale-service-history-copy">
+                  <span>{order.serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</span>
+                  <strong>{order.serviceNumber}</strong>
+                  <small>{order.deviceName}{order.identifier ? " · " + order.identifier : ""}</small>
+                </div>
+                <div className="sale-service-history-meta">
+                  <span>{order.status}</span>
+                  <strong>{order.warrantyCovered ? "Cobertura de venta" : money(order.finalCost)}</strong>
+                  <small>{limaOnlyDate(order.receivedAt)}</small>
+                </div>
               </Link>
             ))}
           </div>
