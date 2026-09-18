@@ -116,13 +116,33 @@ export async function createServiceOrderAction(input: {
       (a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt,
     )[0];
     const sale = latestLink?.saleItem.sale;
-    if (!sale?.customerId || !sale.customer) {
-      throw new Error("No se encontró el cliente asociado a la venta de este equipo.");
+    if (!sale) {
+      throw new Error("No se encontró la venta asociada a este equipo.");
     }
 
     productUnitId = unit.id;
-    customerId = sale.customerId;
     saleId = sale.id;
+
+    if (sale.customerId && sale.customer) {
+      customerId = sale.customerId;
+    } else {
+      const fallbackCustomerId = input.customerId?.trim() || "";
+      if (!fallbackCustomerId) {
+        throw new Error("La venta fue a consumidor final. Selecciona el cliente que entrega el equipo.");
+      }
+      const fallbackCustomer = await prisma.customer.findFirst({
+        where: {
+          id: fallbackCustomerId,
+          companyId: company.id,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      if (!fallbackCustomer) {
+        throw new Error("El cliente seleccionado ya no está disponible.");
+      }
+      customerId = fallbackCustomer.id;
+    }
     deviceName = unit.product.name;
     brand = unit.product.brand?.name ?? null;
     model = unit.product.model;
