@@ -1,0 +1,428 @@
+/* MOBIX POS V5 -----------------------------------------------------------
+ * Catálogo centrado en búsqueda: menos navegación, respuesta inmediata y
+ * tarjetas compactas para vender desde escritorio sin perder el contexto.
+ */
+
+.pos-v5 .pos-heading {
+  margin-bottom: 10px;
+}
+
+.pos-v5 .pos-heading .eyebrow {
+  display: none;
+}
+
+.pos-v5 .pos-heading h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.pos-v5 .pos-heading p {
+  margin: 3px 0 0;
+  font-size: 11px;
+}
+
+.pos-v5 .pos-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 420px);
+  gap: 12px;
+}
+
+.pos-v5 .pos-catalog-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pos-v5-search-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid #eef2f6;
+  background: #fff;
+}
+
+.pos-v5 .pos-search {
+  height: 48px;
+  padding: 0 12px;
+  border: 1px solid #cfd9e8;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .03);
+}
+
+.pos-v5 .pos-search:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .09);
+}
+
+.pos-v5 .pos-search input {
+  min-width: 0;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.pos-v5 .pos-search input::placeholder {
+  color: #8a98ad;
+}
+
+.pos-v5 .pos-search kbd {
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 6px;
+  border: 1px solid #dbe4f0;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 9px;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.pos-v5 .pos-search-state {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.pos-scan-button {
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 11px;
+  background: #f8fbff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pos-scan-button:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.pos-v5-catalog-toolbar {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #eef2f6;
+  background: #fbfcfe;
+}
+
+.pos-quick-filters {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pos-quick-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.pos-quick-filters button {
+  height: 31px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #526174;
+  font: inherit;
+  font-size: 9.8px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pos-quick-filters button:hover {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.pos-quick-filters button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .16);
+}
+
+.pos-results-count {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.pos-v5 .pos-catalog-list.pos-v5-product-grid {
+  width: 100%;
+  max-height: calc(100vh - 270px);
+  min-height: 500px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  gap: 9px;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #f7f9fc;
+}
+
+.pos-v5 .pos-product.pos-v5-product-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 255px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #e4eaf1;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .025);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.pos-v5 .pos-product.pos-v5-product-card:hover {
+  border-color: #cbd8e8;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .06);
+  transform: translateY(-1px);
+}
+
+.pos-product-visual {
+  position: relative;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 70% 20%, rgba(37, 99, 235, .11), transparent 37%),
+    linear-gradient(145deg, #f8fbff, #eef3f9);
+  color: #315a9f;
+}
+
+.pos-favorite {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .9);
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.pos-favorite:hover,
+.pos-favorite.active {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.pos-v5 .pos-product-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pos-v5 .pos-product-copy strong {
+  min-height: 30px;
+  display: -webkit-box;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 11.5px;
+  line-height: 1.3;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pos-v5 .pos-product-copy span,
+.pos-v5 .pos-product-copy small {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pos-v5 .pos-product-copy span {
+  color: #64748b;
+  font-size: 9.6px;
+}
+
+.pos-v5 .pos-product-copy .pos-product-sku {
+  color: #94a3b8;
+  font-size: 8.8px;
+}
+
+.pos-v5 .pos-product-price {
+  min-width: 0;
+  margin-top: auto;
+  text-align: left;
+}
+
+.pos-v5 .pos-product-price strong {
+  display: block;
+  color: #0f172a;
+  font-size: 15px;
+  letter-spacing: -.02em;
+}
+
+.pos-v5 .pos-product-price span {
+  display: inline-flex;
+  margin-top: 2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: #15803d;
+  font-size: 8.8px;
+  font-weight: 700;
+}
+
+.pos-identifier-match {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 7px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 8.8px;
+  font-weight: 700;
+}
+
+.pos-identifier-match span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pos-v5 .pos-unit-select {
+  width: 100%;
+  height: 31px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 8.8px;
+}
+
+.pos-v5 .pos-add {
+  width: 100%;
+  height: 33px;
+  min-height: 33px;
+  justify-content: center;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 9.8px;
+}
+
+.pos-v5-empty {
+  grid-column: 1 / -1;
+  min-height: 280px;
+  background: transparent;
+}
+
+.pos-v5 .pos-checkout {
+  gap: 9px;
+}
+
+.pos-v5 .pos-cart-lines {
+  max-height: 225px;
+}
+
+.pos-v5 .pos-total-card.pos-total-compact {
+  border-color: #dbe5f2;
+}
+
+@media (min-width: 1500px) {
+  .pos-v5 .pos-layout {
+    grid-template-columns: minmax(0, 1fr) 420px;
+  }
+}
+
+@media (max-width: 1440px) {
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1240px) {
+  .pos-v5 .pos-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+    max-height: 560px;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pos-v5-search-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-scan-button {
+    display: none;
+  }
+
+  .pos-v5-catalog-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pos-results-count {
+    padding-left: 2px;
+  }
+
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 520px;
+  }
+
+  .pos-v5 .pos-search kbd,
+  .pos-v5 .pos-search-state {
+    display: none;
+  }
+}
+
+@media (max-width: 470px) {
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-v5 .pos-product.pos-v5-product-card {
+    min-height: 0;
+  }
+}
