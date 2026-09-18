@@ -22,7 +22,24 @@ function dateTime(value: string | null) {
   return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
-export function ServiceTicketModal({ open, onClose, order }: { open: boolean; onClose: () => void; order: any }) {
+export function ServiceTicketModal({
+  open,
+  onClose,
+  order,
+  company,
+}: {
+  open: boolean;
+  onClose: () => void;
+  order: any;
+  company: {
+    businessName: string;
+    tradeName: string | null;
+    ruc: string | null;
+    phone: string | null;
+    address: string | null;
+    logoUrl: string | null;
+  };
+}) {
   if (!open) return null;
 
   function printTicket() {
@@ -47,8 +64,10 @@ export function ServiceTicketModal({ open, onClose, order }: { open: boolean; on
         <div className="service-ticket-scroll">
           <article className="service-ticket-paper">
             <header>
-              <strong>MOBIX</strong>
-              <span>Servicio técnico y postventa</span>
+              {company.logoUrl && <img src={company.logoUrl} alt={"Logo de " + (company.tradeName || company.businessName)} />}
+              <strong>{company.tradeName || company.businessName}</strong>
+              {company.ruc && <span>RUC {company.ruc}</span>}
+              {company.phone && <span>Tel. {company.phone}</span>}
               <b>{order.serviceType === "WARRANTY" ? "GARANTÍA" : "SERVICIO TÉCNICO"}</b>
             </header>
             <div className="service-ticket-meta">
