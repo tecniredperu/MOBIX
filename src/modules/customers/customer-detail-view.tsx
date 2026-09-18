@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { ArrowLeft, ArrowUpRight, CircleDollarSign, CreditCard, Save, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CircleDollarSign, CreditCard, Repeat2, Save, UserRound, WalletCards } from "lucide-react";
 import {
   registerReceivablePaymentAction,
   updateCustomerAction,
@@ -46,10 +46,31 @@ export function CustomerDetailView({ customer }: { customer: {
   status: string;
   createdAt: string;
   credit: { enabled: boolean; limit: number; days: number; notes: string | null; outstanding: number; overdue: number; available: number };
-  summary: { salesCount: number; purchaseTotal: number; outstanding: number; overdue: number };
+  summary: { salesCount: number; purchaseTotal: number; outstanding: number; overdue: number; exchangeCreditBalance: number };
   sales: Array<{ id: string; saleNumber: string; document: string; total: number; status: string; itemCount: number; payments: string[]; createdAt: string }>;
   receivables: Array<{ id: string; saleId: string; saleNumber: string; document: string; status: string; originalAmount: number; paidAmount: number; balance: number; dueDate: string; createdAt: string; overdue: boolean }>;
   payments: Array<{ id: string; receivableId: string; amount: number; method: string; reference: string | null; notes: string | null; createdBy: string; paidAt: string }>;
+  exchangeCredits: Array<{
+    id: string;
+    returnOrderId: string;
+    returnNumber: string;
+    reason: string;
+    originalAmount: number;
+    balance: number;
+    status: string;
+    refundedAmount: number;
+    refundMethod: string | null;
+    refundReference: string | null;
+    refundedAt: string | null;
+    createdAt: string;
+    usages: Array<{
+      id: string;
+      saleId: string;
+      saleNumber: string;
+      amount: number;
+      createdAt: string;
+    }>;
+  }>;
 } }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -144,6 +165,71 @@ export function CustomerDetailView({ customer }: { customer: {
         <article><small>Límite de crédito</small><strong>{customer.credit.enabled ? money(customer.credit.limit) : "No habilitado"}</strong><span>{customer.credit.enabled ? `${customer.credit.days} días` : "Configurable"}</span></article>
         <article><small>Crédito disponible</small><strong>{money(customer.credit.available)}</strong><span>Después de deuda actual</span></article>
       </section>
+
+      {customer.exchangeCredits.length > 0 && (
+        <section className="panel customer-exchange-section">
+          <div className="panel-heading">
+            <div>
+              <h2>Vales de cambio</h2>
+              <p>Saldos originados por cambios y su aplicación en nuevas ventas.</p>
+            </div>
+            <div className="customer-exchange-balance">
+              <span>Disponible</span>
+              <strong>{money(customer.summary.exchangeCreditBalance)}</strong>
+            </div>
+          </div>
+
+          <div className="customer-exchange-list">
+            {customer.exchangeCredits.map((credit) => {
+              const open = ["OPEN", "PARTIAL"].includes(credit.status) && credit.balance > 0.01;
+              const statusLabel = credit.refundedAmount > 0.01
+                ? "Saldo devuelto"
+                : credit.status === "USED"
+                  ? "Utilizado"
+                  : credit.status === "PARTIAL"
+                    ? "Uso parcial"
+                    : credit.status === "CANCELLED"
+                      ? "Cancelado"
+                      : "Disponible";
+
+              return (
+                <article className="customer-exchange-item" key={credit.id}>
+                  <div className="customer-exchange-icon"><WalletCards size={17} /></div>
+                  <div className="customer-exchange-copy">
+                    <span>{credit.returnNumber} · {date(credit.createdAt)}</span>
+                    <strong>{money(credit.originalAmount)} reconocido</strong>
+                    <small>{credit.reason}</small>
+                  </div>
+                  <div className="customer-exchange-status">
+                    <span className={"customer-exchange-status-chip " + credit.status.toLowerCase()}>
+                      {statusLabel}
+                    </span>
+                    <strong>{open ? money(credit.balance) + " disponible" : "Sin saldo pendiente"}</strong>
+                  </div>
+                  <div className="customer-exchange-actions">
+                    {open && (
+                      <Link href={"/pos?exchangeCredit=" + encodeURIComponent(credit.id)}>
+                        <Repeat2 size={13} /> Usar en POS
+                      </Link>
+                    )}
+                    {credit.usages.slice(0, 2).map((usage) => (
+                      <Link href={"/ventas/" + usage.saleId} key={usage.id}>
+                        {usage.saleNumber} · {money(usage.amount)}
+                      </Link>
+                    ))}
+                    {credit.refundedAt && (
+                      <small>
+                        Devuelto {date(credit.refundedAt)}
+                        {credit.refundMethod ? " · " + credit.refundMethod : ""}
+                      </small>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="customer-detail-grid">
         <section className="panel customer-info-card">
