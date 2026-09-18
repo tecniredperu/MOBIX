@@ -6,11 +6,13 @@ import {
   FileText,
   MapPin,
   ReceiptText,
+  Repeat2,
   RotateCcw,
   ShieldCheck,
   ShieldX,
   Smartphone,
   UserRound,
+  WalletCards,
   Wrench,
 } from "lucide-react";
 import { DeviceReturnReview } from "./device-return-review";
@@ -126,6 +128,41 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
       {device.status === "RETURNED" && (
         <DeviceReturnReview productUnitId={device.id} />
       )}
+
+      {device.sale?.exchangeOrigins?.length ? (
+        <section className="panel device-exchange-origin">
+          <div className="panel-heading">
+            <div>
+              <h2>Origen de este cambio</h2>
+              <p>Este equipo fue entregado usando el valor de otro equipo devuelto.</p>
+            </div>
+            <Repeat2 size={20} />
+          </div>
+
+          <div className="device-exchange-origin-list">
+            {device.sale.exchangeOrigins.map((origin) => (
+              <article className="device-exchange-origin-item" key={origin.exchangeCreditId}>
+                <div className="device-exchange-origin-icon">
+                  <WalletCards size={18} />
+                </div>
+                <div className="device-exchange-origin-copy">
+                  <span>Vale originado en {origin.returnNumber}</span>
+                  <strong>{money(origin.amount)} aplicado a esta venta</strong>
+                  <small>Equipo(s) entregado(s) como parte del cambio</small>
+                </div>
+                <div className="device-exchange-unit-links">
+                  {origin.returnedUnits.map((oldUnit) => (
+                    <Link href={"/equipos/" + oldUnit.id} key={oldUnit.id}>
+                      <span>{oldUnit.product}</span>
+                      <code>{oldUnit.identifier}</code>
+                    </Link>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="device-detail-grid">
         <article className="panel device-detail-card">
@@ -256,21 +293,94 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
                 : entry.disposition === "DAMAGED"
                   ? "Dañado / no vendible"
                   : "En revisión";
+
+              const exchangeStatus = entry.exchange
+                ? entry.exchange.refundedAmount > 0
+                  ? "Saldo devuelto"
+                  : entry.exchange.status === "USED"
+                    ? "Vale utilizado"
+                    : entry.exchange.status === "PARTIAL"
+                      ? "Vale parcialmente utilizado"
+                      : "Vale disponible"
+                : null;
+
               return (
-                <div className="device-return-row" key={entry.id}>
-                  <div className="device-service-icon"><RotateCcw size={17} /></div>
-                  <div>
-                    <strong>{entry.returnNumber}</strong>
-                    <span>{entry.reason}</span>
+                <article className="device-return-entry" key={entry.id}>
+                  <div className="device-return-row">
+                    <div className="device-service-icon"><RotateCcw size={17} /></div>
+                    <div>
+                      <strong>{entry.returnNumber}</strong>
+                      <span>{entry.reason}</span>
+                    </div>
+                    <div>
+                      <span>{entry.type === "EXCHANGE" ? "Cambio" : "Devolución"}</span>
+                      <small>{date(entry.createdAt)}</small>
+                    </div>
+                    <span className={"device-return-disposition " + entry.disposition.toLowerCase()}>
+                      {dispositionLabel}
+                    </span>
                   </div>
-                  <div>
-                    <span>{entry.type === "EXCHANGE" ? "Cambio" : "Devolución"}</span>
-                    <small>{date(entry.createdAt)}</small>
-                  </div>
-                  <span className={"device-return-disposition " + entry.disposition.toLowerCase()}>
-                    {dispositionLabel}
-                  </span>
-                </div>
+
+                  {entry.exchange && (
+                    <div className="device-exchange-result">
+                      <div className="device-exchange-result-head">
+                        <div>
+                          <span>Vale de cambio</span>
+                          <strong>{money(entry.exchange.originalAmount)}</strong>
+                        </div>
+                        <div>
+                          <span>{exchangeStatus}</span>
+                          <strong>
+                            {entry.exchange.balance > 0.01
+                              ? money(entry.exchange.balance) + " disponible"
+                              : entry.exchange.refundedAmount > 0.01
+                                ? money(entry.exchange.refundedAmount) + " devuelto"
+                                : "Sin saldo pendiente"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {entry.exchange.usages.length ? (
+                        <div className="device-exchange-replacements">
+                          <span>Equipo(s) entregado(s) como reemplazo</span>
+                          {entry.exchange.usages.map((usage) => (
+                            <div className="device-exchange-usage" key={usage.saleId}>
+                              <Link href={"/ventas/" + usage.saleId} className="device-exchange-sale-link">
+                                <ReceiptText size={14} />
+                                <span>
+                                  <strong>{usage.saleNumber}</strong>
+                                  <small>{money(usage.amount)} aplicado</small>
+                                </span>
+                              </Link>
+                              <div className="device-exchange-new-units">
+                                {usage.newUnits.map((newUnit) => (
+                                  <Link href={"/equipos/" + newUnit.id} key={newUnit.id}>
+                                    <Smartphone size={13} />
+                                    <span>
+                                      <strong>{newUnit.product}</strong>
+                                      <code>{newUnit.identifier}</code>
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="device-exchange-pending">
+                          <WalletCards size={15} />
+                          <span>
+                            {entry.exchange.balance > 0.01
+                              ? "El vale todavía no ha sido aplicado a un equipo de reemplazo."
+                              : entry.exchange.refundedAmount > 0.01
+                                ? "El saldo fue devuelto al cliente sin registrar un reemplazo."
+                                : "No hay una venta de reemplazo vinculada."}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
               );
             })}
           </div>
