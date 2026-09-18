@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { Download, MessageCircle, Printer, Receipt } from "lucide-react";
+import { Download, MessageCircle, Printer, Receipt, Smartphone } from "lucide-react";
 import { ServiceTicketModal } from "./service-ticket-modal";
 import {
   buildServiceReceiptPdf,
@@ -247,6 +248,16 @@ export function ServicePrintActions({
   return (
     <>
       <div className="service-detail-actions no-print">
+        {order.productUnitId && (
+          <Link className="secondary-button" href={"/equipos/" + order.productUnitId}>
+            <Smartphone size={15} /> Ver equipo
+          </Link>
+        )}
+        {order.saleId && (
+          <Link className="secondary-button" href={"/ventas/" + order.saleId}>
+            <Receipt size={15} /> Ver venta
+          </Link>
+        )}
         <button className="secondary-button" type="button" onClick={printA4}>
           <Printer size={15} /> A4 · 2 copias
         </button>
