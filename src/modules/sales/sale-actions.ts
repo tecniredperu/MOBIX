@@ -20,6 +20,7 @@ const PAYMENT_METHODS = new Set<SalePaymentMethod>([
   "CARD",
   "TRANSFER",
   "CREDIT",
+  "EXCHANGE_CREDIT",
   "OTHER",
 ]);
 const DOCUMENT_TYPES = new Set<SaleDocumentType>(["RECEIPT", "INVOICE", "SALES_NOTE"]);
@@ -43,6 +44,13 @@ type CreditCustomerRow = {
 };
 
 type NextNumberRow = { next: unknown };
+
+type ExchangeCreditLockRow = {
+  id: string;
+  customerId: string | null;
+  balance: unknown;
+  status: string;
+};
 
 type UnitSnapshot = {
   id: string;
@@ -206,6 +214,14 @@ export async function createSaleAction(input: CreateSaleInput) {
     if (!Number.isFinite(payment.amount) || payment.amount <= 0) {
       throw new Error("Todos los pagos deben ser mayores a cero.");
     }
+    if (payment.method === "EXCHANGE_CREDIT" && !payment.reference?.trim()) {
+      throw new Error("El vale de cambio no tiene una referencia válida.");
+    }
+  }
+
+  const exchangePayments = input.payments.filter((payment) => payment.method === "EXCHANGE_CREDIT");
+  if (exchangePayments.length > 1) {
+    throw new Error("Solo se puede aplicar un vale de cambio por venta.");
   }
 
   const paid = roundMoney(input.payments.reduce((sum, payment) => sum + payment.amount, 0));
@@ -265,6 +281,37 @@ export async function createSaleAction(input: CreateSaleInput) {
         ? await tx.customer.update({ where: { id: customer.id }, data: customerData })
         : await tx.customer.create({ data: { companyId: company.id, ...customerData } });
       customerId = customer.id;
+    }
+
+    let exchangeCreditLock: ExchangeCreditLockRow | null = null;
+    const exchangePayment = exchangePayments[0];
+    if (exchangePayment) {
+      const exchangeCreditId = exchangePayment.reference!.trim();
+      const rows = await tx.$queryRaw<ExchangeCreditLockRow[]>`
+        SELECT "id", "customerId", "balance", "status"
+        FROM "exchange_credits"
+        WHERE "id" = ${exchangeCreditId}
+          AND "companyId" = ${company.id}
+          AND "status" IN (\'OPEN\',\'PARTIAL\')
+        LIMIT 1
+        FOR UPDATE
+      `;
+      exchangeCreditLock = rows[0] ?? null;
+      if (!exchangeCreditLock) {
+        throw new Error("El vale de cambio ya fue utilizado, cancelado o no está disponible.");
+      }
+
+      const availableExchange = roundMoney(Number(exchangeCreditLock.balance ?? 0));
+      if (exchangePayment.amount > availableExchange + 0.01) {
+        throw new Error("El vale de cambio solo tiene S/ " + availableExchange.toFixed(2) + " disponibles.");
+      }
+
+      if (exchangeCreditLock.customerId) {
+        if (customerId && customerId !== exchangeCreditLock.customerId) {
+          throw new Error("El vale de cambio pertenece a otro cliente.");
+        }
+        if (!customerId) customerId = exchangeCreditLock.customerId;
+      }
     }
 
     let creditDays = 30;
@@ -495,6 +542,31 @@ export async function createSaleAction(input: CreateSaleInput) {
       });
     }
 
+    let exchangeCreditUsed = 0;
+    let exchangeCreditBalance = 0;
+    if (exchangePayment && exchangeCreditLock) {
+      exchangeCreditUsed = roundMoney(exchangePayment.amount);
+      exchangeCreditBalance = roundMoney(
+        Math.max(0, Number(exchangeCreditLock.balance ?? 0) - exchangeCreditUsed),
+      );
+
+      await tx.exchangeCredit.update({
+        where: { id: exchangeCreditLock.id },
+        data: {
+          balance: exchangeCreditBalance,
+          status: exchangeCreditBalance <= 0.01 ? "USED" : "PARTIAL",
+        },
+      });
+
+      await tx.exchangeCreditUsage.create({
+        data: {
+          exchangeCreditId: exchangeCreditLock.id,
+          saleId: sale.id,
+          amount: exchangeCreditUsed,
+        },
+      });
+    }
+
     let receivableId: string | null = null;
     if (creditAmount > 0 && customerId) {
       receivableId = randomUUID();
@@ -530,6 +602,9 @@ export async function createSaleAction(input: CreateSaleInput) {
           total,
           creditAmount,
           receivableId,
+          exchangeCreditId: exchangeCreditLock?.id ?? null,
+          exchangeCreditUsed,
+          exchangeCreditBalance,
           paymentMethods: input.payments.map((payment) => payment.method),
         },
       },
