@@ -116,6 +116,26 @@ export async function getDeviceDetail(id: string) {
                 include: {
                   customer: true,
                   seller: { select: { name: true } },
+                  exchangeCreditUsages: {
+                    include: {
+                      exchangeCredit: {
+                        include: {
+                          returnOrder: {
+                            include: {
+                              items: {
+                                include: {
+                                  product: { select: { name: true } },
+                                  productUnit: {
+                                    include: { identifiers: true },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -148,6 +168,35 @@ export async function getDeviceDetail(id: string) {
               refundAmount: true,
               status: true,
               createdAt: true,
+              exchangeCredit: {
+                select: {
+                  id: true,
+                  originalAmount: true,
+                  balance: true,
+                  status: true,
+                  refundedAmount: true,
+                  usages: {
+                    include: {
+                      sale: {
+                        include: {
+                          items: {
+                            include: {
+                              product: { select: { name: true } },
+                              units: {
+                                include: {
+                                  productUnit: {
+                                    include: { identifiers: true },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -225,6 +274,25 @@ export async function getDeviceDetail(id: string) {
           soldAt: sale.createdAt.toISOString(),
           seller: sale.seller.name,
           returned: latestSaleReturned,
+          exchangeOrigins: sale.exchangeCreditUsages.map((usage) => ({
+            exchangeCreditId: usage.exchangeCreditId,
+            amount: Number(usage.amount),
+            returnNumber: usage.exchangeCredit.returnOrder.returnNumber,
+            returnedUnits: usage.exchangeCredit.returnOrder.items
+              .filter((item) => Boolean(item.productUnit))
+              .map((item) => {
+                const oldIdentifiers = item.productUnit?.identifiers ?? [];
+                return {
+                  id: item.productUnitId,
+                  product: item.product.name,
+                  identifier:
+                    oldIdentifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+                    ?? oldIdentifiers.find((identifier) => identifier.type === "SERIAL")?.value
+                    ?? item.productUnitId
+                    ?? "Sin identificador",
+                };
+              }),
+          })),
           customer: sale.customer
             ? {
                 id: sale.customer.id,
@@ -265,6 +333,33 @@ export async function getDeviceDetail(id: string) {
       refundMethod: item.returnOrder.refundMethod,
       refundAmount: Number(item.returnOrder.refundAmount),
       createdAt: item.returnOrder.createdAt.toISOString(),
+      exchange: item.returnOrder.exchangeCredit
+        ? {
+            id: item.returnOrder.exchangeCredit.id,
+            originalAmount: Number(item.returnOrder.exchangeCredit.originalAmount),
+            balance: Number(item.returnOrder.exchangeCredit.balance),
+            status: item.returnOrder.exchangeCredit.status,
+            refundedAmount: Number(item.returnOrder.exchangeCredit.refundedAmount),
+            usages: item.returnOrder.exchangeCredit.usages.map((usage) => ({
+              saleId: usage.saleId,
+              saleNumber: usage.sale.saleNumber,
+              amount: Number(usage.amount),
+              newUnits: usage.sale.items.flatMap((saleItem) =>
+                saleItem.units.map((link) => {
+                  const newIdentifiers = link.productUnit.identifiers;
+                  return {
+                    id: link.productUnit.id,
+                    product: saleItem.product.name,
+                    identifier:
+                      newIdentifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+                      ?? newIdentifiers.find((identifier) => identifier.type === "SERIAL")?.value
+                      ?? link.productUnit.id,
+                  };
+                }),
+              ),
+            })),
+          }
+        : null,
     })),
   };
 }
