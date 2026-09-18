@@ -111,10 +111,16 @@ async function loadSoldUnits(companyId: string, q = "", take = 20): Promise<Sold
 
   return rows.flatMap((unit) => {
     const links = [...unit.saleLinks].sort((a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt);
-    const latest = links[0]?.saleItem.sale;
+    const latestLink = links[0];
+    const latest = latestLink?.saleItem.sale;
     if (!latest?.customerId || !latest.customer) return [];
-    const warrantyDays = unit.product.warrantyDays ?? 0;
-    const expires = warrantyExpiry(latest.createdAt, warrantyDays);
+
+    const legacyWarrantyDays = unit.product.warrantyDays ?? 0;
+    const warrantyDays = latestLink.warrantyDays || legacyWarrantyDays;
+    const warrantyStartsAt = latestLink.warrantyStartsAt ?? latest.createdAt;
+    const expires = latestLink.warrantyExpiresAt
+      ?? warrantyExpiry(warrantyStartsAt, warrantyDays);
+
     return [{
       id: unit.id,
       saleId: latest.id,
