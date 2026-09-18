@@ -279,3 +279,28 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+.sale-completion-summary .sale-completion-exchange {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.sale-completion-exchange span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.sale-completion-exchange strong {
+  margin: 0;
+  color: #1d4ed8;
+  font-size: 19px;
+}
