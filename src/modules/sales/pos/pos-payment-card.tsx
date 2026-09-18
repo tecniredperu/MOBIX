@@ -82,6 +82,10 @@ export function PosPaymentCard({
                 className={active ? "active" : ""}
                 type="button"
                 onClick={() => onSetSingleMethod(method.value)}
+                disabled={method.value === "CREDIT" && !selectedCustomer?.creditEnabled}
+                title={method.value === "CREDIT" && !selectedCustomer?.creditEnabled
+                  ? "Selecciona un cliente con crédito habilitado"
+                  : undefined}
               >
                 <Icon size={14} />
                 <span>{method.label}</span>
