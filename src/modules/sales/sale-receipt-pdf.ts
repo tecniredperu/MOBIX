@@ -347,7 +347,14 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   y += 30;
   ctx.font = "400 18px Arial";
   for (const payment of ticket.payments) {
-    ctx.fillText(`${PAYMENT_LABELS[payment.method] ?? payment.method}: ${money(payment.amount)}`, margin, y);
+    const reference = payment.reference && payment.method !== "EXCHANGE_CREDIT"
+      ? " · Ref. " + payment.reference
+      : "";
+    ctx.fillText(
+      `${PAYMENT_LABELS[payment.method] ?? payment.method}: ${money(payment.amount)}${reference}`,
+      margin,
+      y,
+    );
     y += 27;
   }
 
