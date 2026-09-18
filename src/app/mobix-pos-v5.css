@@ -1316,3 +1316,18 @@
     text-align: left;
   }
 }
+
+
+.pos-customer-locked {
+  display: inline-flex;
+  align-items: center;
+  min-height: 27px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
