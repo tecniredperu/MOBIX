@@ -120,6 +120,7 @@ export function ReturnDetailView({
     refund: {
       amount: detail.refundAmount,
       method: detail.refundMethod,
+      reference: detail.refundReference,
     },
     exchangeCredit: detail.exchangeCredit
       ? {
@@ -362,6 +363,7 @@ export function ReturnDetailView({
           <div className="return-detail-refund-row">
             <div><span>Importe</span><strong>{money(detail.refundAmount)}</strong></div>
             <div><span>Medio</span><strong>{REFUND_LABELS[detail.refundMethod ?? ""] ?? "—"}</strong></div>
+            <div><span>Referencia</span><strong>{detail.refundReference || "—"}</strong></div>
             <div><span>Venta original</span><strong>{originalDocument(detail)}</strong></div>
           </div>
         </section>
@@ -448,6 +450,7 @@ export function ReturnDetailView({
             <>
               <div><span>Importe devuelto</span><strong>{money(detail.refundAmount)}</strong></div>
               <div><span>Medio de devolución</span><strong>{REFUND_LABELS[detail.refundMethod ?? ""] ?? "—"}</strong></div>
+              {detail.refundReference && <div><span>Referencia</span><strong>{detail.refundReference}</strong></div>}
             </>
           )}
         </div>
