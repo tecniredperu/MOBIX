@@ -40,6 +40,13 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (!words.length) return [""];
@@ -169,6 +176,9 @@ function identifierText(item: SaleTicketData["items"][number]) {
     if (identifier.imei1) parts.push(`IMEI 1: ${identifier.imei1}`);
     if (identifier.imei2) parts.push(`IMEI 2: ${identifier.imei2}`);
     if (identifier.serial) parts.push(`Serie: ${identifier.serial}`);
+    if (identifier.warrantyExpiresAt) {
+      parts.push(`Garantía hasta: ${limaOnlyDate(identifier.warrantyExpiresAt)}`);
+    }
     return parts;
   });
 }
