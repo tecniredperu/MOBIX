@@ -21,6 +21,14 @@ export async function getReturns() {
       customer: { select: { businessName: true, firstName: true, lastName: true } },
       warehouse: { select: { name: true } },
       createdBy: { select: { name: true } },
+      exchangeCredit: {
+        select: {
+          id: true,
+          originalAmount: true,
+          balance: true,
+          status: true,
+        },
+      },
       items: {
         select: {
           productUnitId: true,
@@ -44,6 +52,14 @@ export async function getReturns() {
     customer: customerName(row.customer),
     warehouse: row.warehouse.name,
     userName: row.createdBy.name,
+    exchangeCredit: row.exchangeCredit
+      ? {
+          id: row.exchangeCredit.id,
+          originalAmount: Number(row.exchangeCredit.originalAmount),
+          balance: Number(row.exchangeCredit.balance),
+          status: row.exchangeCredit.status,
+        }
+      : null,
     serializedDisposition: {
       restock: row.items.filter((item) => item.productUnitId && item.disposition === "RESTOCK").length,
       quarantine: row.items.filter((item) => item.productUnitId && item.disposition === "QUARANTINE").length,
