@@ -399,11 +399,11 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     });
   }
 
-  async function addItem(item: PosCatalogItem, directUnit?: PosUnit) {
+  async function addItem(item: PosCatalogItem, directUnit?: PosUnit): Promise<boolean> {
     const stock = stockFor(item, warehouseId);
     if (item.type !== "SERVICE" && stock <= 0) {
       setError("Este producto no tiene stock disponible en la sucursal seleccionada.");
-      return;
+      return false;
     }
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
@@ -424,13 +424,13 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 
         if (!selected) {
           setError("Selecciona el IMEI o serie exacto del equipo antes de agregarlo.");
-          return;
+          return false;
         }
       }
 
       if (cart.some((line) => line.selectedUnitIds.includes(selected.id))) {
         setError("Ese IMEI/equipo ya está agregado a la venta.");
-        return;
+        return false;
       }
 
       setUnitSelections((current) => ({ ...current, [item.variantId]: selected.id }));
@@ -454,7 +454,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       }]);
       setError("");
       resetProductSearchAfterAdd();
-      return;
+      return true;
     }
 
     setCart((current) => {
@@ -479,6 +479,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     });
     setError("");
     resetProductSearchAfterAdd();
+    return true;
   }
 
   async function submitProductSearch(value: string, fallback?: PosCatalogItem) {
@@ -509,12 +510,14 @@ export function PosFormV4({ warehouses, catalog, customers }: {
           ? data.match.item.units.find((unit) => unit.warehouseId === warehouseId)
           : undefined;
 
-        await addItem(data.match.item, scannedUnit);
+        const added = await addItem(data.match.item, scannedUnit);
 
-        if (data.match.matchType === "IDENTIFIER" && scannedUnit) {
-          showScanNotice(unitLabel(scannedUnit) + " agregado a la venta.");
-        } else {
-          showScanNotice(data.match.item.name + " agregado a la venta.");
+        if (added) {
+          if (data.match.matchType === "IDENTIFIER" && scannedUnit) {
+            showScanNotice(unitLabel(scannedUnit) + " agregado a la venta.");
+          } else {
+            showScanNotice(data.match.item.name + " agregado a la venta.");
+          }
         }
         return;
       }
