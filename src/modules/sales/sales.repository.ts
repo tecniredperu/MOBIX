@@ -249,6 +249,26 @@ export async function getSaleDetail(id: string) {
       seller: true,
       createdBy: true,
       payments: { orderBy: { createdAt: "asc" } },
+      exchangeCreditUsages: {
+        include: {
+          exchangeCredit: {
+            include: {
+              returnOrder: {
+                include: {
+                  items: {
+                    include: {
+                      product: { select: { name: true } },
+                      productUnit: {
+                        include: { identifiers: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       items: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -323,6 +343,29 @@ export async function getSaleDetail(id: string) {
       amount: Number(payment.amount),
       reference: payment.reference,
       notes: payment.notes,
+    })),
+    exchangeOrigins: sale.exchangeCreditUsages.map((usage) => ({
+      exchangeCreditId: usage.exchangeCreditId,
+      returnNumber: usage.exchangeCredit.returnOrder.returnNumber,
+      amount: Number(usage.amount),
+      originalAmount: Number(usage.exchangeCredit.originalAmount),
+      balance: Number(usage.exchangeCredit.balance),
+      status: usage.exchangeCredit.status,
+      refundedAmount: Number(usage.exchangeCredit.refundedAmount),
+      returnedUnits: usage.exchangeCredit.returnOrder.items
+        .filter((returnItem) => Boolean(returnItem.productUnit))
+        .map((returnItem) => {
+          const identifiers = returnItem.productUnit?.identifiers ?? [];
+          return {
+            id: returnItem.productUnitId,
+            product: returnItem.product.name,
+            identifier:
+              identifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+              ?? identifiers.find((identifier) => identifier.type === "SERIAL")?.value
+              ?? returnItem.productUnitId
+              ?? "Sin identificador",
+          };
+        }),
     })),
   };
 }
