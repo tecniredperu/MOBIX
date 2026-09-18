@@ -189,17 +189,25 @@ export function PosCatalogPanel({
               {serialized && (
                 <select
                   className="pos-unit-select"
-                  value={unitSelections[item.variantId] ?? matchedUnit?.id ?? availableUnits[0]?.id ?? ""}
+                  value={unitSelections[item.variantId] ?? matchedUnit?.id ?? ""}
                   onFocus={() => { if (!loadedUnits && !isLoadingUnits) void onLoadUnits(item.variantId); }}
                   onChange={(event) => onUnitSelectionChange(item.variantId, event.target.value)}
                   disabled={stock <= 0 || isLoadingUnits}
                   aria-label={`Seleccionar IMEI o serie de ${item.name}`}
                 >
                   {isLoadingUnits && <option value="">Cargando equipos...</option>}
-                  {!isLoadingUnits && !loadedUnits && !matchedUnit && stock > 0 && <option value="">Seleccionar IMEI / serie</option>}
-                  {matchedUnit && !loadedUnits && <option value={matchedUnit.id}>{unitLabel(matchedUnit)}</option>}
-                  {!isLoadingUnits && loadedUnits && !availableUnits.length && <option value="">Sin equipos disponibles</option>}
-                  {availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>)}
+                  {!isLoadingUnits && !matchedUnit && stock > 0 && (
+                    <option value="">Seleccionar IMEI / serie</option>
+                  )}
+                  {matchedUnit && !loadedUnits && (
+                    <option value={matchedUnit.id}>{unitLabel(matchedUnit)}</option>
+                  )}
+                  {!isLoadingUnits && loadedUnits && !availableUnits.length && (
+                    <option value="">Sin equipos disponibles</option>
+                  )}
+                  {availableUnits.map((unit) => (
+                    <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>
+                  ))}
                 </select>
               )}
 
