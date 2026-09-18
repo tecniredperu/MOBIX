@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, Smartphone, UserRound, WalletCards } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, RotateCcw, Smartphone, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { SaleDetailActions } from "./sale-detail-actions";
 
@@ -142,6 +142,43 @@ export function SaleDetailView({
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
+
+      {sale.returns?.length ? (
+        <section className="panel sale-return-history-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Devoluciones y cambios vinculados</h2>
+              <p>Operaciones que modificaron parcial o totalmente esta venta.</p>
+            </div>
+            <RotateCcw size={20} />
+          </div>
+          <div className="sale-return-history-list">
+            {sale.returns.map((entry: any) => (
+              <Link href={"/devoluciones/" + entry.id} className="sale-return-history-row" key={entry.id}>
+                <div className="sale-return-history-icon">
+                  {entry.type === "EXCHANGE" ? <Repeat2 size={16} /> : <RotateCcw size={16} />}
+                </div>
+                <div className="sale-return-history-copy">
+                  <span>{entry.type === "EXCHANGE" ? "Cambio" : "Devolución"}</span>
+                  <strong>{entry.returnNumber}</strong>
+                  <small>{entry.reason}</small>
+                </div>
+                <div className="sale-return-history-meta">
+                  <span>{entry.quantity} producto{entry.quantity === 1 ? "" : "s"}</span>
+                  <strong>{money(entry.value)}</strong>
+                  <small>{limaOnlyDate(entry.createdAt)}</small>
+                </div>
+                {entry.exchangeCredit && (
+                  <div className="sale-return-history-credit">
+                    <span>Vale</span>
+                    <strong>{money(entry.exchangeCredit.balance)} saldo</strong>
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {sale.exchangeOrigins?.length ? (
         <section className="panel sale-exchange-origin-panel">
