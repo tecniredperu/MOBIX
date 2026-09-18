@@ -52,6 +52,13 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
 export function SaleDetailView({
   sale,
   created,
@@ -153,7 +160,7 @@ export function SaleDetailView({
               {sale.items.map((item: any) => (
                 <tr key={item.id}>
                   <td><div className="product-cell"><div className="product-thumb">{item.product.slice(0, 1)}</div><div><strong>{item.product}</strong><span>{item.brand} · {item.variant}</span></div></div></td>
-                  <td>{item.identifiers.length ? <div className="identifier-stack">{item.identifiers.map((identifier: any, index: number) => <span key={index}>{identifier.imei1 && <><b>IMEI 1</b> <code>{identifier.imei1}</code></>}{identifier.imei2 && <><br /><b>IMEI 2</b> <code>{identifier.imei2}</code></>}{identifier.serial && <><br /><b>Serie</b> <code>{identifier.serial}</code></>}</span>)}</div> : "—"}</td>
+                  <td>{item.identifiers.length ? <div className="identifier-stack">{item.identifiers.map((identifier: any, index: number) => <span key={index}>{identifier.imei1 && <><b>IMEI 1</b> <code>{identifier.imei1}</code></>}{identifier.imei2 && <><br /><b>IMEI 2</b> <code>{identifier.imei2}</code></>}{identifier.serial && <><br /><b>Serie</b> <code>{identifier.serial}</code></>}{identifier.warrantyExpiresAt && <><br /><b>Garantía</b> hasta {limaOnlyDate(identifier.warrantyExpiresAt)}</>}</span>)}</div> : "—"}</td>
                   <td className="right">{item.quantity}</td>
                   <td className="right">{money(item.unitPrice)}</td>
                   <td className="right">{item.discount ? money(item.discount) : "—"}</td>
@@ -223,6 +230,7 @@ export function SaleDetailView({
                     {item.identifiers.map((identifier: any, index: number) => (
                       <small key={index}>
                         {[identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : "", identifier.imei2 ? `IMEI 2: ${identifier.imei2}` : "", identifier.serial ? `Serie: ${identifier.serial}` : ""].filter(Boolean).join(" · ")}
+                        {identifier.warrantyExpiresAt ? ` · Garantía hasta: ${limaOnlyDate(identifier.warrantyExpiresAt)}` : ""}
                       </small>
                     ))}
                   </div>
