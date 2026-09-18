@@ -74,6 +74,8 @@ export function ServiceTicketModal({
               <p><span>Orden</span><strong>{order.serviceNumber}</strong></p>
               <p><span>Recepción</span><strong>{dateTime(order.receivedAt)}</strong></p>
               <p><span>Estado</span><strong>{STATUS_LABELS[order.status as ServiceStatus] ?? order.status}</strong></p>
+              {order.saleNumber && <p><span>Venta</span><strong>{order.saleNumber}</strong></p>}
+              {order.warrantyExpiresAt && <p><span>Garantía</span><strong>Hasta {dateTime(order.warrantyExpiresAt)}</strong></p>}
               <p><span>Cliente</span><strong>{order.customer.name}</strong></p>
               {order.customer.documentNumber && <p><span>Documento</span><strong>{order.customer.documentType} {order.customer.documentNumber}</strong></p>}
               {order.customer.phone && <p><span>Celular</span><strong>{order.customer.phone}</strong></p>}
