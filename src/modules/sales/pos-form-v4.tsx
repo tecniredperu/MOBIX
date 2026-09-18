@@ -8,6 +8,7 @@ import { calculatePaymentCoverage, calculateSaleTotals } from "./sales-calculati
 import type {
   PosCatalogItem,
   PosCustomer,
+  PosExchangeCredit,
   PosUnit,
   PosWarehouse,
   SaleDocumentType,
@@ -58,10 +59,16 @@ function customerMatchesQuery(customer: PosCustomer, query: string) {
   return tokens.every((token) => haystack.includes(token));
 }
 
-export function PosFormV4({ warehouses, catalog, customers }: {
+export function PosFormV4({
+  warehouses,
+  catalog,
+  customers,
+  initialExchangeCredit = null,
+}: {
   warehouses: PosWarehouse[];
   catalog: PosCatalogItem[];
   customers: PosCustomer[];
+  initialExchangeCredit?: PosExchangeCredit | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -88,11 +95,17 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const [taxCondition, setTaxCondition] = useState<SaleTaxCondition>("TAXED");
   const [discount, setDiscount] = useState(0);
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(initialExchangeCredit?.customer?.id ?? "");
   const [customerQuery, setCustomerQuery] = useState("");
   const [customerSearchResults, setCustomerSearchResults] = useState<PosCustomer[]>([]);
   const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
-  const [availableCustomers, setAvailableCustomers] = useState<PosCustomer[]>(customers);
+  const [availableCustomers, setAvailableCustomers] = useState<PosCustomer[]>(() => {
+    const merged = new Map(customers.map((customer) => [customer.id, customer]));
+    if (initialExchangeCredit?.customer) {
+      merged.set(initialExchangeCredit.customer.id, initialExchangeCredit.customer);
+    }
+    return [...merged.values()];
+  });
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
 
   const [payments, setPayments] = useState<PaymentLine[]>([
@@ -303,26 +316,52 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     taxRatePercent: 18,
   }), [cart, discount, taxCondition]);
 
+  const exchangeApplied = useMemo(
+    () => roundMoney(Math.min(initialExchangeCredit?.balance ?? 0, totals.total)),
+    [initialExchangeCredit, totals.total],
+  );
+  const exchangeRemaining = useMemo(
+    () => roundMoney(Math.max(0, (initialExchangeCredit?.balance ?? 0) - exchangeApplied)),
+    [exchangeApplied, initialExchangeCredit],
+  );
+  const amountDue = useMemo(
+    () => roundMoney(Math.max(0, totals.total - exchangeApplied)),
+    [exchangeApplied, totals.total],
+  );
+  const effectivePayments = useMemo(() => {
+    const normalPayments = payments.filter((payment) => Number(payment.amount || 0) > 0.009);
+    if (!initialExchangeCredit || exchangeApplied <= 0.009) return normalPayments;
+    return [
+      ...normalPayments,
+      {
+        id: "exchange-credit",
+        method: "EXCHANGE_CREDIT" as SalePaymentMethod,
+        amount: exchangeApplied,
+        reference: initialExchangeCredit.id,
+      },
+    ];
+  }, [exchangeApplied, initialExchangeCredit, payments]);
+
   useEffect(() => {
-    const previousTotal = previousTotalRef.current;
+    const previousDue = previousTotalRef.current;
     setPayments((current) => {
       if (current.length !== 1) return current;
       const payment = current[0];
       if (payment.method === "CASH") return current;
       const amount = Number(payment.amount || 0);
-      const wasAutoAmount = amount <= 0.009 || Math.abs(amount - previousTotal) <= 0.009;
+      const wasAutoAmount = amount <= 0.009 || Math.abs(amount - previousDue) <= 0.009;
       if (!wasAutoAmount) return current;
-      return [{ ...payment, amount: totals.total }];
+      return [{ ...payment, amount: amountDue }];
     });
-    previousTotalRef.current = totals.total;
-  }, [totals.total]);
+    previousTotalRef.current = amountDue;
+  }, [amountDue]);
 
   const coverage = useMemo(() => calculatePaymentCoverage({
     total: totals.total,
-    payments,
+    payments: effectivePayments,
     creditEnabled: selectedCustomer?.creditEnabled,
     availableCredit: selectedCustomer?.availableCredit,
-  }), [payments, selectedCustomer, totals.total]);
+  }), [effectivePayments, selectedCustomer, totals.total]);
 
   function toggleFavorite(variantId: string) {
     setFavoriteVariantIds((current) => {
@@ -365,6 +404,13 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   function selectExistingCustomer(id: string) {
+    if (
+      initialExchangeCredit?.customer
+      && id !== initialExchangeCredit.customer.id
+    ) {
+      setError("Este vale de cambio pertenece a " + initialExchangeCredit.customer.name + " y debe usarse con el mismo cliente.");
+      return;
+    }
     setCustomerId(id);
     setCustomerQuery("");
     setCustomerSearchResults([]);
@@ -557,7 +603,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   function clearSale() {
     setCart([]);
     setDiscount(0);
-    setCustomerId("");
+    setCustomerId(initialExchangeCredit?.customer?.id ?? "");
     setCustomerQuery("");
     setCustomerSearchResults([]);
     setDocumentType("RECEIPT");
@@ -569,6 +615,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   function setSinglePaymentMethod(method: SalePaymentMethod) {
+    if (method === "EXCHANGE_CREDIT") return;
     if (method === "CREDIT" && !selectedCustomer?.creditEnabled) {
       setError("Selecciona un cliente con línea de crédito habilitada antes de usar Crédito.");
       return;
@@ -576,7 +623,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     setPayments([{
       id: "payment-1",
       method,
-      amount: method === "CASH" ? 0 : totals.total,
+      amount: method === "CASH" ? 0 : amountDue,
       reference: "",
     }]);
     setError("");
@@ -588,7 +635,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       const first = current[0] ?? {
         id: "payment-1",
         method: "CASH" as SalePaymentMethod,
-        amount: totals.total,
+        amount: amountDue,
         reference: "",
       };
       const secondMethod: SalePaymentMethod = first.method === "YAPE" ? "CASH" : "YAPE";
@@ -613,6 +660,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   function updatePaymentMethod(id: string, method: SalePaymentMethod) {
+    if (method === "EXCHANGE_CREDIT") return;
     if (method === "CREDIT" && !selectedCustomer?.creditEnabled) {
       setError("Selecciona un cliente con línea de crédito habilitada antes de usar Crédito.");
     } else {
@@ -634,7 +682,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     const otherPaid = payments
       .filter((payment) => payment.id !== id)
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    setPaymentAmount(id, Math.max(0, roundMoney(totals.total - otherPaid)));
+    setPaymentAmount(id, Math.max(0, roundMoney(amountDue - otherPaid)));
   }
 
   function submitSale() {
@@ -665,7 +713,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       }
     }
 
-    if (totals.total > 0.01 && !payments.some((payment) => Number(payment.amount) > 0.009)) {
+    if (totals.total > 0.01 && !effectivePayments.some((payment) => Number(payment.amount) > 0.009)) {
       setError("Ingresa el monto recibido antes de confirmar la venta.");
       return;
     }
@@ -699,7 +747,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
             unitPrice: Number(line.unitPrice),
             selectedUnitIds: line.selectedUnitIds,
           })),
-          payments: payments.map((payment) => ({
+          payments: effectivePayments.map((payment) => ({
             method: payment.method,
             amount: Number(payment.amount),
             reference: payment.reference,
@@ -808,6 +856,10 @@ export function PosFormV4({ warehouses, catalog, customers }: {
             selectedCustomer={selectedCustomer}
             creditAmount={coverage.creditAmount}
             creditReady={coverage.creditReady}
+            exchangeCredit={initialExchangeCredit}
+            exchangeApplied={exchangeApplied}
+            exchangeRemaining={exchangeRemaining}
+            amountDue={amountDue}
             onSetSingleMethod={setSinglePaymentMethod}
             onEnableMixed={enableMixedPayment}
             onAdd={addPayment}
