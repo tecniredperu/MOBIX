@@ -115,36 +115,38 @@ export async function getReturnSaleOptions() {
     returned.map((row) => [row.saleItemId, Number(row._sum.quantity ?? 0)]),
   );
 
-  return sales.map((sale) => ({
-    id: sale.id,
-    saleNumber: sale.saleNumber,
-    createdAt: sale.createdAt.toISOString(),
-    customer: customerName(sale.customer),
-    warehouseId: sale.warehouseId,
-    warehouse: sale.warehouse.name,
-    total: Number(sale.total),
-    items: sale.items.map((item) => ({
-      id: item.id,
-      productId: item.productId,
-      variantId: item.variantId,
-      product: item.product.name,
-      type: item.product.type,
-      variant: [item.variant.color, item.variant.ram, item.variant.storage]
-        .filter(Boolean)
-        .join(" · ") || item.variant.sku || "General",
-      quantity: item.quantity,
-      returned: returnedMap.get(item.id) ?? 0,
-      total: Number(item.total),
-      unitPrice: Number(item.unitPrice),
-      unitCost: Number(item.unitCost),
-      units: item.units.map((link) => ({
-        id: link.productUnit.id,
-        status: link.productUnit.status,
-        identifier:
-          link.productUnit.identifiers.find((identifier) => identifier.type === "IMEI_1")?.value
-          || link.productUnit.identifiers.find((identifier) => identifier.type === "SERIAL")?.value
-          || link.productUnit.id,
+  return sales
+    .map((sale) => ({
+      id: sale.id,
+      saleNumber: sale.saleNumber,
+      createdAt: sale.createdAt.toISOString(),
+      customer: customerName(sale.customer),
+      warehouseId: sale.warehouseId,
+      warehouse: sale.warehouse.name,
+      total: Number(sale.total),
+      items: sale.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        product: item.product.name,
+        type: item.product.type,
+        variant: [item.variant.color, item.variant.ram, item.variant.storage]
+          .filter(Boolean)
+          .join(" · ") || item.variant.sku || "General",
+        quantity: item.quantity,
+        returned: returnedMap.get(item.id) ?? 0,
+        total: Number(item.total),
+        unitPrice: Number(item.unitPrice),
+        unitCost: Number(item.unitCost),
+        units: item.units.map((link) => ({
+          id: link.productUnit.id,
+          status: link.productUnit.status,
+          identifier:
+            link.productUnit.identifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+            || link.productUnit.identifiers.find((identifier) => identifier.type === "SERIAL")?.value
+            || link.productUnit.id,
+        })),
       })),
-    })),
-  }));
+    }))
+    .filter((sale) => sale.items.some((item) => item.returned < item.quantity));
 }
