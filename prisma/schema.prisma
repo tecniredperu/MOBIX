@@ -608,6 +608,7 @@ model Sale {
   branchId       String
   warehouseId    String
   customerId     String?
+  cashSessionId  String?
   saleNumber     String
   documentType   DocumentType @default(SALES_NOTE)
   documentSeries String?
@@ -628,6 +629,7 @@ model Sale {
   branch        Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
   warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   customer      Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cashSession   CashSession?       @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
   seller        User               @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
   createdBy     User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   items         SaleItem[]
@@ -641,6 +643,7 @@ model Sale {
   @@index([companyId, branchId, createdAt])
   @@index([companyId, customerId, createdAt])
   @@index([companyId, status, createdAt])
+  @@index([cashSessionId, createdAt])
   @@map("sales")
 }
 
@@ -771,6 +774,7 @@ model CashSession {
   user               User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   movements                CashMovement[]
   receivablePayments       ReceivablePayment[]
+  sales                     Sale[]
   refundReturnOrders       ReturnOrder[]      @relation("ReturnRefundCashSession")
   refundedExchangeCredits  ExchangeCredit[]   @relation("ExchangeCreditRefundCashSession")
 
