@@ -92,7 +92,15 @@ enum PaymentMethod {
   CARD
   TRANSFER
   CREDIT
+  EXCHANGE_CREDIT
   OTHER
+}
+
+enum ExchangeCreditStatus {
+  OPEN
+  PARTIAL
+  USED
+  CANCELLED
 }
 
 enum InventoryMovementType {
@@ -177,6 +185,7 @@ model Company {
   returnOrders        ReturnOrder[]
   stockTransfers      StockTransfer[]
   serviceOrders       ServiceOrder[]
+  exchangeCredits      ExchangeCredit[]
 
   @@unique([ruc])
   @@index([status])
@@ -585,6 +594,8 @@ model Customer {
   receivables   AccountReceivable[]
   returnOrders  ReturnOrder[]
   serviceOrders ServiceOrder[]
+  exchangeCreditUsages ExchangeCreditUsage[]
+  exchangeCredits ExchangeCredit[]
 
   @@unique([companyId, documentNumber])
   @@index([companyId, status])
@@ -622,9 +633,10 @@ model Sale {
   createdBy     User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   items         SaleItem[]
   payments      SalePayment[]
-  receivable    AccountReceivable?
-  returnOrders  ReturnOrder[]
-  serviceOrders ServiceOrder[]
+  receivable          AccountReceivable?
+  returnOrders        ReturnOrder[]
+  serviceOrders       ServiceOrder[]
+  exchangeCreditUsages ExchangeCreditUsage[]
 
   @@unique([companyId, saleNumber])
   @@index([companyId, branchId, createdAt])
@@ -870,8 +882,9 @@ model ReturnOrder {
   sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict, map: "return_orders_sale_fkey")
   customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull, map: "return_orders_customer_fkey")
   warehouse Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
-  createdBy User       @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
-  items     ReturnItem[]
+  createdBy      User            @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
+  items          ReturnItem[]
+  exchangeCredit ExchangeCredit?
 
   @@unique([companyId, returnNumber], map: "return_orders_company_number_key")
   @@index([companyId, createdAt], map: "return_orders_company_date_idx")
@@ -902,6 +915,42 @@ model ReturnItem {
   @@index([returnOrderId], map: "return_items_order_idx")
   @@index([saleItemId], map: "return_items_sale_item_idx")
   @@map("return_items")
+}
+
+model ExchangeCredit {
+  id             String               @id @default(cuid())
+  companyId      String
+  returnOrderId  String               @unique
+  customerId     String?
+  originalAmount Decimal              @db.Decimal(14, 2)
+  balance        Decimal              @db.Decimal(14, 2)
+  status         ExchangeCreditStatus @default(OPEN)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  company     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  returnOrder ReturnOrder           @relation(fields: [returnOrderId], references: [id], onDelete: Restrict)
+  customer    Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  usages      ExchangeCreditUsage[]
+
+  @@index([companyId, status, createdAt])
+  @@index([customerId, status])
+  @@map("exchange_credits")
+}
+
+model ExchangeCreditUsage {
+  id               String   @id @default(cuid())
+  exchangeCreditId String
+  saleId           String
+  amount           Decimal  @db.Decimal(14, 2)
+  createdAt        DateTime @default(now())
+
+  exchangeCredit ExchangeCredit @relation(fields: [exchangeCreditId], references: [id], onDelete: Restrict)
+  sale           Sale           @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@unique([exchangeCreditId, saleId])
+  @@index([saleId])
+  @@map("exchange_credit_usages")
 }
 
 model StockTransfer {
