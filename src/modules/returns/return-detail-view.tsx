@@ -86,7 +86,7 @@ export function ReturnDetailView({
   const receipt: ReturnReceiptData = {
     company,
     returnNumber: detail.returnNumber,
-    type: detail.type,
+    type: detail.type as "RETURN" | "EXCHANGE",
     createdAt: detail.createdAt,
     createdBy: detail.createdBy,
     reason: detail.reason,
