@@ -31,6 +31,13 @@ import {
 
 const FAVORITES_STORAGE_KEY = "mobix:pos:favorites";
 
+type PosScanMatch = {
+  matchType: "IDENTIFIER" | "BARCODE" | "SKU";
+  identifierType: string | null;
+  matchedValue: string | null;
+  item: PosCatalogItem;
+};
+
 function normalizeCustomerSearch(value: string) {
   return value
     .normalize("NFD")
@@ -61,6 +68,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const previousTotalRef = useRef(0);
   const productSearchCacheRef = useRef(new Map<string, PosCatalogItem[]>());
   const customerSearchCacheRef = useRef(new Map<string, PosCustomer[]>());
+  const scanNoticeTimeoutRef = useRef<number | null>(null);
 
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
@@ -68,6 +76,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const [favoriteVariantIds, setFavoriteVariantIds] = useState<Set<string>>(new Set());
   const [searchResults, setSearchResults] = useState<PosCatalogItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isResolvingScan, setIsResolvingScan] = useState(false);
+  const [scanNotice, setScanNotice] = useState("");
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
@@ -89,6 +99,14 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     { id: "payment-1", method: "CASH", amount: 0, reference: "" },
   ]);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (scanNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(scanNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -337,12 +355,6 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       if (!response.ok) throw new Error("No se pudieron cargar los IMEI disponibles.");
       const data = await response.json() as { units: PosUnit[] };
       setUnitsByVariant((current) => ({ ...current, [cacheKey]: data.units }));
-      if (data.units[0]) {
-        setUnitSelections((current) => ({
-          ...current,
-          [variantId]: current[variantId] || data.units[0].id,
-        }));
-      }
       return data.units;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudieron cargar los equipos disponibles.");
@@ -368,6 +380,17 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     setError("");
   }
 
+  function showScanNotice(message: string) {
+    setScanNotice(message);
+    if (scanNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(scanNoticeTimeoutRef.current);
+    }
+    scanNoticeTimeoutRef.current = window.setTimeout(() => {
+      setScanNotice("");
+      scanNoticeTimeoutRef.current = null;
+    }, 1800);
+  }
+
   function resetProductSearchAfterAdd() {
     setQuery("");
     setSearchResults([]);
@@ -376,7 +399,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     });
   }
 
-  async function addItem(item: PosCatalogItem) {
+  async function addItem(item: PosCatalogItem, directUnit?: PosUnit) {
     const stock = stockFor(item, warehouseId);
     if (item.type !== "SERVICE" && stock <= 0) {
       setError("Este producto no tiene stock disponible en la sucursal seleccionada.");
@@ -385,21 +408,38 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
       const cacheKey = item.variantId + ":" + warehouseId;
-      const preferredMatchedUnit = item.units.find((unit) => unit.warehouseId === warehouseId);
-      const availableUnits = unitsByVariant[cacheKey] ?? await loadUnits(item.variantId);
-      const selectedId = unitSelections[item.variantId] || preferredMatchedUnit?.id || availableUnits[0]?.id;
-      const selected = availableUnits.find((unit) => unit.id === selectedId);
+      const matchedUnit = directUnit
+        ?? item.units.find((unit) => unit.warehouseId === warehouseId);
+
+      let selected = matchedUnit;
 
       if (!selected) {
-        setError("Selecciona un IMEI o serie disponible.");
-        return;
+        let availableUnits = unitsByVariant[cacheKey];
+        if (!availableUnits) {
+          availableUnits = await loadUnits(item.variantId);
+        }
+
+        const selectedId = unitSelections[item.variantId];
+        selected = availableUnits.find((unit) => unit.id === selectedId);
+
+        if (!selected) {
+          setError("Selecciona el IMEI o serie exacto del equipo antes de agregarlo.");
+          return;
+        }
       }
+
       if (cart.some((line) => line.selectedUnitIds.includes(selected.id))) {
         setError("Ese IMEI/equipo ya está agregado a la venta.");
         return;
       }
 
       setUnitSelections((current) => ({ ...current, [item.variantId]: selected.id }));
+      setUnitsByVariant((current) => {
+        const existing = current[cacheKey] ?? [];
+        return existing.some((unit) => unit.id === selected.id)
+          ? current
+          : { ...current, [cacheKey]: [selected, ...existing] };
+      });
       setCart((current) => [...current, {
         key: selected.id,
         variantId: item.variantId,
@@ -439,6 +479,57 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     });
     setError("");
     resetProductSearchAfterAdd();
+  }
+
+  async function submitProductSearch(value: string, fallback?: PosCatalogItem) {
+    const normalized = value.trim();
+    if (!normalized || isResolvingScan) return;
+
+    setIsResolvingScan(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        value: normalized,
+        warehouseId,
+      });
+      const response = await fetch("/api/pos/scan?" + params.toString(), {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo resolver el código escaneado.");
+      }
+
+      const data = await response.json() as { match: PosScanMatch | null };
+
+      if (data.match) {
+        const scannedUnit = data.match.matchType === "IDENTIFIER"
+          ? data.match.item.units.find((unit) => unit.warehouseId === warehouseId)
+          : undefined;
+
+        await addItem(data.match.item, scannedUnit);
+
+        if (data.match.matchType === "IDENTIFIER" && scannedUnit) {
+          showScanNotice(unitLabel(scannedUnit) + " agregado a la venta.");
+        } else {
+          showScanNotice(data.match.item.name + " agregado a la venta.");
+        }
+        return;
+      }
+
+      if (fallback) {
+        await addItem(fallback);
+        return;
+      }
+
+      setError("No encontramos un producto, IMEI, serie o código disponible con ese valor.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo procesar el escaneo.");
+    } finally {
+      setIsResolvingScan(false);
+    }
   }
 
   function updateQuantity(key: string, quantity: number) {
@@ -670,6 +761,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
           unitsByVariant={unitsByVariant}
           loadingUnits={loadingUnits}
           isSearching={isSearching}
+          isResolvingScan={isResolvingScan}
+          scanNotice={scanNotice}
           onQueryChange={setQuery}
           onFilterChange={setActiveFilter}
           onToggleFavorite={toggleFavorite}
@@ -677,6 +770,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
           onUnitSelectionChange={(variantId, unitId) =>
             setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
           onAdd={addItem}
+          onSubmitSearch={submitProductSearch}
         />
 
         <aside className="pos-checkout">
