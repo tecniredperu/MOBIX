@@ -12,6 +12,15 @@ test("la garantía del IMEI queda congelada al momento de la venta", async () =>
     },
   });
 
+  await testDb.companySettings.create({
+    data: {
+      companyId: company.id,
+      taxRate: 18,
+      defaultTaxCondition: "TAXED",
+      requireCashSession: false,
+    },
+  });
+
   const branch = await testDb.branch.create({
     data: {
       companyId: company.id,
