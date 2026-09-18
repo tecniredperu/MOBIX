@@ -6,6 +6,7 @@ import {
   FileText,
   MapPin,
   ReceiptText,
+  RotateCcw,
   ShieldCheck,
   ShieldX,
   Smartphone,
@@ -82,6 +83,15 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
           {device.sale && (
             <Link href={"/ventas/" + device.sale.id} className="secondary-button">
               <ReceiptText size={16} /> Ver venta
+            </Link>
+          )}
+          {device.status === "SOLD" && (
+            <Link
+              href={"/devoluciones/nueva?unitId=" + encodeURIComponent(device.id)}
+              className="secondary-button"
+            >
+              <RotateCcw size={16} />
+              Devolver / cambiar
             </Link>
           )}
           {device.status === "SOLD" && identifier && (
@@ -220,6 +230,50 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
             <FileText size={20} />
             <strong>Sin atenciones registradas</strong>
             <span>Cuando el equipo ingrese por garantía o servicio técnico aparecerá aquí.</span>
+          </div>
+        )}
+      </section>
+
+      <section className="panel device-history-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Devoluciones y cambios</h2>
+            <p>Historial comercial del equipo y destino asignado al IMEI cuando regresó a tienda.</p>
+          </div>
+          <RotateCcw size={20} />
+        </div>
+
+        {device.returns.length ? (
+          <div className="device-return-history">
+            {device.returns.map((entry) => {
+              const dispositionLabel = entry.disposition === "RESTOCK"
+                ? "Apto para venta"
+                : entry.disposition === "DAMAGED"
+                  ? "Dañado / no vendible"
+                  : "En revisión";
+              return (
+                <div className="device-return-row" key={entry.id}>
+                  <div className="device-service-icon"><RotateCcw size={17} /></div>
+                  <div>
+                    <strong>{entry.returnNumber}</strong>
+                    <span>{entry.reason}</span>
+                  </div>
+                  <div>
+                    <span>{entry.type === "EXCHANGE" ? "Cambio" : "Devolución"}</span>
+                    <small>{date(entry.createdAt)}</small>
+                  </div>
+                  <span className={"device-return-disposition " + entry.disposition.toLowerCase()}>
+                    {dispositionLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="device-detail-empty">
+            <RotateCcw size={20} />
+            <strong>Sin devoluciones ni cambios</strong>
+            <span>Este IMEI no registra reingresos comerciales.</span>
           </div>
         )}
       </section>
