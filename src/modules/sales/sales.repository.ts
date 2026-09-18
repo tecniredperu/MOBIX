@@ -311,6 +311,9 @@ export async function getSaleDetail(id: string) {
           imei1: identifiers.get("IMEI_1") ?? null,
           imei2: identifiers.get("IMEI_2") ?? null,
           serial: identifiers.get("SERIAL") ?? null,
+          warrantyDays: link.warrantyDays,
+          warrantyStartsAt: link.warrantyStartsAt?.toISOString() ?? null,
+          warrantyExpiresAt: link.warrantyExpiresAt?.toISOString() ?? null,
         };
       }),
     })),
