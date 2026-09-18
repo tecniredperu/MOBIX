@@ -15,6 +15,7 @@ const MOVEMENT_TYPES = new Set<CashMovementKind>([
 ]);
 
 type CashCollectionRow = { amount: unknown };
+type CashRefundRow = { id: string; amount: unknown };
 type CashSessionLockRow = {
   id: string;
   branchId: string;
@@ -163,7 +164,7 @@ export async function closeCashSessionAction(input: {
     const session = locked[0];
     if (!session) throw new Error("La caja ya fue cerrada o pertenece a otro usuario.");
 
-    const [cashPayments, cashCollections, movements] = await Promise.all([
+    const [cashPayments, cashCollections, directCashRefunds, exchangeCashRefunds, movements] = await Promise.all([
       tx.salePayment.findMany({
         where: {
           paymentMethod: "CASH",
@@ -171,7 +172,7 @@ export async function closeCashSessionAction(input: {
             companyId: company.id,
             branchId: session.branchId,
             sellerId: session.userId,
-            status: "COMPLETED",
+            status: { in: ["COMPLETED", "REFUNDED"] },
             createdAt: { gte: session.openedAt },
           },
         },
@@ -184,25 +185,60 @@ export async function closeCashSessionAction(input: {
           AND rp."cashSessionId" = ${session.id}
           AND rp."paymentMethod" = 'CASH'::"PaymentMethod"
       `,
+      tx.$queryRaw<CashRefundRow[]>`
+        SELECT ro."id", ro."refundAmount" AS "amount"
+        FROM "return_orders" ro
+        WHERE ro."companyId" = ${company.id}
+          AND ro."refundCashSessionId" = ${session.id}
+          AND ro."type" = 'RETURN'
+          AND ro."status" = 'COMPLETED'
+          AND ro."refundMethod" = 'CASH'
+          AND ro."refundAmount" > 0
+      `,
+      tx.$queryRaw<CashRefundRow[]>`
+        SELECT ec."id", ec."refundedAmount" AS "amount"
+        FROM "exchange_credits" ec
+        WHERE ec."companyId" = ${company.id}
+          AND ec."refundCashSessionId" = ${session.id}
+          AND ec."refundMethod" = 'CASH'::"PaymentMethod"
+          AND ec."refundedAmount" > 0
+      `,
       tx.cashMovement.findMany({
         where: { companyId: company.id, cashSessionId: session.id },
-        select: { type: true, amount: true },
+        select: { type: true, amount: true, reference: true },
       }),
     ]);
 
     const cashSales = roundMoney(cashPayments.reduce((sum, payment) => sum + Number(payment.amount), 0));
     const receivableCash = roundMoney(cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0));
+    const directRefundCash = roundMoney(
+      directCashRefunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+    );
+    const exchangeRefundCash = roundMoney(
+      exchangeCashRefunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+    );
+    const automaticRefundReferences = new Set([
+      ...directCashRefunds.map((refund) => refund.id),
+      ...exchangeCashRefunds.map((refund) => refund.id),
+    ]);
+
     let manualIn = 0;
     let manualOut = 0;
-
     for (const movement of movements) {
+      if (movement.reference && automaticRefundReferences.has(movement.reference)) continue;
       const amount = Number(movement.amount);
       if (movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN") manualIn += amount;
       else manualOut += amount;
     }
 
     const expectedAmount = roundMoney(
-      Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut,
+      Number(session.openingAmount)
+        + cashSales
+        + receivableCash
+        - directRefundCash
+        - exchangeRefundCash
+        + manualIn
+        - manualOut,
     );
     const difference = roundMoney(actualAmount - expectedAmount);
     const closedAt = new Date();
@@ -234,6 +270,8 @@ export async function closeCashSessionAction(input: {
           difference,
           cashSales,
           receivableCash,
+          directRefundCash,
+          exchangeRefundCash,
           manualIn: roundMoney(manualIn),
           manualOut: roundMoney(manualOut),
         },
@@ -245,6 +283,7 @@ export async function closeCashSessionAction(input: {
       expectedAmount,
       actualAmount,
       difference,
+      cashRefunds: roundMoney(directRefundCash + exchangeRefundCash),
       closedAt: closedAt.toISOString(),
     };
   });
