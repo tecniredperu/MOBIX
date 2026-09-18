@@ -725,6 +725,17 @@ export function PosFormV4({
       return;
     }
 
+    const missingReference = effectivePayments.find((payment) =>
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
+      && !payment.reference?.trim());
+    if (missingReference) {
+      const label = missingReference.method === "CARD"
+        ? "Tarjeta"
+        : missingReference.method.charAt(0) + missingReference.method.slice(1).toLowerCase();
+      setError("Ingresa el número de operación o referencia para " + label + ".");
+      return;
+    }
+
     if (coverage.invalidOverpayment) {
       setError("El exceso de pago solo puede entregarse como vuelto cuando proviene de efectivo.");
       return;
