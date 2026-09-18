@@ -59,6 +59,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const previousTotalRef = useRef(0);
+  const productSearchCacheRef = useRef(new Map<string, PosCatalogItem[]>());
+  const customerSearchCacheRef = useRef(new Map<string, PosCustomer[]>());
 
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
@@ -136,6 +138,14 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       return;
     }
 
+    const cacheKey = warehouseId + "|" + normalizeCustomerSearch(normalized);
+    const cached = productSearchCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSearchResults(cached);
+      setIsSearching(false);
+      return;
+    }
+
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setIsSearching(true);
@@ -150,6 +160,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         });
         if (!response.ok) throw new Error("No se pudo buscar el catálogo.");
         const data = await response.json() as { items: PosCatalogItem[] };
+        productSearchCacheRef.current.set(cacheKey, data.items);
         setSearchResults(data.items);
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
@@ -173,6 +184,14 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       return;
     }
 
+    const cacheKey = normalizeCustomerSearch(normalized);
+    const cached = customerSearchCacheRef.current.get(cacheKey);
+    if (cached) {
+      setCustomerSearchResults(cached);
+      setIsSearchingCustomers(false);
+      return;
+    }
+
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setIsSearchingCustomers(true);
@@ -185,6 +204,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         if (!response.ok) throw new Error("No se pudo buscar clientes.");
 
         const data = await response.json() as { items: PosCustomer[] };
+        customerSearchCacheRef.current.set(cacheKey, data.items);
         setCustomerSearchResults(data.items);
         setAvailableCustomers((current) => {
           const merged = new Map(current.map((customer) => [customer.id, customer]));
@@ -609,6 +629,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
               setUnitsByVariant({});
               setUnitSelections({});
               setSearchResults([]);
+              productSearchCacheRef.current.clear();
             }}
             disabled={cart.length > 0}
           >
