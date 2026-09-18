@@ -170,10 +170,8 @@ export async function closeCashSessionAction(input: {
           paymentMethod: "CASH",
           sale: {
             companyId: company.id,
-            branchId: session.branchId,
-            sellerId: session.userId,
+            cashSessionId: session.id,
             status: { in: ["COMPLETED", "REFUNDED"] },
-            createdAt: { gte: session.openedAt },
           },
         },
         select: { amount: true },
