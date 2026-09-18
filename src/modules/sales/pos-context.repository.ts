@@ -337,3 +337,63 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
     .sort((a, b) => catalogSearchScore(b, query) - catalogSearchScore(a, query) || a.name.localeCompare(b.name, "es"))
     .slice(0, 80);
 }
+
+
+export async function searchPosCustomers(q: string) {
+  const company = await getActiveCompany();
+  const query = q.trim();
+  if (query.length < 2) return [];
+
+  const tokens = searchTokens(query);
+  const customers = await prisma.customer.findMany({
+    where: {
+      companyId: company.id,
+      status: "ACTIVE",
+      AND: tokens.map((token) => ({
+        OR: [
+          { documentNumber: { contains: token, mode: "insensitive" as const } },
+          { businessName: { contains: token, mode: "insensitive" as const } },
+          { firstName: { contains: token, mode: "insensitive" as const } },
+          { lastName: { contains: token, mode: "insensitive" as const } },
+          { phone: { contains: token, mode: "insensitive" as const } },
+          { whatsapp: { contains: token, mode: "insensitive" as const } },
+        ],
+      })),
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 30,
+  });
+
+  if (!customers.length) return [];
+
+  const outstandingRows = await prisma.accountReceivable.groupBy({
+    by: ["customerId"],
+    where: {
+      companyId: company.id,
+      customerId: { in: customers.map((customer) => customer.id) },
+      status: { in: ["OPEN", "PARTIAL"] },
+    },
+    _sum: { balance: true },
+  });
+
+  const outstandingMap = new Map(
+    outstandingRows.map((row) => [row.customerId, Number(row._sum.balance ?? 0)]),
+  );
+
+  return customers.map((customer): PosCustomer => {
+    const creditLimit = Number(customer.creditLimit ?? 0);
+    const outstanding = outstandingMap.get(customer.id) ?? 0;
+    return {
+      id: customer.id,
+      documentType: customer.documentType,
+      documentNumber: customer.documentNumber,
+      name: customerDisplayName(customer, "Cliente"),
+      phone: customer.whatsapp ?? customer.phone,
+      creditEnabled: customer.creditEnabled,
+      creditLimit,
+      creditDays: Number(customer.creditDays ?? 30),
+      outstanding,
+      availableCredit: Math.max(0, creditLimit - outstanding),
+    };
+  });
+}
