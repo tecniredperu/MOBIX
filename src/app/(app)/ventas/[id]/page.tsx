@@ -21,6 +21,10 @@ export default async function SaleDetailPage({
   const changeParam = Array.isArray(query.change) ? query.change[0] : query.change;
   const parsedChange = Number(changeParam ?? 0);
   const change = Number.isFinite(parsedChange) ? Math.max(0, parsedChange) : 0;
+  const exchangeCreditId = Array.isArray(query.exchangeCredit) ? query.exchangeCredit[0] : query.exchangeCredit;
+  const exchangeBalanceParam = Array.isArray(query.exchangeBalance) ? query.exchangeBalance[0] : query.exchangeBalance;
+  const parsedExchangeBalance = Number(exchangeBalanceParam ?? 0);
+  const exchangeBalance = Number.isFinite(parsedExchangeBalance) ? Math.max(0, parsedExchangeBalance) : 0;
   const company = {
     businessName: context.company.businessName,
     tradeName: context.company.tradeName,
@@ -37,6 +41,8 @@ export default async function SaleDetailPage({
         sale={sale}
         created={created}
         change={change}
+        exchangeCreditId={exchangeCreditId ?? null}
+        exchangeBalance={exchangeBalance}
         company={company}
         ticketFooter={context.settings.ticketFooter}
       />
