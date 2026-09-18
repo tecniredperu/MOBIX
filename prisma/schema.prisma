@@ -917,15 +917,20 @@ model ReturnItem {
 }
 
 model ExchangeCredit {
-  id             String               @id @default(cuid())
-  companyId      String
-  returnOrderId  String               @unique
-  customerId     String?
-  originalAmount Decimal              @db.Decimal(14, 2)
-  balance        Decimal              @db.Decimal(14, 2)
-  status         ExchangeCreditStatus @default(OPEN)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id              String               @id @default(cuid())
+  companyId       String
+  returnOrderId   String               @unique
+  customerId      String?
+  originalAmount  Decimal              @db.Decimal(14, 2)
+  balance         Decimal              @db.Decimal(14, 2)
+  status          ExchangeCreditStatus @default(OPEN)
+  refundedAmount  Decimal              @default(0) @db.Decimal(14, 2)
+  refundMethod    PaymentMethod?
+  refundReference String?
+  refundedAt      DateTime?
+  refundedById    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   company     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   returnOrder ReturnOrder           @relation(fields: [returnOrderId], references: [id], onDelete: Restrict)
