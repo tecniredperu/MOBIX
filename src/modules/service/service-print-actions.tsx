@@ -91,7 +91,7 @@ function ServicePrintCopy({
         <div><span>Fecha de recepción</span><strong>{dateTime(order.receivedAt)}</strong></div>
         <div><span>Tipo de atención</span><strong>{order.serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</strong></div>
         <div><span>Estado</span><strong>{STATUS_LABELS[order.status as ServiceStatus] ?? order.status}</strong></div>
-        <div><span>Entrega estimada</span><strong>{dateTime(order.expectedAt)}</strong></div>
+        <div><span>Venta / garantía</span><strong>{order.saleNumber || "No vinculada"}</strong>{order.warrantyExpiresAt && <small>Hasta {dateTime(order.warrantyExpiresAt)}</small>}</div>
       </div>
 
       <div className="service-a4-two-cols">
@@ -153,6 +153,8 @@ export function ServicePrintActions({
     status: order.status,
     receivedAt: order.receivedAt,
     expectedAt: order.expectedAt,
+    saleNumber: order.saleNumber,
+    warrantyExpiresAt: order.warrantyExpiresAt,
     deviceName: order.deviceName,
     brand: order.brand,
     model: order.model,
