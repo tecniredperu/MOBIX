@@ -67,11 +67,18 @@ export function PosCatalogPanel({
             id="pos-product-search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && items[0]) {
+                event.preventDefault();
+                void onAdd(items[0]);
+              }
+            }}
             placeholder="Buscar producto, código, IMEI, serie, marca o modelo..."
             autoComplete="off"
             spellCheck={false}
             autoFocus
           />
+          <kbd>Enter</kbd>
           <kbd>F2</kbd>
           {isSearching && <span className="pos-search-state">Buscando…</span>}
         </div>
