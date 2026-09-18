@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { getReturnDetail } from "./returns.repository";
 import { ReturnDetailActions } from "./return-detail-actions";
+import type { ReturnReceiptData } from "./return-receipt-pdf";
 
 type ReturnDetail = NonNullable<Awaited<ReturnType<typeof getReturnDetail>>>;
 
@@ -82,6 +83,64 @@ export function ReturnDetailView({
     && detail.exchangeCredit.balance > 0.01,
   );
 
+  const receipt: ReturnReceiptData = {
+    company,
+    returnNumber: detail.returnNumber,
+    type: detail.type,
+    createdAt: detail.createdAt,
+    createdBy: detail.createdBy,
+    reason: detail.reason,
+    notes: detail.notes,
+    warehouse: {
+      branch: detail.warehouse.branch,
+      name: detail.warehouse.name,
+    },
+    customer: detail.customer
+      ? {
+          name: detail.customer.name,
+          documentType: detail.customer.documentType,
+          documentNumber: detail.customer.documentNumber,
+          phone: detail.customer.phone,
+        }
+      : null,
+    sale: {
+      saleNumber: detail.sale.saleNumber,
+      documentSeries: detail.sale.documentSeries,
+      documentNumber: detail.sale.documentNumber,
+    },
+    items: detail.items.map((item) => ({
+      product: item.product,
+      brand: item.brand,
+      variant: item.variant,
+      quantity: item.quantity,
+      identifier: item.identifier,
+      disposition: item.disposition,
+      amount: item.amount,
+    })),
+    refund: {
+      amount: detail.refundAmount,
+      method: detail.refundMethod,
+    },
+    exchangeCredit: detail.exchangeCredit
+      ? {
+          originalAmount: detail.exchangeCredit.originalAmount,
+          balance: detail.exchangeCredit.balance,
+          status: detail.exchangeCredit.status,
+          refundedAmount: detail.exchangeCredit.refundedAmount,
+          refundMethod: detail.exchangeCredit.refundMethod,
+          refundReference: detail.exchangeCredit.refundReference,
+          usages: detail.exchangeCredit.usages.map((usage) => ({
+            saleNumber: usage.sale.saleNumber,
+            amount: usage.amount,
+            units: usage.sale.units.map((unit) => ({
+              product: unit.product,
+              identifier: unit.identifier,
+            })),
+          })),
+        }
+      : null,
+  };
+
   return (
     <div className="page-stack return-detail-page">
       <section className="page-heading return-detail-heading">
@@ -98,6 +157,7 @@ export function ReturnDetailView({
         <ReturnDetailActions
           exchangeCreditId={detail.exchangeCredit?.id}
           exchangeBalance={detail.exchangeCredit?.balance}
+          receipt={receipt}
         />
       </section>
 
