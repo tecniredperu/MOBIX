@@ -270,6 +270,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     setPayments((current) => {
       if (current.length !== 1) return current;
       const payment = current[0];
+      if (payment.method === "CASH") return current;
       const amount = Number(payment.amount || 0);
       const wasAutoAmount = amount <= 0.009 || Math.abs(amount - previousTotal) <= 0.009;
       if (!wasAutoAmount) return current;
@@ -451,7 +452,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     setPayments([{
       id: "payment-1",
       method,
-      amount: totals.total,
+      amount: method === "CASH" ? 0 : totals.total,
       reference: "",
     }]);
     setError("");
