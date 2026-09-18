@@ -12,6 +12,7 @@ export type CashPaymentMethod =
   | "CARD"
   | "TRANSFER"
   | "CREDIT"
+  | "EXCHANGE_CREDIT"
   | "OTHER";
 
 export type CashBranchOption = {
@@ -24,7 +25,7 @@ export type CashPaymentTotals = Record<CashPaymentMethod, number>;
 
 export type CashActivityItem = {
   id: string;
-  source: "SALE" | "MANUAL";
+  source: "SALE" | "COLLECTION" | "REFUND" | "MANUAL";
   direction: "IN" | "OUT" | "NEUTRAL";
   label: string;
   detail: string;
@@ -43,10 +44,13 @@ export type CashOpenSession = {
   openingAmount: number;
   openingNotes: string | null;
   paymentTotals: CashPaymentTotals;
+  refundTotals: CashPaymentTotals;
+  netPaymentTotals: CashPaymentTotals;
   salesCount: number;
   salesTotal: number;
   manualIncome: number;
   manualOut: number;
+  refundTotal: number;
   expectedCash: number;
   activity: CashActivityItem[];
 };
