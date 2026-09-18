@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
 import { isValidMoney, roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { calculateExpectedCash } from "./cash-calculations";
 import type { CashMovementKind } from "./cash-types";
 
 const MOVEMENT_TYPES = new Set<CashMovementKind>([
@@ -229,15 +230,13 @@ export async function closeCashSessionAction(input: {
       else manualOut += amount;
     }
 
-    const expectedAmount = roundMoney(
-      Number(session.openingAmount)
-        + cashSales
-        + receivableCash
-        - directRefundCash
-        - exchangeRefundCash
-        + manualIn
-        - manualOut,
-    );
+    const expectedAmount = calculateExpectedCash({
+      openingAmount: Number(session.openingAmount),
+      cashCollected: roundMoney(cashSales + receivableCash),
+      cashRefunded: roundMoney(directRefundCash + exchangeRefundCash),
+      manualIncome: manualIn,
+      manualOut,
+    });
     const difference = roundMoney(actualAmount - expectedAmount);
     const closedAt = new Date();
 
