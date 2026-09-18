@@ -202,8 +202,9 @@ export async function createReturnAction(input: CreateReturnInput) {
     }
 
     let cashSessionId: string | null = null;
-    const financialRefund = input.type === "RETURN" && input.refundMethod !== "CREDIT";
-    if (financialRefund && (input.refundMethod === "CASH" || settings.requireCashSession)) {
+    const trackRefundInSession =
+      input.type === "RETURN" && (input.refundMethod === "CASH" || settings.requireCashSession);
+    if (trackRefundInSession) {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
