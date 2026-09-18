@@ -81,6 +81,12 @@ export function SaleDetailActions({
   const message = encodeURIComponent(plainMessage);
 
   useEffect(() => {
+    if (created && typeof window !== "undefined") {
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    }
+  }, [created]);
+
+  useEffect(() => {
     if (!completionOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
