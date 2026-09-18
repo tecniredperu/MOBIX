@@ -202,9 +202,7 @@ export async function createReturnAction(input: CreateReturnInput) {
     }
 
     let cashSessionId: string | null = null;
-    const trackRefundInSession =
-      input.type === "RETURN" && (input.refundMethod === "CASH" || settings.requireCashSession);
-    if (trackRefundInSession) {
+    if (input.type === "RETURN") {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
@@ -216,15 +214,15 @@ export async function createReturnAction(input: CreateReturnInput) {
         LIMIT 1
         FOR UPDATE
       `;
-      const session = sessions[0];
-      if (!session) {
+      cashSessionId = sessions[0]?.id ?? null;
+
+      if (!cashSessionId && (input.refundMethod === "CASH" || settings.requireCashSession)) {
         throw new Error(
           input.refundMethod === "CASH"
             ? "Para devolver dinero en efectivo debes tener una caja abierta en la sucursal de la venta."
             : "Debes tener una caja abierta en la sucursal de la venta para registrar esta devolución y conciliar el medio de pago.",
         );
       }
-      cashSessionId = session.id;
     }
 
     let creditReceivable: ReceivableLockRow | null = null;
@@ -549,7 +547,7 @@ export async function refundExchangeCreditAction(input: {
     if (amount <= 0.01) throw new Error("El vale ya no tiene saldo por devolver.");
 
     let cashSessionId: string | null = null;
-    if (input.method === "CASH" || settings.requireCashSession) {
+    {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
@@ -562,7 +560,8 @@ export async function refundExchangeCreditAction(input: {
         FOR UPDATE
       `;
       cashSessionId = sessions[0]?.id ?? null;
-      if (!cashSessionId) {
+
+      if (!cashSessionId && (input.method === "CASH" || settings.requireCashSession)) {
         throw new Error(
           input.method === "CASH"
             ? "Para devolver el saldo en efectivo debes tener una caja abierta en la sucursal de la venta original."
