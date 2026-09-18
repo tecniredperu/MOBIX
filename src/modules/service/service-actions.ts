@@ -132,13 +132,19 @@ export async function createServiceOrderAction(input: {
     variantId = unit.variantId;
     purchaseCost = Number(unit.purchaseCost);
 
-    const warrantyDays = unit.product.warrantyDays > 0
-      ? unit.product.warrantyDays
-      : settings.defaultWarrantyDays;
-    if (warrantyDays > 0) {
-      warrantyExpiresAt = new Date(sale.createdAt.getTime() + warrantyDays * 86_400_000);
-      warrantyCovered = warrantyExpiresAt.getTime() >= Date.now();
-    }
+    const warrantyDays = latestLink.warrantyDays > 0
+      ? latestLink.warrantyDays
+      : unit.product.warrantyDays > 0
+        ? unit.product.warrantyDays
+        : settings.defaultWarrantyDays;
+    const warrantyStartsAt = latestLink.warrantyStartsAt ?? sale.createdAt;
+    warrantyExpiresAt = latestLink.warrantyExpiresAt
+      ?? (warrantyDays > 0
+        ? new Date(warrantyStartsAt.getTime() + warrantyDays * 86_400_000)
+        : null);
+    warrantyCovered = Boolean(
+      warrantyExpiresAt && warrantyExpiresAt.getTime() >= Date.now(),
+    );
     if (input.serviceType === "WARRANTY" && !warrantyCovered) {
       throw new Error("La garantía configurada para este equipo ya venció o el producto no tiene días de garantía definidos.");
     }
