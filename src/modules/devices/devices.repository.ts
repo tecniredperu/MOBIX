@@ -146,6 +146,7 @@ export async function getDeviceDetail(id: string) {
               reason: true,
               refundMethod: true,
               refundAmount: true,
+              status: true,
               createdAt: true,
             },
           },
@@ -168,9 +169,16 @@ export async function getDeviceDetail(id: string) {
   const warrantyStartsAt = latestLink?.warrantyStartsAt ?? sale?.createdAt ?? null;
   const warrantyExpiresAt = latestLink?.warrantyExpiresAt
     ?? (warrantyStartsAt ? addDays(warrantyStartsAt, warrantyDays) : null);
+  const latestSaleReturned = Boolean(
+    latestLink && unit.returnItems.some((item) =>
+      item.saleItemId === latestLink.saleItemId
+      && item.returnOrder.status === "COMPLETED"),
+  );
   const now = Date.now();
   const warrantyActive = Boolean(
-    warrantyExpiresAt && warrantyExpiresAt.getTime() >= now,
+    !latestSaleReturned
+    && warrantyExpiresAt
+    && warrantyExpiresAt.getTime() >= now,
   );
 
   return {
@@ -216,6 +224,7 @@ export async function getDeviceDetail(id: string) {
           documentNumber: sale.documentNumber,
           soldAt: sale.createdAt.toISOString(),
           seller: sale.seller.name,
+          returned: latestSaleReturned,
           customer: sale.customer
             ? {
                 id: sale.customer.id,
