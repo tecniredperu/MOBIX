@@ -550,11 +550,13 @@ export async function createSaleAction(input: CreateSaleInput) {
         Math.max(0, Number(exchangeCreditLock.balance ?? 0) - exchangeCreditUsed),
       );
 
+      const exchangeCustomerId = exchangeCreditLock.customerId ?? customerId;
       await tx.exchangeCredit.update({
         where: { id: exchangeCreditLock.id },
         data: {
           balance: exchangeCreditBalance,
           status: exchangeCreditBalance <= 0.01 ? "USED" : "PARTIAL",
+          ...(exchangeCustomerId ? { customerId: exchangeCustomerId } : {}),
         },
       });
 
