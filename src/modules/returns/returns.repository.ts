@@ -21,6 +21,12 @@ export async function getReturns() {
       customer: { select: { businessName: true, firstName: true, lastName: true } },
       warehouse: { select: { name: true } },
       createdBy: { select: { name: true } },
+      items: {
+        select: {
+          productUnitId: true,
+          disposition: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 150,
@@ -38,6 +44,11 @@ export async function getReturns() {
     customer: customerName(row.customer),
     warehouse: row.warehouse.name,
     userName: row.createdBy.name,
+    serializedDisposition: {
+      restock: row.items.filter((item) => item.productUnitId && item.disposition === "RESTOCK").length,
+      quarantine: row.items.filter((item) => item.productUnitId && item.disposition === "QUARANTINE").length,
+      damaged: row.items.filter((item) => item.productUnitId && item.disposition === "DAMAGED").length,
+    },
   }));
 }
 
