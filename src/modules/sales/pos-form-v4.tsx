@@ -418,6 +418,13 @@ export function PosFormV4({
   }
 
   function handleCustomerCreated(customer: PosCustomer) {
+    if (
+      initialExchangeCredit?.customer
+      && customer.id !== initialExchangeCredit.customer.id
+    ) {
+      setError("Este vale de cambio ya está asociado a " + initialExchangeCredit.customer.name + ".");
+      return;
+    }
     setAvailableCustomers((current) => current.some((item) => item.id === customer.id)
       ? current
       : [customer, ...current]);
@@ -847,6 +854,7 @@ export function PosFormV4({
             selectedCustomer={selectedCustomer}
             documentType={documentType}
             taxCondition={taxCondition}
+            customerLocked={Boolean(initialExchangeCredit?.customer)}
             onCustomerQueryChange={setCustomerQuery}
             onExistingCustomerChange={selectExistingCustomer}
             onAddCustomer={() => setCustomerModalOpen(true)}
