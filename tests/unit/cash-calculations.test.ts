@@ -5,7 +5,7 @@ import {
   calculateNetPaymentTotals,
   emptyCashPaymentTotals,
   sumPaymentTotals,
-} from "@/modules/cash/cash-calculations";
+} from "../../src/modules/cash/cash-calculations";
 
 test("caja descuenta devoluciones de efectivo sin duplicar egresos", () => {
   const expected = calculateExpectedCash({
