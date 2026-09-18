@@ -31,10 +31,20 @@ export function ServiceDetailView({
   order,
   technicians,
   created,
+  company,
 }: {
   order: any;
   technicians: Array<{ id: string; name: string }>;
   created: boolean;
+  company: {
+    businessName: string;
+    tradeName: string | null;
+    ruc: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    logoUrl: string | null;
+  };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -82,7 +92,7 @@ export function ServiceDetailView({
           <h1>{order.deviceName}</h1>
           <p>{order.identifier ?? "Sin IMEI/serie"} · Recibido {dateTime(order.receivedAt)}</p>
         </div>
-        <ServicePrintActions order={order} />
+        <ServicePrintActions order={order} company={company} />
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Recepción registrada</strong><span>La orden {order.serviceNumber} quedó vinculada al cliente y al equipo.</span></div></div>}
