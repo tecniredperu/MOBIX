@@ -58,3 +58,34 @@ ALTER TABLE "exchange_credit_usages"
 ALTER TABLE "exchange_credit_usages"
   ADD CONSTRAINT "exchange_credit_usages_saleId_fkey"
   FOREIGN KEY ("saleId") REFERENCES "sales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+
+-- Backfill de cambios ya existentes para no perder trazabilidad al desplegar.
+INSERT INTO "exchange_credits" (
+  "id",
+  "companyId",
+  "returnOrderId",
+  "customerId",
+  "originalAmount",
+  "balance",
+  "status",
+  "createdAt",
+  "updatedAt"
+)
+SELECT
+  'exc_' || md5(ro."id") AS "id",
+  ro."companyId",
+  ro."id" AS "returnOrderId",
+  ro."customerId",
+  COALESCE(SUM(ri."amount"), 0)::DECIMAL(14,2) AS "originalAmount",
+  COALESCE(SUM(ri."amount"), 0)::DECIMAL(14,2) AS "balance",
+  'OPEN'::"ExchangeCreditStatus" AS "status",
+  ro."createdAt",
+  CURRENT_TIMESTAMP
+FROM "return_orders" ro
+INNER JOIN "return_items" ri ON ri."returnOrderId" = ro."id"
+WHERE ro."type" = 'EXCHANGE'
+  AND ro."status" = 'COMPLETED'
+GROUP BY ro."id", ro."companyId", ro."customerId", ro."createdAt"
+HAVING COALESCE(SUM(ri."amount"), 0) > 0
+ON CONFLICT ("returnOrderId") DO NOTHING;
