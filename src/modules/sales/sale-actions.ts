@@ -424,7 +424,24 @@ export async function createSaleAction(input: CreateSaleInput) {
             throw new Error(`El equipo de ${variant.product.name} acaba de ser vendido por otro usuario.`);
           }
 
-          await tx.saleItemUnit.create({ data: { saleItemId: saleItem.id, productUnitId: unitId } });
+          const warrantyDays = Math.max(
+            0,
+            Number(variant.product.warrantyDays || settings.defaultWarrantyDays || 0),
+          );
+          const warrantyStartsAt = warrantyDays > 0 ? sale.createdAt : null;
+          const warrantyExpiresAt = warrantyStartsAt
+            ? new Date(warrantyStartsAt.getTime() + warrantyDays * 86_400_000)
+            : null;
+
+          await tx.saleItemUnit.create({
+            data: {
+              saleItemId: saleItem.id,
+              productUnitId: unitId,
+              warrantyDays,
+              warrantyStartsAt,
+              warrantyExpiresAt,
+            },
+          });
           await tx.inventoryMovement.create({
             data: {
               companyId: company.id,
