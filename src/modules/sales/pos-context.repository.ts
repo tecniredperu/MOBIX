@@ -397,3 +397,148 @@ export async function searchPosCustomers(q: string) {
     };
   });
 }
+
+
+export async function resolvePosScan(rawValue: string, warehouseId: string) {
+  const company = await getActiveCompany();
+  const candidate = extractIdentifierCandidate(rawValue);
+  if (!candidate || candidate.length < 3 || !warehouseId) return null;
+
+  const warehouses = await prisma.warehouse.findMany({
+    where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+    select: { id: true },
+  });
+
+  const identifierHit = candidate.length >= 6
+    ? await prisma.productUnitIdentifier.findFirst({
+        where: {
+          companyId: company.id,
+          value: { equals: candidate, mode: "insensitive" },
+          productUnit: {
+            warehouseId,
+            status: "AVAILABLE",
+            product: { status: "ACTIVE", deletedAt: null },
+            variant: { status: "ACTIVE" },
+          },
+        },
+        select: {
+          type: true,
+          value: true,
+          productUnit: {
+            select: {
+              id: true,
+              productId: true,
+              variantId: true,
+              warehouseId: true,
+              identifiers: { select: { type: true, value: true } },
+            },
+          },
+        },
+      })
+    : null;
+
+  if (identifierHit) {
+    const unit = identifierHit.productUnit;
+    const identifiers = new Map(unit.identifiers.map((identifier) => [identifier.type, identifier.value]));
+    const matchedUnit: PosUnit = {
+      id: unit.id,
+      warehouseId: unit.warehouseId,
+      imei1: identifiers.get("IMEI_1") ?? null,
+      imei2: identifiers.get("IMEI_2") ?? null,
+      serial: identifiers.get("SERIAL") ?? null,
+    };
+
+    const products = await loadProducts(company.id, undefined, [unit.productId]);
+    const catalog = await mapCatalog(
+      company.id,
+      warehouses,
+      products,
+      new Map([[unit.variantId, matchedUnit]]),
+    );
+    const item = catalog.find((entry) => entry.variantId === unit.variantId);
+    if (!item) return null;
+
+    return {
+      matchType: "IDENTIFIER" as const,
+      identifierType: identifierHit.type,
+      matchedValue: identifierHit.value,
+      item,
+    };
+  }
+
+  const variantHit = await prisma.productVariant.findFirst({
+    where: {
+      companyId: company.id,
+      status: "ACTIVE",
+      product: { status: "ACTIVE", deletedAt: null },
+      OR: [
+        { sku: { equals: candidate, mode: "insensitive" } },
+        { barcode: { equals: candidate, mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      productId: true,
+      sku: true,
+      barcode: true,
+    },
+  });
+
+  if (variantHit) {
+    const products = await loadProducts(company.id, undefined, [variantHit.productId]);
+    const catalog = await mapCatalog(company.id, warehouses, products);
+    const item = catalog.find((entry) => entry.variantId === variantHit.id);
+    if (!item) return null;
+
+    const matchType = variantHit.barcode?.toLocaleLowerCase("es-PE") === candidate.toLocaleLowerCase("es-PE")
+      ? "BARCODE"
+      : "SKU";
+
+    return {
+      matchType,
+      identifierType: null,
+      matchedValue: matchType === "BARCODE" ? variantHit.barcode : variantHit.sku,
+      item,
+    };
+  }
+
+  const productHit = await prisma.product.findFirst({
+    where: {
+      companyId: company.id,
+      status: "ACTIVE",
+      deletedAt: null,
+      OR: [
+        { sku: { equals: candidate, mode: "insensitive" } },
+        { barcode: { equals: candidate, mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      sku: true,
+      barcode: true,
+      variants: {
+        where: { status: "ACTIVE" },
+        select: { id: true },
+        take: 2,
+      },
+    },
+  });
+
+  if (!productHit || productHit.variants.length !== 1) return null;
+
+  const products = await loadProducts(company.id, undefined, [productHit.id]);
+  const catalog = await mapCatalog(company.id, warehouses, products);
+  const item = catalog.find((entry) => entry.variantId === productHit.variants[0].id);
+  if (!item) return null;
+
+  const matchType = productHit.barcode?.toLocaleLowerCase("es-PE") === candidate.toLocaleLowerCase("es-PE")
+    ? "BARCODE"
+    : "SKU";
+
+  return {
+    matchType,
+    identifierType: null,
+    matchedValue: matchType === "BARCODE" ? productHit.barcode : productHit.sku,
+    item,
+  };
+}
