@@ -101,3 +101,29 @@ test("costo promedio ponderado conserva precisión monetaria", () => {
 
   assert.equal(average, 22);
 });
+
+
+test("vale de cambio puede cubrir parte o todo el nuevo equipo sin generar vuelto", () => {
+  const partial = calculatePaymentCoverage({
+    total: 1500,
+    payments: [
+      { method: "EXCHANGE_CREDIT", amount: 1000 },
+      { method: "YAPE", amount: 500 },
+    ],
+  });
+  const exact = calculatePaymentCoverage({
+    total: 1000,
+    payments: [{ method: "EXCHANGE_CREDIT", amount: 1000 }],
+  });
+  const excess = calculatePaymentCoverage({
+    total: 900,
+    payments: [{ method: "EXCHANGE_CREDIT", amount: 1000 }],
+  });
+
+  assert.equal(partial.paymentComplete, true);
+  assert.equal(partial.pendingAmount, 0);
+  assert.equal(exact.paymentComplete, true);
+  assert.equal(exact.change, 0);
+  assert.equal(excess.invalidOverpayment, true);
+  assert.equal(excess.paymentComplete, false);
+});
