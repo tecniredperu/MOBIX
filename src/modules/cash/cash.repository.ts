@@ -1,3 +1,4 @@
+import { getOperationalContext } from "@/lib/business-context";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import {
@@ -66,22 +67,6 @@ function customerName(customer: {
   return [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "Cliente";
 }
 
-async function getMembership(companyId: string) {
-  const membership = await prisma.companyUser.findFirst({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: { createdAt: "asc" },
-    include: {
-      user: { select: { id: true, name: true } },
-      defaultBranch: { select: { id: true } },
-    },
-  });
-
-  if (!membership) {
-    throw new Error("No existe un usuario activo para operar la caja.");
-  }
-
-  return membership;
-}
 
 export async function getCashSessionSummary(sessionId: string): Promise<CashOpenSession> {
   const company = await getActiveCompany();
@@ -362,8 +347,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
 }
 
 export async function getCashDeskContext() {
-  const company = await getActiveCompany();
-  const membership = await getMembership(company.id);
+  const { company, membership, user } = await getOperationalContext();
 
   const [branchesRaw, openSessionRaw, historyRaw] = await Promise.all([
     prisma.branch.findMany({
@@ -372,7 +356,7 @@ export async function getCashDeskContext() {
       select: { id: true, name: true, code: true },
     }),
     prisma.cashSession.findFirst({
-      where: { companyId: company.id, userId: membership.userId, status: "OPEN" },
+      where: { companyId: company.id, userId: user.id, status: "OPEN" },
       orderBy: { openedAt: "desc" },
       select: { id: true },
     }),
@@ -412,8 +396,8 @@ export async function getCashDeskContext() {
   return {
     companyName: company.tradeName ?? company.businessName,
     currentUser: {
-      id: membership.user.id,
-      name: membership.user.name,
+      id: user.id,
+      name: user.name,
       defaultBranchId: membership.defaultBranchId,
     },
     branches,
