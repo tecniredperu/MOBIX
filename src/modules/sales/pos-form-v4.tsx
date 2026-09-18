@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
@@ -31,6 +31,26 @@ import {
 
 const FAVORITES_STORAGE_KEY = "mobix:pos:favorites";
 
+function normalizeCustomerSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-PE")
+    .trim();
+}
+
+function customerMatchesQuery(customer: PosCustomer, query: string) {
+  const tokens = normalizeCustomerSearch(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  const haystack = normalizeCustomerSearch([
+    customer.name,
+    customer.documentType ?? "",
+    customer.documentNumber ?? "",
+    customer.phone ?? "",
+  ].join(" "));
+  return tokens.every((token) => haystack.includes(token));
+}
+
 export function PosFormV4({ warehouses, catalog, customers }: {
   warehouses: PosWarehouse[];
   catalog: PosCatalogItem[];
@@ -38,22 +58,31 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const previousTotalRef = useRef(0);
+
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<PosCatalogFilter>("ALL");
   const [favoriteVariantIds, setFavoriteVariantIds] = useState<Set<string>>(new Set());
   const [searchResults, setSearchResults] = useState<PosCatalogItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
   const [cart, setCart] = useState<CartLine[]>([]);
   const [unitSelections, setUnitSelections] = useState<Record<string, string>>({});
   const [unitsByVariant, setUnitsByVariant] = useState<Record<string, PosUnit[]>>({});
   const [loadingUnits, setLoadingUnits] = useState<Record<string, boolean>>({});
+
   const [documentType, setDocumentType] = useState<SaleDocumentType>("RECEIPT");
   const [taxCondition, setTaxCondition] = useState<SaleTaxCondition>("TAXED");
   const [discount, setDiscount] = useState(0);
+
   const [customerId, setCustomerId] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerSearchResults, setCustomerSearchResults] = useState<PosCustomer[]>([]);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
   const [availableCustomers, setAvailableCustomers] = useState<PosCustomer[]>(customers);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+
   const [payments, setPayments] = useState<PaymentLine[]>([
     { id: "payment-1", method: "CASH", amount: 0, reference: "" },
   ]);
@@ -68,7 +97,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         setFavoriteVariantIds(new Set(parsed.filter((value): value is string => typeof value === "string")));
       }
     } catch {
-      // El POS sigue funcionando aunque el navegador bloquee localStorage.
+      // El POS nunca debe bloquear una venta por preferencias locales.
     }
   }, []);
 
@@ -77,10 +106,21 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       if (event.key === "F2") {
         event.preventDefault();
         document.getElementById("pos-product-search")?.focus();
-      }
-      if (event.key === "F4") {
+      } else if (event.key === "F4") {
         event.preventDefault();
-        setCustomerModalOpen(true);
+        document.getElementById("pos-customer-search")?.focus();
+      } else if (event.key === "F6") {
+        event.preventDefault();
+        const paymentAmount = document.getElementById("pos-payment-amount") as HTMLInputElement | null;
+        paymentAmount?.focus();
+        paymentAmount?.select();
+      } else if (event.key === "F8") {
+        event.preventDefault();
+        const firstDocument = document.querySelector("#pos-document-types button") as HTMLButtonElement | null;
+        firstDocument?.focus();
+      } else if (event.key === "F9") {
+        event.preventDefault();
+        (document.getElementById("pos-confirm-sale") as HTMLButtonElement | null)?.click();
       }
     };
 
@@ -103,7 +143,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         const params = new URLSearchParams({ q: normalized });
         if (warehouseId) params.set("warehouseId", warehouseId);
 
-        const response = await fetch(`/api/pos/catalog?${params.toString()}`, {
+        const response = await fetch("/api/pos/catalog?" + params.toString(), {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
@@ -124,6 +164,46 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       window.clearTimeout(timeout);
     };
   }, [query, warehouseId]);
+
+  useEffect(() => {
+    const normalized = customerQuery.trim();
+    if (normalized.length < 2) {
+      setCustomerSearchResults([]);
+      setIsSearchingCustomers(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearchingCustomers(true);
+      try {
+        const response = await fetch("/api/pos/customers?q=" + encodeURIComponent(normalized), {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("No se pudo buscar clientes.");
+
+        const data = await response.json() as { items: PosCustomer[] };
+        setCustomerSearchResults(data.items);
+        setAvailableCustomers((current) => {
+          const merged = new Map(current.map((customer) => [customer.id, customer]));
+          for (const customer of data.items) merged.set(customer.id, customer);
+          return [...merged.values()];
+        });
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setError(cause instanceof Error ? cause.message : "No se pudo buscar clientes.");
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingCustomers(false);
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [customerQuery]);
 
   const filteredCatalog = useMemo(() => {
     const merged = new Map<string, PosCatalogItem>();
@@ -161,6 +241,18 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     return merged;
   }, [catalog, searchResults]);
 
+  const customerMatches = useMemo(() => {
+    if (customerQuery.trim().length < 2) return [];
+    const merged = new Map<string, PosCustomer>();
+    for (const customer of customerSearchResults) merged.set(customer.id, customer);
+    for (const customer of availableCustomers) {
+      if (!merged.has(customer.id) && customerMatchesQuery(customer, customerQuery)) {
+        merged.set(customer.id, customer);
+      }
+    }
+    return [...merged.values()].slice(0, 12);
+  }, [availableCustomers, customerQuery, customerSearchResults]);
+
   const selectedCustomer = useMemo(
     () => availableCustomers.find((customer) => customer.id === customerId) ?? null,
     [availableCustomers, customerId],
@@ -172,6 +264,19 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     taxCondition,
     taxRatePercent: 18,
   }), [cart, discount, taxCondition]);
+
+  useEffect(() => {
+    const previousTotal = previousTotalRef.current;
+    setPayments((current) => {
+      if (current.length !== 1) return current;
+      const payment = current[0];
+      const amount = Number(payment.amount || 0);
+      const wasAutoAmount = amount <= 0.009 || Math.abs(amount - previousTotal) <= 0.009;
+      if (!wasAutoAmount) return current;
+      return [{ ...payment, amount: totals.total }];
+    });
+    previousTotalRef.current = totals.total;
+  }, [totals.total]);
 
   const coverage = useMemo(() => calculatePaymentCoverage({
     total: totals.total,
@@ -197,21 +302,25 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   async function loadUnits(variantId: string): Promise<PosUnit[]> {
-    const cacheKey = `${variantId}:${warehouseId}`;
+    const cacheKey = variantId + ":" + warehouseId;
     if (unitsByVariant[cacheKey]) return unitsByVariant[cacheKey];
     if (loadingUnits[cacheKey]) return [];
 
     setLoadingUnits((current) => ({ ...current, [cacheKey]: true }));
     try {
-      const response = await fetch(`/api/pos/units?variantId=${encodeURIComponent(variantId)}&warehouseId=${encodeURIComponent(warehouseId)}`, {
-        method: "GET",
-        cache: "no-store",
-      });
+      const response = await fetch(
+        "/api/pos/units?variantId=" + encodeURIComponent(variantId)
+          + "&warehouseId=" + encodeURIComponent(warehouseId),
+        { method: "GET", cache: "no-store" },
+      );
       if (!response.ok) throw new Error("No se pudieron cargar los IMEI disponibles.");
       const data = await response.json() as { units: PosUnit[] };
       setUnitsByVariant((current) => ({ ...current, [cacheKey]: data.units }));
       if (data.units[0]) {
-        setUnitSelections((current) => ({ ...current, [variantId]: current[variantId] || data.units[0].id }));
+        setUnitSelections((current) => ({
+          ...current,
+          [variantId]: current[variantId] || data.units[0].id,
+        }));
       }
       return data.units;
     } catch (cause) {
@@ -224,12 +333,17 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 
   function selectExistingCustomer(id: string) {
     setCustomerId(id);
+    setCustomerQuery("");
+    setCustomerSearchResults([]);
     setError("");
   }
 
   function handleCustomerCreated(customer: PosCustomer) {
-    setAvailableCustomers((current) => current.some((item) => item.id === customer.id) ? current : [customer, ...current]);
+    setAvailableCustomers((current) => current.some((item) => item.id === customer.id)
+      ? current
+      : [customer, ...current]);
     setCustomerId(customer.id);
+    setCustomerQuery("");
     setError("");
   }
 
@@ -241,7 +355,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     }
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
-      const cacheKey = `${item.variantId}:${warehouseId}`;
+      const cacheKey = item.variantId + ":" + warehouseId;
       const preferredMatchedUnit = item.units.find((unit) => unit.warehouseId === warehouseId);
       const availableUnits = unitsByVariant[cacheKey] ?? await loadUnits(item.variantId);
       const selectedId = unitSelections[item.variantId] || preferredMatchedUnit?.id || availableUnits[0]?.id;
@@ -306,49 +420,143 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   function updatePrice(key: string, value: number) {
-    setCart((current) => current.map((line) => line.key === key ? { ...line, unitPrice: Math.max(0, value || 0) } : line));
+    setCart((current) => current.map((line) => line.key === key
+      ? { ...line, unitPrice: Math.max(0, value || 0) }
+      : line));
   }
 
   function removeLine(key: string) {
     setCart((current) => current.filter((line) => line.key !== key));
   }
 
+  function clearSale() {
+    setCart([]);
+    setDiscount(0);
+    setCustomerId("");
+    setCustomerQuery("");
+    setCustomerSearchResults([]);
+    setDocumentType("RECEIPT");
+    setTaxCondition("TAXED");
+    setPayments([{ id: "payment-1", method: "CASH", amount: 0, reference: "" }]);
+    previousTotalRef.current = 0;
+    setError("");
+    document.getElementById("pos-product-search")?.focus();
+  }
+
+  function setSinglePaymentMethod(method: SalePaymentMethod) {
+    if (method === "CREDIT" && !selectedCustomer?.creditEnabled) {
+      setError("Selecciona un cliente con línea de crédito habilitada antes de usar Crédito.");
+      return;
+    }
+    setPayments([{
+      id: "payment-1",
+      method,
+      amount: totals.total,
+      reference: "",
+    }]);
+    setError("");
+  }
+
+  function enableMixedPayment() {
+    setPayments((current) => {
+      if (current.length > 1) return current;
+      const first = current[0] ?? {
+        id: "payment-1",
+        method: "CASH" as SalePaymentMethod,
+        amount: totals.total,
+        reference: "",
+      };
+      const secondMethod: SalePaymentMethod = first.method === "YAPE" ? "CASH" : "YAPE";
+      return [
+        { ...first },
+        { id: "payment-2", method: secondMethod, amount: 0, reference: "" },
+      ];
+    });
+  }
+
   function addPayment() {
-    setPayments((current) => [...current, { id: `payment-${Date.now()}`, method: "YAPE", amount: 0, reference: "" }]);
+    setPayments((current) => [
+      ...current,
+      { id: "payment-" + Date.now(), method: "YAPE", amount: 0, reference: "" },
+    ]);
   }
 
   function setPaymentAmount(id: string, amount: number) {
-    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, amount: Math.max(0, amount || 0) } : payment));
+    setPayments((current) => current.map((payment) => payment.id === id
+      ? { ...payment, amount: Math.max(0, amount || 0) }
+      : payment));
   }
 
   function updatePaymentMethod(id: string, method: SalePaymentMethod) {
-    setError(method === "CREDIT" && !selectedCustomer?.creditEnabled
-      ? "Selecciona un cliente con línea de crédito habilitada antes de usar Crédito."
-      : "");
-    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, method } : payment));
+    if (method === "CREDIT" && !selectedCustomer?.creditEnabled) {
+      setError("Selecciona un cliente con línea de crédito habilitada antes de usar Crédito.");
+    } else {
+      setError("");
+    }
+
+    setPayments((current) => current.map((payment) => payment.id === id
+      ? { ...payment, method }
+      : payment));
   }
 
   function updatePaymentReference(id: string, reference: string) {
-    setPayments((current) => current.map((payment) => payment.id === id ? { ...payment, reference } : payment));
+    setPayments((current) => current.map((payment) => payment.id === id
+      ? { ...payment, reference }
+      : payment));
   }
 
   function completePaymentBalance(id: string) {
-    const otherPaid = payments.filter((payment) => payment.id !== id).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const otherPaid = payments
+      .filter((payment) => payment.id !== id)
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     setPaymentAmount(id, Math.max(0, roundMoney(totals.total - otherPaid)));
   }
 
   function submitSale() {
     setError("");
+
     if (!cart.length) {
       setError("Agrega al menos un producto o servicio antes de cobrar.");
       return;
     }
+
+    const invalidPrice = cart.find((line) =>
+      line.minimumSalePrice > 0 && Number(line.unitPrice) < Number(line.minimumSalePrice));
+    if (invalidPrice) {
+      setError(
+        "El precio de " + invalidPrice.name + " no puede ser menor a S/ "
+          + Number(invalidPrice.minimumSalePrice).toFixed(2) + ".",
+      );
+      return;
+    }
+
+    if (documentType === "INVOICE") {
+      const validRuc = selectedCustomer?.documentType === "RUC"
+        && (selectedCustomer.documentNumber ?? "").replace(/\D/g, "").length === 11;
+      if (!validRuc) {
+        setError("Para emitir Factura selecciona un cliente con RUC válido de 11 dígitos.");
+        document.getElementById("pos-customer-search")?.focus();
+        return;
+      }
+    }
+
     if (totals.total > 0.01 && !payments.some((payment) => Number(payment.amount) > 0.009)) {
       setError("Ingresa el monto recibido antes de confirmar la venta.");
       return;
     }
+
+    if (coverage.invalidOverpayment) {
+      setError("El exceso de pago solo puede entregarse como vuelto cuando proviene de efectivo.");
+      return;
+    }
+
+    if (!coverage.creditReady) {
+      setError("El crédito seleccionado supera la línea disponible del cliente.");
+      return;
+    }
+
     if (!coverage.paymentComplete) {
-      setError(`El cobro está incompleto. Falta S/ ${coverage.pendingAmount.toFixed(2)}.`);
+      setError("El cobro está incompleto. Falta S/ " + coverage.pendingAmount.toFixed(2) + ".");
       return;
     }
 
@@ -366,9 +574,16 @@ export function PosFormV4({ warehouses, catalog, customers }: {
             unitPrice: Number(line.unitPrice),
             selectedUnitIds: line.selectedUnitIds,
           })),
-          payments: payments.map((payment) => ({ method: payment.method, amount: Number(payment.amount), reference: payment.reference })),
+          payments: payments.map((payment) => ({
+            method: payment.method,
+            amount: Number(payment.amount),
+            reference: payment.reference,
+          })),
         });
-        router.push(`/ventas/${result.id}?created=1&change=${result.change.toFixed(2)}`);
+
+        router.push(
+          "/ventas/" + result.id + "?created=1&change=" + result.change.toFixed(2),
+        );
         router.refresh();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "No se pudo completar la venta.");
@@ -386,18 +601,31 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         </div>
         <label className="pos-warehouse">
           <span>Sucursal / almacén</span>
-          <select value={warehouseId} onChange={(event) => {
-            setWarehouseId(event.target.value);
-            setUnitsByVariant({});
-            setUnitSelections({});
-            setSearchResults([]);
-          }} disabled={cart.length > 0}>
-            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.branchName} · {warehouse.name}</option>)}
+          <select
+            value={warehouseId}
+            onChange={(event) => {
+              setWarehouseId(event.target.value);
+              setUnitsByVariant({});
+              setUnitSelections({});
+              setSearchResults([]);
+            }}
+            disabled={cart.length > 0}
+          >
+            {warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.branchName} · {warehouse.name}
+              </option>
+            ))}
           </select>
         </label>
       </section>
 
-      {error && <div className="error-banner"><strong>Revisa la operación</strong><span>{error}</span></div>}
+      {error && (
+        <div className="error-banner">
+          <strong>Revisa la operación</strong>
+          <span>{error}</span>
+        </div>
+      )}
 
       <div className="pos-layout">
         <PosCatalogPanel
@@ -414,35 +642,54 @@ export function PosFormV4({ warehouses, catalog, customers }: {
           onFilterChange={setActiveFilter}
           onToggleFavorite={toggleFavorite}
           onLoadUnits={loadUnits}
-          onUnitSelectionChange={(variantId, unitId) => setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
+          onUnitSelectionChange={(variantId, unitId) =>
+            setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
           onAdd={addItem}
         />
 
         <aside className="pos-checkout">
-          <PosCartCard cart={cart} onQuantityChange={updateQuantity} onPriceChange={updatePrice} onRemove={removeLine} />
+          <PosCartCard
+            cart={cart}
+            onQuantityChange={updateQuantity}
+            onPriceChange={updatePrice}
+            onRemove={removeLine}
+            onClear={clearSale}
+          />
+
           <PosCustomerCard
-            customers={availableCustomers}
+            customers={customerMatches}
             customerId={customerId}
+            customerQuery={customerQuery}
+            isSearchingCustomers={isSearchingCustomers}
             selectedCustomer={selectedCustomer}
             documentType={documentType}
             taxCondition={taxCondition}
+            onCustomerQueryChange={setCustomerQuery}
             onExistingCustomerChange={selectExistingCustomer}
             onAddCustomer={() => setCustomerModalOpen(true)}
             onDocumentTypeChange={setDocumentType}
             onTaxConditionChange={setTaxCondition}
           />
+
           <PosPaymentCard
             payments={payments}
+            total={totals.total}
+            change={coverage.change}
+            pendingAmount={coverage.pendingAmount}
             selectedCustomer={selectedCustomer}
             creditAmount={coverage.creditAmount}
             creditReady={coverage.creditReady}
+            onSetSingleMethod={setSinglePaymentMethod}
+            onEnableMixed={enableMixedPayment}
             onAdd={addPayment}
             onMethodChange={updatePaymentMethod}
             onAmountChange={setPaymentAmount}
             onReferenceChange={updatePaymentReference}
             onCompleteBalance={completePaymentBalance}
-            onRemove={(id) => setPayments((current) => current.filter((item) => item.id !== id))}
+            onRemove={(id) =>
+              setPayments((current) => current.filter((item) => item.id !== id))}
           />
+
           <PosTotalCard
             taxCondition={taxCondition}
             discount={discount}
@@ -465,7 +712,11 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         </aside>
       </div>
 
-      <PosCustomerModal open={customerModalOpen} onClose={() => setCustomerModalOpen(false)} onCreated={handleCustomerCreated} />
+      <PosCustomerModal
+        open={customerModalOpen}
+        onClose={() => setCustomerModalOpen(false)}
+        onCreated={handleCustomerCreated}
+      />
     </div>
   );
 }
