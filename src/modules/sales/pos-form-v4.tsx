@@ -368,6 +368,14 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     setError("");
   }
 
+  function resetProductSearchAfterAdd() {
+    setQuery("");
+    setSearchResults([]);
+    window.requestAnimationFrame(() => {
+      document.getElementById("pos-product-search")?.focus();
+    });
+  }
+
   async function addItem(item: PosCatalogItem) {
     const stock = stockFor(item, warehouseId);
     if (item.type !== "SERVICE" && stock <= 0) {
@@ -405,6 +413,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         unitLabel: unitLabel(selected),
       }]);
       setError("");
+      resetProductSearchAfterAdd();
       return;
     }
 
@@ -429,6 +438,7 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       }];
     });
     setError("");
+    resetProductSearchAfterAdd();
   }
 
   function updateQuantity(key: string, quantity: number) {
