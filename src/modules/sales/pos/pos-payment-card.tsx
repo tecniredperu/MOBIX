@@ -7,11 +7,11 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
-import type { PosCustomer, SalePaymentMethod } from "../sale-types";
+import type { PosCustomer, PosExchangeCredit, SalePaymentMethod } from "../sale-types";
 import { formatPen, PAYMENT_LABELS, type PaymentLine } from "./pos-shared";
 
 const QUICK_METHODS: Array<{
-  value: Exclude<SalePaymentMethod, "OTHER">;
+  value: Exclude<SalePaymentMethod, "OTHER" | "EXCHANGE_CREDIT">;
   label: string;
   icon: typeof Banknote;
 }> = [
@@ -31,6 +31,10 @@ export function PosPaymentCard({
   selectedCustomer,
   creditAmount,
   creditReady,
+  exchangeCredit,
+  exchangeApplied,
+  exchangeRemaining,
+  amountDue,
   onSetSingleMethod,
   onEnableMixed,
   onAdd,
@@ -47,6 +51,10 @@ export function PosPaymentCard({
   selectedCustomer: PosCustomer | null;
   creditAmount: number;
   creditReady: boolean;
+  exchangeCredit?: PosExchangeCredit | null;
+  exchangeApplied: number;
+  exchangeRemaining: number;
+  amountDue: number;
   onSetSingleMethod: (method: SalePaymentMethod) => void;
   onEnableMixed: () => void;
   onAdd: () => void;
@@ -73,6 +81,23 @@ export function PosPaymentCard({
       </div>
 
       <div className="pos-v5-payment-body">
+        {exchangeCredit && (
+          <div className="pos-exchange-credit-card">
+            <div>
+              <span>Vale de cambio · {exchangeCredit.returnNumber}</span>
+              <strong>{formatPen(exchangeApplied)} aplicado</strong>
+              <small>
+                Saldo del vale: {formatPen(exchangeCredit.balance)}
+                {exchangeRemaining > 0.01 ? " · Restante después de esta venta: " + formatPen(exchangeRemaining) : " · Se utilizará por completo"}
+              </small>
+            </div>
+            <div>
+              <span>Falta cobrar</span>
+              <strong>{formatPen(amountDue)}</strong>
+            </div>
+          </div>
+        )}
+
         <div className="pos-payment-method-buttons" id="pos-payment-methods">
           {QUICK_METHODS.map((method) => {
             const Icon = method.icon;
@@ -83,7 +108,10 @@ export function PosPaymentCard({
                 className={active ? "active" : ""}
                 type="button"
                 onClick={() => onSetSingleMethod(method.value)}
-                disabled={method.value === "CREDIT" && !selectedCustomer?.creditEnabled}
+                disabled={
+                  amountDue <= 0.01
+                  || (method.value === "CREDIT" && !selectedCustomer?.creditEnabled)
+                }
                 title={method.value === "CREDIT" && !selectedCustomer?.creditEnabled
                   ? "Selecciona un cliente con crédito habilitado"
                   : undefined}
@@ -174,9 +202,11 @@ export function PosPaymentCard({
                       value={payment.method}
                       onChange={(event) => onMethodChange(payment.id, event.target.value as SalePaymentMethod)}
                     >
-                      {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
+                      {Object.entries(PAYMENT_LABELS)
+                        .filter(([value]) => value !== "EXCHANGE_CREDIT")
+                        .map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
                     </select>
                   </label>
 
