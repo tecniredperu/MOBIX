@@ -21,6 +21,13 @@ const RETURN_PATHS = [
 
 type RefundMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "CREDIT" | "OTHER";
 type ReturnType = "RETURN" | "EXCHANGE";
+type ReturnDisposition = "RESTOCK" | "QUARANTINE" | "DAMAGED";
+
+const RETURN_DISPOSITIONS = new Set<ReturnDisposition>([
+  "RESTOCK",
+  "QUARANTINE",
+  "DAMAGED",
+]);
 
 type CreateReturnInput = {
   saleId: string;
@@ -28,7 +35,12 @@ type CreateReturnInput = {
   reason: string;
   refundMethod?: string;
   notes?: string;
-  items: Array<{ saleItemId: string; quantity: number; productUnitId?: string }>;
+  items: Array<{
+    saleItemId: string;
+    quantity: number;
+    productUnitId?: string;
+    disposition?: ReturnDisposition;
+  }>;
 };
 
 type ReceivableLockRow = {
@@ -84,7 +96,22 @@ export async function createReturnAction(input: CreateReturnInput) {
       items: {
         include: {
           product: true,
-          units: { include: { productUnit: true } },
+          units: {
+            include: {
+              productUnit: {
+                include: {
+                  serviceOrders: {
+                    where: {
+                      companyId: company.id,
+                      status: { notIn: ["DELIVERED", "CANCELLED"] },
+                    },
+                    select: { id: true },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -111,20 +138,33 @@ export async function createReturnAction(input: CreateReturnInput) {
 
     const serialized = item.product.type === "PHONE" || item.product.type === "SERIALIZED";
     let unitId: string | null = null;
+    let disposition: ReturnDisposition = "RESTOCK";
+
     if (serialized) {
       if (line.quantity !== 1 || !line.productUnitId) {
         throw new Error(`Selecciona el IMEI/serie exacto de ${item.product.name}.`);
       }
+
       const link = item.units.find((unit) => unit.productUnitId === line.productUnitId);
       if (!link || link.productUnit.status !== "SOLD") {
         throw new Error(`El IMEI de ${item.product.name} no está disponible para devolución.`);
+      }
+      if (link.productUnit.serviceOrders.length) {
+        throw new Error(
+          `El IMEI de ${item.product.name} tiene una atención de postventa abierta. Ciérrala antes de registrar una devolución o cambio.`,
+        );
+      }
+
+      disposition = line.disposition ?? "QUARANTINE";
+      if (!RETURN_DISPOSITIONS.has(disposition)) {
+        throw new Error("Selecciona qué ocurrirá con el equipo que regresa.");
       }
       unitId = line.productUnitId;
     }
 
     const amount = roundMoney((Number(item.total) / item.quantity) * line.quantity);
     merchandiseAmount = roundMoney(merchandiseAmount + amount);
-    return { item, quantity: line.quantity, unitId, amount };
+    return { item, quantity: line.quantity, unitId, amount, disposition };
   });
 
   const refundAmount = input.type === "RETURN" ? merchandiseAmount : 0;
@@ -233,6 +273,7 @@ export async function createReturnAction(input: CreateReturnInput) {
           productId: row.item.productId,
           variantId: row.item.variantId,
           productUnitId: row.unitId,
+          disposition: row.disposition,
           quantity: row.quantity,
           unitPrice: Number(row.item.unitPrice),
           unitCost: Number(row.item.unitCost),
@@ -241,13 +282,25 @@ export async function createReturnAction(input: CreateReturnInput) {
       });
 
       if (row.unitId) {
+        const targetStatus = row.disposition === "RESTOCK"
+          ? "AVAILABLE"
+          : row.disposition === "DAMAGED"
+            ? "DAMAGED"
+            : "RETURNED";
+
         const updated = await tx.productUnit.updateMany({
           where: { id: row.unitId, companyId: company.id, status: "SOLD" },
-          data: { status: "AVAILABLE", warehouseId: sale.warehouseId },
+          data: { status: targetStatus, warehouseId: sale.warehouseId },
         });
         if (updated.count !== 1) {
           throw new Error("El estado del IMEI cambió durante la devolución.");
         }
+
+        const dispositionLabel = row.disposition === "RESTOCK"
+          ? "disponible para venta"
+          : row.disposition === "DAMAGED"
+            ? "dañado / no vendible"
+            : "en revisión";
 
         await tx.inventoryMovement.create({
           data: {
@@ -261,7 +314,7 @@ export async function createReturnAction(input: CreateReturnInput) {
             unitCost: Number(row.item.unitCost),
             referenceType: "RETURN",
             referenceId: returnId,
-            notes: `Reingreso por ${input.type === "EXCHANGE" ? "cambio" : "devolución"} ${returnNumber}`,
+            notes: `Reingreso por ${input.type === "EXCHANGE" ? "cambio" : "devolución"} ${returnNumber} · ${dispositionLabel}`,
             createdById: membership.userId,
           },
         });
@@ -371,6 +424,12 @@ export async function createReturnAction(input: CreateReturnInput) {
           refundAmount,
           refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
           reason,
+          itemDispositions: validated
+            .filter((row) => Boolean(row.unitId))
+            .map((row) => ({
+              productUnitId: row.unitId,
+              disposition: row.disposition,
+            })),
         },
       },
     });
