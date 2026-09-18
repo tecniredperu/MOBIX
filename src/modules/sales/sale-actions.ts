@@ -247,21 +247,20 @@ export async function createSaleAction(input: CreateSaleInput) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    if (settings.requireCashSession) {
-      const cashRows = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT "id"
-        FROM "cash_sessions"
-        WHERE "companyId" = ${company.id}
-          AND "branchId" = ${warehouse.branchId}
-          AND "userId" = ${membership.userId}
-          AND "status" = 'OPEN'::"CashSessionStatus"
-        ORDER BY "openedAt" DESC
-        LIMIT 1
-        FOR UPDATE
-      `;
-      if (!cashRows.length) {
-        throw new Error("Debes abrir caja en esta sucursal antes de registrar una venta.");
-      }
+    const cashRows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "cash_sessions"
+      WHERE "companyId" = ${company.id}
+        AND "branchId" = ${warehouse.branchId}
+        AND "userId" = ${membership.userId}
+        AND "status" = 'OPEN'::"CashSessionStatus"
+      ORDER BY "openedAt" DESC
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const saleCashSessionId = cashRows[0]?.id ?? null;
+    if (settings.requireCashSession && !saleCashSessionId) {
+      throw new Error("Debes abrir caja en esta sucursal antes de registrar una venta.");
     }
 
     let customerId: string | null = null;
@@ -391,6 +390,7 @@ export async function createSaleAction(input: CreateSaleInput) {
         branchId: warehouse.branchId,
         warehouseId: warehouse.id,
         customerId,
+        cashSessionId: saleCashSessionId,
         saleNumber,
         documentType: input.documentType,
         documentSeries,
