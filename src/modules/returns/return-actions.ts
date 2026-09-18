@@ -264,6 +264,22 @@ export async function createReturnAction(input: CreateReturnInput) {
       },
     });
 
+    let exchangeCreditId: string | null = null;
+    if (input.type === "EXCHANGE") {
+      exchangeCreditId = randomUUID();
+      await tx.exchangeCredit.create({
+        data: {
+          id: exchangeCreditId,
+          companyId: company.id,
+          returnOrderId: returnId,
+          customerId: sale.customerId,
+          originalAmount: merchandiseAmount,
+          balance: merchandiseAmount,
+          status: "OPEN",
+        },
+      });
+    }
+
     for (const row of validated) {
       await tx.returnItem.create({
         data: {
@@ -434,7 +450,13 @@ export async function createReturnAction(input: CreateReturnInput) {
       },
     });
 
-    return { id: returnId, returnNumber, amount: refundAmount, merchandiseAmount };
+    return {
+      id: returnId,
+      returnNumber,
+      amount: refundAmount,
+      merchandiseAmount,
+      exchangeCreditId,
+    };
   });
 
   revalidatePaths(RETURN_PATHS);
