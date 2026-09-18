@@ -36,6 +36,7 @@ type CreateReturnInput = {
   type: ReturnType;
   reason: string;
   refundMethod?: string;
+  refundReference?: string;
   notes?: string;
   items: Array<{
     saleItemId: string;
@@ -78,6 +79,7 @@ async function returnedQuantityMap(
 export async function createReturnAction(input: CreateReturnInput) {
   const { company, membership, settings } = await requirePermission("returns.manage");
   const reason = input.reason?.trim();
+  const refundReference = input.refundReference?.trim() || null;
 
   if (!input.saleId || !input.items.length) {
     throw new Error("Selecciona la venta y al menos un producto.");
@@ -90,6 +92,13 @@ export async function createReturnAction(input: CreateReturnInput) {
   }
   if (input.type === "RETURN" && !REFUND_METHODS.has(input.refundMethod as RefundMethod)) {
     throw new Error("Selecciona el medio por el que se devolverá el dinero.");
+  }
+  if (
+    input.type === "RETURN"
+    && ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.refundMethod ?? "")
+    && !refundReference
+  ) {
+    throw new Error("Ingresa el número de operación o referencia de la devolución.");
   }
 
   const sale = await prisma.sale.findFirst({
@@ -265,6 +274,7 @@ export async function createReturnAction(input: CreateReturnInput) {
         status: "COMPLETED",
         reason,
         refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
+        refundReference: input.type === "RETURN" ? refundReference : null,
         refundAmount,
         refundCashSessionId: input.type === "RETURN" ? cashSessionId : null,
         notes: input.notes?.trim() || null,
@@ -459,6 +469,7 @@ export async function createReturnAction(input: CreateReturnInput) {
           merchandiseAmount,
           refundAmount,
           refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
+          refundReference: input.type === "RETURN" ? refundReference : null,
           reason,
           saleFullyReturned,
           resultingSaleStatus: saleFullyReturned ? "REFUNDED" : sale.status,
