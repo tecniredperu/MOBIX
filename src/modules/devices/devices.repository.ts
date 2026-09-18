@@ -82,3 +82,155 @@ export async function getDevices(filters: { q?: string; status?: string; warehou
     },
   };
 }
+
+
+function displayCustomer(customer: {
+  businessName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+} | null | undefined) {
+  if (!customer) return "Consumidor final";
+  if (customer.businessName?.trim()) return customer.businessName;
+  return [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "Cliente";
+}
+
+function addDays(date: Date, days: number) {
+  return days > 0 ? new Date(date.getTime() + days * 86_400_000) : null;
+}
+
+export async function getDeviceDetail(id: string) {
+  const company = await getActiveCompany();
+  const unit = await prisma.productUnit.findFirst({
+    where: { id, companyId: company.id },
+    include: {
+      product: { include: { brand: true, category: true } },
+      variant: true,
+      warehouse: { include: { branch: true } },
+      identifiers: true,
+      purchase: { include: { supplier: true } },
+      saleLinks: {
+        include: {
+          saleItem: {
+            include: {
+              sale: {
+                include: {
+                  customer: true,
+                  seller: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      serviceOrders: {
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          serviceNumber: true,
+          serviceType: true,
+          status: true,
+          reportedIssue: true,
+          warrantyCovered: true,
+          receivedAt: true,
+          deliveredAt: true,
+        },
+      },
+    },
+  });
+
+  if (!unit) return null;
+
+  const identifiers = new Map(unit.identifiers.map((identifier) => [identifier.type, identifier.value]));
+  const saleLinks = [...unit.saleLinks].sort(
+    (a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt,
+  );
+  const latestLink = saleLinks[0] ?? null;
+  const sale = latestLink?.saleItem.sale ?? null;
+
+  const legacyWarrantyDays = unit.product.warrantyDays ?? 0;
+  const warrantyDays = latestLink?.warrantyDays || legacyWarrantyDays;
+  const warrantyStartsAt = latestLink?.warrantyStartsAt ?? sale?.createdAt ?? null;
+  const warrantyExpiresAt = latestLink?.warrantyExpiresAt
+    ?? (warrantyStartsAt ? addDays(warrantyStartsAt, warrantyDays) : null);
+  const now = Date.now();
+  const warrantyActive = Boolean(
+    unit.status === "SOLD"
+    && warrantyExpiresAt
+    && warrantyExpiresAt.getTime() >= now,
+  );
+
+  return {
+    id: unit.id,
+    status: unit.status,
+    product: {
+      name: unit.product.name,
+      model: unit.product.model,
+      brand: unit.product.brand?.name ?? "Sin marca",
+      category: unit.product.category?.name ?? "Sin categoría",
+      warrantyDaysConfigured: unit.product.warrantyDays,
+    },
+    variant: {
+      label: [unit.variant.ram, unit.variant.storage, unit.variant.color].filter(Boolean).join(" / ") || "Variante base",
+      sku: unit.variant.sku ?? unit.product.sku,
+      color: unit.variant.color,
+      ram: unit.variant.ram,
+      storage: unit.variant.storage,
+    },
+    identifiers: {
+      imei1: identifiers.get("IMEI_1") ?? null,
+      imei2: identifiers.get("IMEI_2") ?? null,
+      serial: identifiers.get("SERIAL") ?? null,
+    },
+    location: {
+      warehouse: unit.warehouse.name,
+      branch: unit.warehouse.branch.name,
+    },
+    purchase: unit.purchase
+      ? {
+          number: unit.purchase.number,
+          supplier: unit.purchase.supplier.businessName,
+          issueDate: unit.purchase.issueDate.toISOString(),
+          cost: Number(unit.purchaseCost),
+        }
+      : null,
+    sale: sale
+      ? {
+          id: sale.id,
+          saleNumber: sale.saleNumber,
+          documentType: sale.documentType,
+          documentSeries: sale.documentSeries,
+          documentNumber: sale.documentNumber,
+          soldAt: sale.createdAt.toISOString(),
+          seller: sale.seller.name,
+          customer: sale.customer
+            ? {
+                id: sale.customer.id,
+                name: displayCustomer(sale.customer),
+                documentType: sale.customer.documentType,
+                documentNumber: sale.customer.documentNumber,
+                phone: sale.customer.whatsapp ?? sale.customer.phone,
+                email: sale.customer.email,
+                address: sale.customer.address,
+              }
+            : null,
+        }
+      : null,
+    warranty: {
+      days: warrantyDays,
+      startsAt: warrantyStartsAt?.toISOString() ?? null,
+      expiresAt: warrantyExpiresAt?.toISOString() ?? null,
+      active: warrantyActive,
+      expired: Boolean(warrantyExpiresAt && warrantyExpiresAt.getTime() < now),
+    },
+    serviceOrders: unit.serviceOrders.map((order) => ({
+      id: order.id,
+      serviceNumber: order.serviceNumber,
+      serviceType: order.serviceType,
+      status: order.status,
+      reportedIssue: order.reportedIssue,
+      warrantyCovered: order.warrantyCovered,
+      receivedAt: order.receivedAt.toISOString(),
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
+    })),
+  };
+}
