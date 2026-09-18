@@ -76,7 +76,7 @@ async function returnedQuantityMap(
 }
 
 export async function createReturnAction(input: CreateReturnInput) {
-  const { company, membership } = await requirePermission("returns.manage");
+  const { company, membership, settings } = await requirePermission("returns.manage");
   const reason = input.reason?.trim();
 
   if (!input.saleId || !input.items.length) {
@@ -193,7 +193,8 @@ export async function createReturnAction(input: CreateReturnInput) {
     }
 
     let cashSessionId: string | null = null;
-    if (input.type === "RETURN" && input.refundMethod === "CASH") {
+    const financialRefund = input.type === "RETURN" && input.refundMethod !== "CREDIT";
+    if (financialRefund && (input.refundMethod === "CASH" || settings.requireCashSession)) {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
@@ -207,7 +208,11 @@ export async function createReturnAction(input: CreateReturnInput) {
       `;
       const session = sessions[0];
       if (!session) {
-        throw new Error("Para devolver dinero en efectivo debes tener una caja abierta en la sucursal de la venta.");
+        throw new Error(
+          input.refundMethod === "CASH"
+            ? "Para devolver dinero en efectivo debes tener una caja abierta en la sucursal de la venta."
+            : "Debes tener una caja abierta en la sucursal de la venta para registrar esta devolución y conciliar el medio de pago.",
+        );
       }
       cashSessionId = session.id;
     }
@@ -261,6 +266,7 @@ export async function createReturnAction(input: CreateReturnInput) {
         reason,
         refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
         refundAmount,
+        refundCashSessionId: input.type === "RETURN" ? cashSessionId : null,
         notes: input.notes?.trim() || null,
         createdById: membership.userId,
       },
@@ -496,7 +502,7 @@ export async function refundExchangeCreditAction(input: {
   method: ExchangeRefundMethod;
   reference?: string;
 }) {
-  const { company, membership } = await requirePermission("returns.manage");
+  const { company, membership, settings } = await requirePermission("returns.manage");
   const exchangeCreditId = input.exchangeCreditId?.trim();
   const reference = input.reference?.trim() || null;
 
@@ -531,7 +537,7 @@ export async function refundExchangeCreditAction(input: {
     if (amount <= 0.01) throw new Error("El vale ya no tiene saldo por devolver.");
 
     let cashSessionId: string | null = null;
-    if (input.method === "CASH") {
+    if (input.method === "CASH" || settings.requireCashSession) {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
@@ -545,9 +551,15 @@ export async function refundExchangeCreditAction(input: {
       `;
       cashSessionId = sessions[0]?.id ?? null;
       if (!cashSessionId) {
-        throw new Error("Para devolver el saldo en efectivo debes tener una caja abierta en la sucursal de la venta original.");
+        throw new Error(
+          input.method === "CASH"
+            ? "Para devolver el saldo en efectivo debes tener una caja abierta en la sucursal de la venta original."
+            : "Debes tener una caja abierta en la sucursal de la venta original para conciliar esta devolución.",
+        );
       }
+    }
 
+    if (input.method === "CASH" && cashSessionId) {
       await tx.cashMovement.create({
         data: {
           companyId: company.id,
@@ -571,6 +583,7 @@ export async function refundExchangeCreditAction(input: {
         refundReference: reference,
         refundedAt: new Date(),
         refundedById: membership.userId,
+        refundCashSessionId: cashSessionId,
       },
     });
 
