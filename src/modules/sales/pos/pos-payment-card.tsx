@@ -11,7 +11,7 @@ import type { PosCustomer, SalePaymentMethod } from "../sale-types";
 import { formatPen, PAYMENT_LABELS, type PaymentLine } from "./pos-shared";
 
 const QUICK_METHODS: Array<{
-  value: Exclude<SalePaymentMethod, "CREDIT" | "OTHER">;
+  value: Exclude<SalePaymentMethod, "OTHER">;
   label: string;
   icon: typeof Banknote;
 }> = [
@@ -20,6 +20,7 @@ const QUICK_METHODS: Array<{
   { value: "PLIN", label: "Plin", icon: Smartphone },
   { value: "CARD", label: "Tarjeta", icon: CreditCard },
   { value: "TRANSFER", label: "Transferencia", icon: Landmark },
+  { value: "CREDIT", label: "Crédito", icon: WalletCards },
 ];
 
 export function PosPaymentCard({
