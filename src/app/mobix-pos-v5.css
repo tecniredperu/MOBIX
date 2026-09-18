@@ -1240,3 +1240,79 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+
+.pos-exchange-credit-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #eff6ff, #f8fbff);
+}
+
+.pos-exchange-credit-card > div:first-child {
+  min-width: 0;
+}
+
+.pos-exchange-credit-card span,
+.pos-exchange-credit-card strong,
+.pos-exchange-credit-card small {
+  display: block;
+}
+
+.pos-exchange-credit-card > div:first-child > span {
+  color: #1d4ed8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.pos-exchange-credit-card > div:first-child > strong {
+  margin-top: 2px;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.pos-exchange-credit-card > div:first-child > small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 8.4px;
+  line-height: 1.35;
+}
+
+.pos-exchange-credit-card > div:last-child {
+  min-width: 102px;
+  padding-left: 10px;
+  border-left: 1px solid #dbeafe;
+  text-align: right;
+}
+
+.pos-exchange-credit-card > div:last-child span {
+  color: #64748b;
+  font-size: 8px;
+}
+
+.pos-exchange-credit-card > div:last-child strong {
+  margin-top: 2px;
+  color: #1d4ed8;
+  font-size: 15px;
+}
+
+@media (max-width: 470px) {
+  .pos-exchange-credit-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-exchange-credit-card > div:last-child {
+    padding-left: 0;
+    padding-top: 7px;
+    border-left: 0;
+    border-top: 1px solid #dbeafe;
+    text-align: left;
+  }
+}
