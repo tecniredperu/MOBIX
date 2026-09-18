@@ -754,9 +754,15 @@ export function PosFormV4({
           })),
         });
 
-        router.push(
-          "/ventas/" + result.id + "?created=1&change=" + result.change.toFixed(2),
-        );
+        const completionParams = new URLSearchParams({
+          created: "1",
+          change: result.change.toFixed(2),
+        });
+        if (initialExchangeCredit) {
+          completionParams.set("exchangeCredit", initialExchangeCredit.id);
+          completionParams.set("exchangeBalance", exchangeRemaining.toFixed(2));
+        }
+        router.push("/ventas/" + result.id + "?" + completionParams.toString());
         router.refresh();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "No se pudo completar la venta.");
