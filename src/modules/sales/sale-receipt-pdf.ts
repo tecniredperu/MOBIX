@@ -21,6 +21,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
