@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePaths } from "@/lib/revalidation";
 
 const REFUND_METHODS = new Set(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "CREDIT", "OTHER"] as const);
+const EXCHANGE_REFUND_METHODS = new Set(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "OTHER"] as const);
 const RETURN_PATHS = [
   "/devoluciones",
   "/ventas",
@@ -20,6 +21,7 @@ const RETURN_PATHS = [
 ] as const;
 
 type RefundMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "CREDIT" | "OTHER";
+type ExchangeRefundMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "OTHER";
 type ReturnType = "RETURN" | "EXCHANGE";
 type ReturnDisposition = "RESTOCK" | "QUARANTINE" | "DAMAGED";
 
@@ -461,5 +463,134 @@ export async function createReturnAction(input: CreateReturnInput) {
 
   revalidatePaths(RETURN_PATHS);
   if (sale.customerId) revalidatePaths([`/clientes/${sale.customerId}`]);
+  return result;
+}
+
+
+type ExchangeCreditRefundLockRow = {
+  id: string;
+  balance: unknown;
+  status: string;
+  returnNumber: string;
+  saleNumber: string;
+  branchId: string;
+};
+
+export async function refundExchangeCreditAction(input: {
+  exchangeCreditId: string;
+  method: ExchangeRefundMethod;
+  reference?: string;
+}) {
+  const { company, membership } = await requirePermission("returns.manage");
+  const exchangeCreditId = input.exchangeCreditId?.trim();
+  const reference = input.reference?.trim() || null;
+
+  if (!exchangeCreditId) throw new Error("No se identificó el vale de cambio.");
+  if (!EXCHANGE_REFUND_METHODS.has(input.method)) {
+    throw new Error("Selecciona un medio válido para devolver el saldo.");
+  }
+  if (["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.method) && !reference) {
+    throw new Error("Ingresa el número de operación o referencia de la devolución.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<ExchangeCreditRefundLockRow[]>`
+      SELECT ec."id", ec."balance", ec."status",
+             ro."returnNumber", s."saleNumber", s."branchId"
+      FROM "exchange_credits" ec
+      JOIN "return_orders" ro ON ro."id" = ec."returnOrderId"
+      JOIN "sales" s ON s."id" = ro."saleId"
+      WHERE ec."id" = ${exchangeCreditId}
+        AND ec."companyId" = ${company.id}
+        AND ec."status" IN ('OPEN','PARTIAL')
+      LIMIT 1
+      FOR UPDATE OF ec
+    `;
+
+    const credit = rows[0];
+    if (!credit) {
+      throw new Error("El vale ya fue utilizado, reembolsado o no está disponible.");
+    }
+
+    const amount = roundMoney(Number(credit.balance ?? 0));
+    if (amount <= 0.01) throw new Error("El vale ya no tiene saldo por devolver.");
+
+    let cashSessionId: string | null = null;
+    if (input.method === "CASH") {
+      const sessions = await tx.$queryRaw<CashSessionRow[]>`
+        SELECT "id"
+        FROM "cash_sessions"
+        WHERE "companyId" = ${company.id}
+          AND "branchId" = ${credit.branchId}
+          AND "userId" = ${membership.userId}
+          AND "status" = 'OPEN'::"CashSessionStatus"
+        ORDER BY "openedAt" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+      cashSessionId = sessions[0]?.id ?? null;
+      if (!cashSessionId) {
+        throw new Error("Para devolver el saldo en efectivo debes tener una caja abierta en la sucursal de la venta original.");
+      }
+
+      await tx.cashMovement.create({
+        data: {
+          companyId: company.id,
+          cashSessionId,
+          type: "EXPENSE",
+          amount,
+          concept: `Devolución de saldo de vale ${credit.returnNumber}`,
+          reference: exchangeCreditId,
+          createdById: membership.userId,
+        },
+      });
+    }
+
+    await tx.exchangeCredit.update({
+      where: { id: exchangeCreditId },
+      data: {
+        balance: 0,
+        status: "USED",
+        refundedAmount: amount,
+        refundMethod: input.method,
+        refundReference: reference,
+        refundedAt: new Date(),
+        refundedById: membership.userId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "UPDATE",
+        entity: "EXCHANGE_CREDIT",
+        entityId: exchangeCreditId,
+        oldValues: {
+          status: credit.status,
+          balance: amount,
+        },
+        newValues: {
+          status: "USED",
+          balance: 0,
+          refundedAmount: amount,
+          refundMethod: input.method,
+          refundReference: reference,
+          returnNumber: credit.returnNumber,
+          saleNumber: credit.saleNumber,
+          cashSessionId,
+        },
+      },
+    });
+
+    return {
+      id: exchangeCreditId,
+      amount,
+      method: input.method,
+      returnNumber: credit.returnNumber,
+    };
+  });
+
+  revalidatePaths(["/devoluciones", "/caja", "/reportes", "/pos"]);
   return result;
 }
