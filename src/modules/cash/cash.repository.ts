@@ -1,5 +1,12 @@
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
+import {
+  CASH_PAYMENT_METHODS,
+  calculateExpectedCash,
+  calculateNetPaymentTotals,
+  emptyCashPaymentTotals,
+  sumPaymentTotals,
+} from "./cash-calculations";
 import type {
   CashActivityItem,
   CashBranchOption,
@@ -9,17 +16,6 @@ import type {
   CashPaymentTotals,
   CashSessionHistoryItem,
 } from "./cash-types";
-
-const PAYMENT_METHODS: CashPaymentMethod[] = [
-  "CASH",
-  "YAPE",
-  "PLIN",
-  "CARD",
-  "TRANSFER",
-  "CREDIT",
-  "EXCHANGE_CREDIT",
-  "OTHER",
-];
 
 const PAYMENT_LABELS: Record<CashPaymentMethod, string> = {
   CASH: "Efectivo",
@@ -49,26 +45,13 @@ type ReceivableCollectionRow = {
   customerName: string;
 };
 
-function emptyPaymentTotals(): CashPaymentTotals {
-  return {
-    CASH: 0,
-    YAPE: 0,
-    PLIN: 0,
-    CARD: 0,
-    TRANSFER: 0,
-    CREDIT: 0,
-    EXCHANGE_CREDIT: 0,
-    OTHER: 0,
-  };
-}
-
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function paymentMethod(value: string | null | undefined): CashPaymentMethod | null {
   if (!value) return null;
-  return PAYMENT_METHODS.includes(value as CashPaymentMethod)
+  return CASH_PAYMENT_METHODS.includes(value as CashPaymentMethod)
     ? value as CashPaymentMethod
     : null;
 }
@@ -198,7 +181,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     }),
   ]);
 
-  const paymentTotals = emptyPaymentTotals();
+  const paymentTotals = emptyCashPaymentTotals();
   for (const payment of payments) {
     const method = paymentMethod(payment.paymentMethod);
     if (method) {
@@ -213,7 +196,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     }
   }
 
-  const refundTotals = emptyPaymentTotals();
+  const refundTotals = emptyCashPaymentTotals();
   for (const refund of directRefunds) {
     const method = paymentMethod(refund.refundMethod);
     if (method) {
@@ -227,10 +210,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     }
   }
 
-  const netPaymentTotals = emptyPaymentTotals();
-  for (const method of PAYMENT_METHODS) {
-    netPaymentTotals[method] = roundMoney(paymentTotals[method] - refundTotals[method]);
-  }
+  const netPaymentTotals = calculateNetPaymentTotals(paymentTotals, refundTotals);
 
   const automaticRefundReferences = new Set<string>([
     ...directRefunds
@@ -258,17 +238,15 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
   manualIncome = roundMoney(manualIncome);
   manualOut = roundMoney(manualOut);
 
-  const refundTotal = roundMoney(
-    PAYMENT_METHODS.reduce((sum, method) => sum + refundTotals[method], 0),
-  );
+  const refundTotal = sumPaymentTotals(refundTotals);
 
-  const expectedCash = roundMoney(
-    Number(session.openingAmount)
-      + paymentTotals.CASH
-      - refundTotals.CASH
-      + manualIncome
-      - manualOut,
-  );
+  const expectedCash = calculateExpectedCash({
+    openingAmount: Number(session.openingAmount),
+    cashCollected: paymentTotals.CASH,
+    cashRefunded: refundTotals.CASH,
+    manualIncome,
+    manualOut,
+  });
 
   const saleActivity: CashActivityItem[] = payments.map((payment) => {
     const method = paymentMethod(payment.paymentMethod) ?? "OTHER";
