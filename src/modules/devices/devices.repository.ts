@@ -135,6 +135,22 @@ export async function getDeviceDetail(id: string) {
           deliveredAt: true,
         },
       },
+      returnItems: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          returnOrder: {
+            select: {
+              id: true,
+              returnNumber: true,
+              type: true,
+              reason: true,
+              refundMethod: true,
+              refundAmount: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -229,6 +245,17 @@ export async function getDeviceDetail(id: string) {
       warrantyCovered: order.warrantyCovered,
       receivedAt: order.receivedAt.toISOString(),
       deliveredAt: order.deliveredAt?.toISOString() ?? null,
+    })),
+    returns: unit.returnItems.map((item) => ({
+      id: item.id,
+      returnOrderId: item.returnOrder.id,
+      returnNumber: item.returnOrder.returnNumber,
+      type: item.returnOrder.type,
+      reason: item.returnOrder.reason,
+      disposition: item.disposition,
+      refundMethod: item.returnOrder.refundMethod,
+      refundAmount: Number(item.returnOrder.refundAmount),
+      createdAt: item.returnOrder.createdAt.toISOString(),
     })),
   };
 }
