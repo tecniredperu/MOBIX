@@ -12,17 +12,27 @@ function date(value: string | null) {
   return new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(value));
 }
 
-export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustomerOption[]; soldUnits: SoldUnitOption[] }) {
+export function ServiceForm({
+  customers,
+  soldUnits,
+  initialUnitId = "",
+  initialUnitQuery = "",
+}: {
+  customers: ServiceCustomerOption[];
+  soldUnits: SoldUnitOption[];
+  initialUnitId?: string;
+  initialUnitQuery?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [origin, setOrigin] = useState<"SOLD" | "EXTERNAL">("SOLD");
-  const [unitId, setUnitId] = useState(soldUnits[0]?.id ?? "");
+  const [unitId, setUnitId] = useState(initialUnitId || soldUnits[0]?.id || "");
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
   const [availableCustomers, setAvailableCustomers] = useState(customers);
   const [availableSoldUnits, setAvailableSoldUnits] = useState(soldUnits);
   const [customerQuery, setCustomerQuery] = useState("");
-  const [unitQuery, setUnitQuery] = useState("");
+  const [unitQuery, setUnitQuery] = useState(initialUnitQuery);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [serviceType, setServiceType] = useState<ServiceType>("TECHNICAL_SERVICE");
@@ -37,6 +47,11 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
   const [expectedAt, setExpectedAt] = useState("");
 
   const selectedUnit = useMemo(() => availableSoldUnits.find((unit) => unit.id === unitId) ?? null, [availableSoldUnits, unitId]);
+
+  useEffect(() => {
+    if (!selectedUnit) return;
+    setServiceType(selectedUnit.withinWarranty ? "WARRANTY" : "TECHNICAL_SERVICE");
+  }, [selectedUnit]);
 
   useEffect(() => {
     if (origin !== "SOLD") return;
@@ -124,7 +139,7 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
           {origin === "SOLD" ? (
             <div className="service-field-stack">
               <label><span>Buscar equipo vendido / IMEI</span><input value={unitQuery} onChange={(event) => setUnitQuery(event.target.value)} placeholder="IMEI, serie, equipo, modelo o SKU..." autoComplete="off" /></label>
-              <label><span>Equipo vendido / IMEI {loadingUnits ? "· buscando..." : ""}</span><select value={unitId} onChange={(event) => { setUnitId(event.target.value); setServiceType("TECHNICAL_SERVICE"); }}><option value="">Selecciona un equipo</option>{availableSoldUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier} · {unit.productName} · {unit.customerName}</option>)}</select></label>
+              <label><span>Equipo vendido / IMEI {loadingUnits ? "· buscando..." : ""}</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)}><option value="">Selecciona un equipo</option>{availableSoldUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier} · {unit.productName} · {unit.customerName}</option>)}</select></label>
               {selectedUnit && <div className="service-unit-preview"><div><span>Equipo</span><strong>{selectedUnit.productName}</strong><small>{selectedUnit.brand} · {selectedUnit.variant}</small></div><div><span>Cliente</span><strong>{selectedUnit.customerName}</strong><small>Venta {selectedUnit.saleNumber}</small></div><div><span>Identificador</span><strong>{selectedUnit.identifier}</strong><small>Vendido {date(selectedUnit.soldAt)}</small></div><div className={selectedUnit.withinWarranty ? "warranty-ok" : "warranty-expired"}><span>Garantía</span><strong>{selectedUnit.withinWarranty ? "Vigente" : "No vigente"}</strong><small>{selectedUnit.warrantyExpiresAt ? `Hasta ${date(selectedUnit.warrantyExpiresAt)}` : "Sin plazo configurado"}</small></div></div>}
             </div>
           ) : (
