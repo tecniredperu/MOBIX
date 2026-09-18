@@ -29,6 +29,7 @@ export const PAYMENT_LABELS: Record<SalePaymentMethod, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
