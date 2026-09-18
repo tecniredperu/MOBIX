@@ -38,6 +38,8 @@ const penFormatter = new Intl.NumberFormat("es-PE", {
   minimumFractionDigits: 2,
 });
 
+const SEARCH_LABEL_TOKENS = new Set(["imei", "imei1", "imei2", "serie", "serial", "codigo"]);
+
 export function formatPen(value: number) {
   return penFormatter.format(value || 0);
 }
@@ -54,8 +56,8 @@ export function normalizePosSearch(value: string) {
 export function posSearchTokens(value: string) {
   return normalizePosSearch(value)
     .split(" ")
-    .map((token) => token.trim())
-    .filter(Boolean)
+    .map((token) => token.replace(/^[:#-]+|[:#-]+$/g, "").trim())
+    .filter((token) => Boolean(token) && !SEARCH_LABEL_TOKENS.has(token))
     .slice(0, 8);
 }
 
