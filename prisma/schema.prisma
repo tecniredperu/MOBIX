@@ -874,6 +874,7 @@ model ReturnOrder {
   status       String   @default("COMPLETED")
   reason       String
   refundMethod        String?
+  refundReference     String?
   refundAmount        Decimal  @default(0) @db.Decimal(14, 2)
   refundCashSessionId String?
   notes               String?
