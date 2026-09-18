@@ -217,6 +217,14 @@ export async function createSaleAction(input: CreateSaleInput) {
     if (payment.method === "EXCHANGE_CREDIT" && !payment.reference?.trim()) {
       throw new Error("El vale de cambio no tiene una referencia válida.");
     }
+    if (
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
+      && !payment.reference?.trim()
+    ) {
+      throw new Error(
+        `Ingresa el número de operación o referencia para ${payment.method === "CARD" ? "Tarjeta" : payment.method.charAt(0) + payment.method.slice(1).toLowerCase()}.`,
+      );
+    }
   }
 
   const exchangePayments = input.payments.filter((payment) => payment.method === "EXCHANGE_CREDIT");
