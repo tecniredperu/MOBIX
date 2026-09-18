@@ -41,8 +41,13 @@ export type CashOpenSession = {
   userId: string;
   userName: string;
   openedAt: string;
+  closedAt: string | null;
   openingAmount: number;
   openingNotes: string | null;
+  closingNotes: string | null;
+  expectedAmount: number | null;
+  closingAmount: number | null;
+  difference: number | null;
   paymentTotals: CashPaymentTotals;
   refundTotals: CashPaymentTotals;
   netPaymentTotals: CashPaymentTotals;
