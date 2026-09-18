@@ -34,6 +34,13 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
 export type SaleTicketData = {
   saleNumber: string;
   documentType: string;
@@ -64,7 +71,14 @@ export type SaleTicketData = {
     quantity: number;
     unitPrice: number;
     total: number;
-    identifiers: Array<{ imei1: string | null; imei2: string | null; serial: string | null }>;
+    identifiers: Array<{
+      imei1: string | null;
+      imei2: string | null;
+      serial: string | null;
+      warrantyDays?: number;
+      warrantyStartsAt?: string | null;
+      warrantyExpiresAt?: string | null;
+    }>;
   }>;
   subtotal: number;
   tax: number;
@@ -144,6 +158,9 @@ export function SaleTicketModal({
                     <span key={index}>
                       {identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : identifier.serial ? `Serie: ${identifier.serial}` : ""}
                       {identifier.imei2 ? ` · IMEI 2: ${identifier.imei2}` : ""}
+                      {identifier.warrantyExpiresAt ? (
+                        <><br />Garantía hasta: {limaOnlyDate(identifier.warrantyExpiresAt)}</>
+                      ) : null}
                     </span>
                   ))}
                   <div><span>{item.quantity} x {money(item.unitPrice)}</span><strong>{money(item.total)}</strong></div>
