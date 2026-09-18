@@ -97,6 +97,7 @@ export function PosTotalCard({
       </div>
 
       <button
+        id="pos-confirm-sale"
         className="primary-button wide pos-v5-confirm"
         type="button"
         disabled={disabled}
