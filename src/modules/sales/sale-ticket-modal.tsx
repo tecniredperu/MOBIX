@@ -85,7 +85,7 @@ export type SaleTicketData = {
   tax: number;
   discount: number;
   total: number;
-  payments: Array<{ id: string; method: string; amount: number }>;
+  payments: Array<{ id: string; method: string; amount: number; reference?: string | null }>;
 };
 
 export function SaleTicketModal({
@@ -176,7 +176,13 @@ export function SaleTicketModal({
             </div>
             <div className="ticket-payments">
               {ticket.payments.map((payment) => (
-                <div key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span><strong>{money(payment.amount)}</strong></div>
+                <div key={payment.id}>
+                  <span>
+                    {PAYMENT_LABELS[payment.method] ?? payment.method}
+                    {payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}
+                  </span>
+                  <strong>{money(payment.amount)}</strong>
+                </div>
               ))}
             </div>
             <footer className="ticket-footer">
