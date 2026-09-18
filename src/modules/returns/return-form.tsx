@@ -8,11 +8,17 @@ import { createReturnAction } from "./return-actions";
 
 const METHODS=[['CASH','Efectivo'],['YAPE','Yape'],['PLIN','Plin'],['CARD','Tarjeta'],['TRANSFER','Transferencia'],['CREDIT','Crédito'],['OTHER','Otro']];
 function money(v:number){return new Intl.NumberFormat('es-PE',{style:'currency',currency:'PEN'}).format(v||0)}
-export function ReturnForm({sales}:{sales:any[]}){
+export function ReturnForm({
+ sales,
+ initialSaleId='',
+ initialUnitId='',
+}:{sales:any[];initialSaleId?:string;initialUnitId?:string}){
  const router=useRouter(); const [pending,start]=useTransition(); const [error,setError]=useState('');
- const [saleId,setSaleId]=useState(sales[0]?.id||''); const [type,setType]=useState<'RETURN'|'EXCHANGE'>('RETURN'); const [reason,setReason]=useState(''); const [method,setMethod]=useState('CASH'); const [notes,setNotes]=useState('');
+ const initialSale=sales.find(s=>s.id===initialSaleId)??sales[0];
+ const initialItem=initialUnitId?initialSale?.items.find((item:any)=>item.units.some((unit:any)=>unit.id===initialUnitId)):undefined;
+ const [saleId,setSaleId]=useState(initialSale?.id||''); const [type,setType]=useState<'RETURN'|'EXCHANGE'>('RETURN'); const [reason,setReason]=useState(''); const [method,setMethod]=useState('CASH'); const [notes,setNotes]=useState('');
  const sale=useMemo(()=>sales.find(s=>s.id===saleId),[sales,saleId]);
- const [selected,setSelected]=useState<Record<string,{checked:boolean;quantity:number;unitId?:string;disposition?:'RESTOCK'|'QUARANTINE'|'DAMAGED'}>>({});
+ const [selected,setSelected]=useState<Record<string,{checked:boolean;quantity:number;unitId?:string;disposition?:'RESTOCK'|'QUARANTINE'|'DAMAGED'}>>(initialItem?{[initialItem.id]:{checked:true,quantity:1,unitId:initialUnitId,disposition:'QUARANTINE'}}:{});
  const total=useMemo(()=>sale?.items.reduce((sum:number,item:any)=>{const st=selected[item.id];if(!st?.checked)return sum;const q=item.type==='PHONE'||item.type==='SERIALIZED'?1:Number(st.quantity||0);return sum+(item.total/item.quantity)*q},0)||0,[sale,selected]);
  function setLine(id:string,patch:any){setSelected(prev=>{const current=prev[id]??{checked:false,quantity:1};return {...prev,[id]:{...current,...patch}}})}
  function submit(){setError(''); const items=(sale?.items||[]).filter((i:any)=>selected[i.id]?.checked).map((i:any)=>({saleItemId:i.id,quantity:(i.type==='PHONE'||i.type==='SERIALIZED')?1:Number(selected[i.id]?.quantity||1),productUnitId:selected[i.id]?.unitId||undefined,disposition:(i.type==='PHONE'||i.type==='SERIALIZED')?(selected[i.id]?.disposition||'QUARANTINE'):undefined}));start(async()=>{try{const r=await createReturnAction({saleId,type,reason,refundMethod:type==='RETURN'?method:undefined,notes,items});router.push(`/devoluciones?created=${r.returnNumber}`);router.refresh()}catch(e){setError(e instanceof Error?e.message:'No se pudo registrar la operación.')}})}
