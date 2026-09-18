@@ -593,8 +593,7 @@ model Customer {
   sales         Sale[]
   receivables   AccountReceivable[]
   returnOrders  ReturnOrder[]
-  serviceOrders ServiceOrder[]
-  exchangeCreditUsages ExchangeCreditUsage[]
+  serviceOrders  ServiceOrder[]
   exchangeCredits ExchangeCredit[]
 
   @@unique([companyId, documentNumber])
