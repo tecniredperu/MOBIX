@@ -13,6 +13,7 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
+import { DeviceReturnReview } from "./device-return-review";
 import type { getDeviceDetail } from "./devices.repository";
 
 type DeviceDetail = NonNullable<Awaited<ReturnType<typeof getDeviceDetail>>>;
@@ -122,6 +123,10 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
         </div>
       </section>
 
+      {device.status === "RETURNED" && (
+        <DeviceReturnReview productUnitId={device.id} />
+      )}
+
       <section className="device-detail-grid">
         <article className="panel device-detail-card">
           <div className="device-detail-card-title">
@@ -171,7 +176,7 @@ export function DeviceDetailView({ device }: { device: DeviceDetail }) {
                 </dd>
               </div>
               <div><dt>WhatsApp / teléfono</dt><dd>{device.sale.customer?.phone ?? "—"}</dd></div>
-              <div><dt>Venta</dt><dd>{device.sale.saleNumber}</dd></div>
+              <div><dt>Venta</dt><dd>{device.sale.saleNumber}{device.sale.returned ? " · Devuelta" : ""}</dd></div>
               <div><dt>Comprobante</dt><dd>{documentNumber(device)}</dd></div>
               <div><dt>Fecha de venta</dt><dd>{date(device.sale.soldAt)}</dd></div>
               <div><dt>Vendedor</dt><dd>{device.sale.seller}</dd></div>
