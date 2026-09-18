@@ -219,7 +219,9 @@ export function ReturnsView({ items }: { items: any[] }) {
                 return (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.returnNumber}</strong>
+                      <Link className="return-detail-link" href={"/devoluciones/" + item.id}>
+                        {item.returnNumber}
+                      </Link>
                       <span className={`service-type-badge ${item.type === "EXCHANGE" ? "technical" : "warranty"}`}>
                         {item.type === "EXCHANGE" ? "Cambio" : "Devolución"}
                       </span>
