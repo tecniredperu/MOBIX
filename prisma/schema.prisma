@@ -45,6 +45,12 @@ enum ProductUnitStatus {
   INACTIVE
 }
 
+enum ReturnDisposition {
+  RESTOCK
+  QUARANTINE
+  DAMAGED
+}
+
 enum DeviceIdentifierType {
   IMEI_1
   IMEI_2
@@ -874,17 +880,18 @@ model ReturnOrder {
 }
 
 model ReturnItem {
-  id            String   @id
+  id            String            @id
   returnOrderId String
   saleItemId    String
   productId     String
   variantId     String
   productUnitId String?
+  disposition   ReturnDisposition @default(RESTOCK)
   quantity      Int
-  unitPrice     Decimal  @db.Decimal(14, 2)
-  unitCost      Decimal  @db.Decimal(14, 2)
-  amount        Decimal  @db.Decimal(14, 2)
-  createdAt     DateTime @default(now())
+  unitPrice     Decimal           @db.Decimal(14, 2)
+  unitCost      Decimal           @db.Decimal(14, 2)
+  amount        Decimal           @db.Decimal(14, 2)
+  createdAt     DateTime          @default(now())
 
   returnOrder ReturnOrder     @relation(fields: [returnOrderId], references: [id], onDelete: Cascade, map: "return_items_order_fkey")
   saleItem    SaleItem        @relation(fields: [saleItemId], references: [id], onDelete: Restrict, map: "return_items_sale_item_fkey")
