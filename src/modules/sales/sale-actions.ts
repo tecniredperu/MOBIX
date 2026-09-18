@@ -292,7 +292,7 @@ export async function createSaleAction(input: CreateSaleInput) {
         FROM "exchange_credits"
         WHERE "id" = ${exchangeCreditId}
           AND "companyId" = ${company.id}
-          AND "status" IN (\'OPEN\',\'PARTIAL\')
+          AND "status" IN ('OPEN','PARTIAL')
         LIMIT 1
         FOR UPDATE
       `;
