@@ -392,6 +392,18 @@ export async function createReturnAction(input: CreateReturnInput) {
       }
     }
 
+    const finalReturnedMap = await returnedQuantityMap(tx, company.id, sale.id);
+    const saleFullyReturned = sale.items.every(
+      (item) => (finalReturnedMap.get(item.id) ?? 0) >= item.quantity,
+    );
+
+    if (saleFullyReturned) {
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: { status: "REFUNDED" },
+      });
+    }
+
     if (input.type === "RETURN" && input.refundMethod === "CASH" && cashSessionId) {
       await tx.cashMovement.create({
         data: {
@@ -442,6 +454,8 @@ export async function createReturnAction(input: CreateReturnInput) {
           refundAmount,
           refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
           reason,
+          saleFullyReturned,
+          resultingSaleStatus: saleFullyReturned ? "REFUNDED" : sale.status,
           itemDispositions: validated
             .filter((row) => Boolean(row.unitId))
             .map((row) => ({
@@ -458,6 +472,7 @@ export async function createReturnAction(input: CreateReturnInput) {
       amount: refundAmount,
       merchandiseAmount,
       exchangeCreditId,
+      saleFullyReturned,
     };
   });
 
