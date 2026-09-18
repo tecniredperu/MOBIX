@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   CreditCard,
   Headphones,
   LoaderCircle,
@@ -31,12 +32,15 @@ export function PosCatalogPanel({
   unitsByVariant,
   loadingUnits,
   isSearching,
+  isResolvingScan,
+  scanNotice,
   onQueryChange,
   onFilterChange,
   onToggleFavorite,
   onLoadUnits,
   onUnitSelectionChange,
   onAdd,
+  onSubmitSearch,
 }: {
   items: PosCatalogItem[];
   query: string;
@@ -47,12 +51,15 @@ export function PosCatalogPanel({
   unitsByVariant: Record<string, PosUnit[]>;
   loadingUnits: Record<string, boolean>;
   isSearching: boolean;
+  isResolvingScan: boolean;
+  scanNotice: string;
   onQueryChange: (value: string) => void;
   onFilterChange: (value: PosCatalogFilter) => void;
   onToggleFavorite: (variantId: string) => void;
   onLoadUnits: (variantId: string) => Promise<PosUnit[]>;
   onUnitSelectionChange: (variantId: string, unitId: string) => void;
   onAdd: (item: PosCatalogItem) => void | Promise<void>;
+  onSubmitSearch: (value: string, fallback?: PosCatalogItem) => void | Promise<void>;
 }) {
   function focusSearch() {
     document.getElementById("pos-product-search")?.focus();
@@ -62,15 +69,17 @@ export function PosCatalogPanel({
     <section className="pos-catalog-panel panel">
       <div className="pos-v5-search-zone">
         <div className="pos-search">
-          {isSearching ? <LoaderCircle className="mobix-spin" size={19} /> : <Search size={19} />}
+          {isSearching || isResolvingScan
+            ? <LoaderCircle className="mobix-spin" size={19} />
+            : <Search size={19} />}
           <input
             id="pos-product-search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && items[0]) {
+              if (event.key === "Enter" && query.trim()) {
                 event.preventDefault();
-                void onAdd(items[0]);
+                void onSubmitSearch(query, items[0]);
               }
             }}
             placeholder="Buscar producto, código, IMEI, serie, marca o modelo..."
@@ -80,13 +89,29 @@ export function PosCatalogPanel({
           />
           <kbd>Enter</kbd>
           <kbd>F2</kbd>
-          {isSearching && <span className="pos-search-state">Buscando…</span>}
+          {(isSearching || isResolvingScan) && (
+            <span className="pos-search-state">
+              {isResolvingScan ? "Resolviendo escaneo…" : "Buscando…"}
+            </span>
+          )}
         </div>
 
-        <button className="pos-scan-button" type="button" onClick={focusSearch} title="Escanear código o IMEI">
+        <button
+          className="pos-scan-button"
+          type="button"
+          onClick={focusSearch}
+          title="Escanear código, IMEI o serie"
+        >
           <ScanLine size={18} />
           <span>Escanear</span>
         </button>
+
+        {scanNotice && (
+          <div className="pos-scan-notice" role="status" aria-live="polite">
+            <BadgeCheck size={14} />
+            <span>{scanNotice}</span>
+          </div>
+        )}
       </div>
 
       <div className="pos-v5-catalog-toolbar">
@@ -114,7 +139,10 @@ export function PosCatalogPanel({
         </span>
       </div>
 
-      <div className="pos-catalog-list pos-v5-product-grid" aria-busy={isSearching}>
+      <div
+        className="pos-catalog-list pos-v5-product-grid"
+        aria-busy={isSearching || isResolvingScan}
+      >
         {items.map((item) => {
           const stock = stockFor(item, warehouseId);
           const serialized = item.type === "PHONE" || item.type === "SERIALIZED";
