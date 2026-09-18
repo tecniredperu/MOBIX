@@ -291,6 +291,22 @@ export async function getSaleDetail(id: string) {
           },
         },
       },
+      serviceOrders: {
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          serviceNumber: true,
+          serviceType: true,
+          status: true,
+          deviceName: true,
+          identifier: true,
+          warrantyCovered: true,
+          reportedIssue: true,
+          receivedAt: true,
+          deliveredAt: true,
+          finalCost: true,
+        },
+      },
       items: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -409,6 +425,19 @@ export async function getSaleDetail(id: string) {
             refundedAmount: Number(order.exchangeCredit.refundedAmount),
           }
         : null,
+    })),
+    serviceOrders: sale.serviceOrders.map((order) => ({
+      id: order.id,
+      serviceNumber: order.serviceNumber,
+      serviceType: order.serviceType,
+      status: order.status,
+      deviceName: order.deviceName,
+      identifier: order.identifier,
+      warrantyCovered: order.warrantyCovered,
+      reportedIssue: order.reportedIssue,
+      receivedAt: order.receivedAt.toISOString(),
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
+      finalCost: Number(order.finalCost),
     })),
   };
 }
