@@ -154,9 +154,7 @@ export async function getDeviceDetail(id: string) {
     ?? (warrantyStartsAt ? addDays(warrantyStartsAt, warrantyDays) : null);
   const now = Date.now();
   const warrantyActive = Boolean(
-    unit.status === "SOLD"
-    && warrantyExpiresAt
-    && warrantyExpiresAt.getTime() >= now,
+    warrantyExpiresAt && warrantyExpiresAt.getTime() >= now,
   );
 
   return {
