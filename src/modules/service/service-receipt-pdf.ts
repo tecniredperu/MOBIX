@@ -2,7 +2,7 @@
 
 export type ServiceReceiptData = {
   company:{businessName:string;tradeName:string|null;ruc:string|null;email:string|null;phone:string|null;address:string|null;logoUrl:string|null};
-  serviceNumber:string;serviceType:string;status:string;receivedAt:string;expectedAt:string|null;
+  serviceNumber:string;serviceType:string;status:string;receivedAt:string;expectedAt:string|null;saleNumber:string|null;warrantyExpiresAt:string|null;
   deviceName:string;brand:string|null;model:string|null;identifier:string|null;
   reportedIssue:string;physicalCondition:string|null;accessories:string|null;diagnosis:string|null;
   technicianName:string|null;estimatedCost:number;finalCost:number;
