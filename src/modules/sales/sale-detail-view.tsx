@@ -27,6 +27,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -176,7 +177,7 @@ export function SaleDetailView({
         <section className="panel sale-payments-panel">
           <div className="panel-heading"><div><h2>Pagos</h2><p>Medios utilizados en la operación.</p></div></div>
           <div className="sale-payment-list">
-            {sale.payments.map((payment: any) => <div className="sale-payment-row" key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}{payment.reference ? <small>Ref. {payment.reference}</small> : null}</span><strong>{money(payment.amount)}</strong></div>)}
+            {sale.payments.map((payment: any) => <div className="sale-payment-row" key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}{payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}</span><strong>{money(payment.amount)}</strong></div>)}
           </div>
         </section>
         <section className="panel sale-totals-panel">
