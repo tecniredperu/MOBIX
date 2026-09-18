@@ -43,6 +43,7 @@ export type ReturnReceiptData = {
   refund: {
     amount: number;
     method: string | null;
+    reference: string | null;
   };
   exchangeCredit: {
     originalAmount: number;
@@ -471,6 +472,13 @@ export async function buildReturnReceiptPdf(data: ReturnReceiptData) {
     ctx.fillText(REFUND_LABELS[data.refund.method ?? ""] ?? data.refund.method ?? "—", right, y);
     ctx.textAlign = "left";
     y += 27;
+    if (data.refund.reference) {
+      ctx.fillText("Referencia", margin, y);
+      ctx.textAlign = "right";
+      ctx.fillText(data.refund.reference, right, y);
+      ctx.textAlign = "left";
+      y += 27;
+    }
   }
 
   y += 45;
