@@ -769,8 +769,10 @@ model CashSession {
   company            Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branch             Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
   user               User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  movements          CashMovement[]
-  receivablePayments ReceivablePayment[]
+  movements                CashMovement[]
+  receivablePayments       ReceivablePayment[]
+  refundReturnOrders       ReturnOrder[]      @relation("ReturnRefundCashSession")
+  refundedExchangeCredits  ExchangeCredit[]   @relation("ExchangeCreditRefundCashSession")
 
   @@index([companyId, branchId, status, openedAt])
   @@index([companyId, userId, status, openedAt])
@@ -871,16 +873,18 @@ model ReturnOrder {
   type         String   @default("RETURN")
   status       String   @default("COMPLETED")
   reason       String
-  refundMethod String?
-  refundAmount Decimal  @default(0) @db.Decimal(14, 2)
-  notes        String?
+  refundMethod        String?
+  refundAmount        Decimal  @default(0) @db.Decimal(14, 2)
+  refundCashSessionId String?
+  notes               String?
   createdById  String
   createdAt    DateTime @default(now())
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict, map: "return_orders_company_fkey")
   sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict, map: "return_orders_sale_fkey")
   customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull, map: "return_orders_customer_fkey")
-  warehouse Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
+  warehouse         Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
+  refundCashSession CashSession?  @relation("ReturnRefundCashSession", fields: [refundCashSessionId], references: [id], onDelete: SetNull)
   createdBy      User            @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
   items          ReturnItem[]
   exchangeCredit ExchangeCredit?
@@ -888,6 +892,7 @@ model ReturnOrder {
   @@unique([companyId, returnNumber], map: "return_orders_company_number_key")
   @@index([companyId, createdAt], map: "return_orders_company_date_idx")
   @@index([saleId], map: "return_orders_sale_idx")
+  @@index([refundCashSessionId], map: "return_orders_refund_cash_session_idx")
   @@map("return_orders")
 }
 
@@ -926,19 +931,22 @@ model ExchangeCredit {
   status          ExchangeCreditStatus @default(OPEN)
   refundedAmount  Decimal              @default(0) @db.Decimal(14, 2)
   refundMethod    PaymentMethod?
-  refundReference String?
-  refundedAt      DateTime?
-  refundedById    String?
+  refundReference     String?
+  refundedAt          DateTime?
+  refundedById        String?
+  refundCashSessionId String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
   company     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   returnOrder ReturnOrder           @relation(fields: [returnOrderId], references: [id], onDelete: Restrict)
-  customer    Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  usages      ExchangeCreditUsage[]
+  customer          Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  refundCashSession CashSession?          @relation("ExchangeCreditRefundCashSession", fields: [refundCashSessionId], references: [id], onDelete: SetNull)
+  usages            ExchangeCreditUsage[]
 
   @@index([companyId, status, createdAt])
   @@index([customerId, status])
+  @@index([refundCashSessionId])
   @@map("exchange_credits")
 }
 
