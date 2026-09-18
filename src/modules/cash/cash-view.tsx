@@ -15,6 +15,7 @@ import {
   Plus,
   PlusCircle,
   ReceiptText,
+  Repeat2,
   Smartphone,
   WalletCards,
 } from "lucide-react";
@@ -45,6 +46,8 @@ const PAYMENT_CARDS = [
   { key: "PLIN" as const, label: "Plin", icon: Smartphone },
   { key: "CARD" as const, label: "Tarjeta", icon: CreditCard },
   { key: "TRANSFER" as const, label: "Transferencia", icon: Landmark },
+  { key: "CREDIT" as const, label: "Crédito", icon: WalletCards },
+  { key: "EXCHANGE_CREDIT" as const, label: "Vale de cambio", icon: Repeat2 },
 ];
 
 function money(value: number) {
@@ -174,6 +177,9 @@ export function CashView({
         salesCount: sessionSnapshot.salesCount,
         salesTotal: sessionSnapshot.salesTotal,
         paymentTotals: sessionSnapshot.paymentTotals,
+        refundTotals: sessionSnapshot.refundTotals,
+        netPaymentTotals: sessionSnapshot.netPaymentTotals,
+        refundTotal: sessionSnapshot.refundTotal,
         manualIncome: sessionSnapshot.manualIncome,
         manualOut: sessionSnapshot.manualOut,
         expectedAmount: result.expectedAmount,
@@ -275,7 +281,7 @@ export function CashView({
               <span>Ventas del turno</span><strong>{money(openSession.salesTotal)}</strong><small>{openSession.salesCount} operación{openSession.salesCount === 1 ? "" : "es"}</small>
             </article>
             <article className="cash-summary-card">
-              <span>Movimientos netos</span><strong>{money(openSession.manualIncome - openSession.manualOut)}</strong><small>Ingresos {money(openSession.manualIncome)} · Salidas {money(openSession.manualOut)}</small>
+              <span>Devoluciones del turno</span><strong>{money(openSession.refundTotal)}</strong><small>Ya descontadas en la conciliación</small>
             </article>
           </section>
 
@@ -283,7 +289,16 @@ export function CashView({
             {PAYMENT_CARDS.map(({ key, label, icon: Icon }) => (
               <article className={`cash-payment-card ${key === "CASH" ? "cash-main" : ""}`} key={key}>
                 <span className="cash-payment-icon"><Icon size={17} /></span>
-                <div><span>{label}</span><strong>{money(openSession.paymentTotals[key])}</strong></div>
+                <div>
+                  <span>{label}</span>
+                  <strong>{money(openSession.netPaymentTotals[key])}</strong>
+                  <small>
+                    {key === "EXCHANGE_CREDIT" ? "Aplicado" : "Cobrado"} {money(openSession.paymentTotals[key])}
+                    {openSession.refundTotals[key] > 0.001
+                      ? " · Devuelto " + money(openSession.refundTotals[key])
+                      : ""}
+                  </small>
+                </div>
               </article>
             ))}
           </section>
@@ -291,7 +306,7 @@ export function CashView({
           <section className="cash-work-grid">
             <article className="panel cash-activity-panel">
               <div className="panel-heading cash-panel-heading">
-                <div><h2>Movimientos del turno</h2><p>Ventas cobradas y movimientos manuales de caja</p></div>
+                <div><h2>Movimientos del turno</h2><p>Ventas, cobranzas, devoluciones y movimientos manuales</p></div>
                 <span className="cash-turn-meta">{openSession.userName} · {dateTime(openSession.openedAt)}</span>
               </div>
               <div className="cash-activity-list">
