@@ -10,6 +10,7 @@ const PAYMENT_LABELS: Array<{ key: keyof CashPaymentTotals; label: string }> = [
   { key: "CARD", label: "Tarjeta" },
   { key: "TRANSFER", label: "Transferencia" },
   { key: "CREDIT", label: "Crédito" },
+  { key: "EXCHANGE_CREDIT", label: "Vale de cambio" },
   { key: "OTHER", label: "Otro" },
 ];
 
@@ -40,6 +41,9 @@ export type CashCloseReportData = {
   salesCount: number;
   salesTotal: number;
   paymentTotals: CashPaymentTotals;
+  refundTotals: CashPaymentTotals;
+  netPaymentTotals: CashPaymentTotals;
+  refundTotal: number;
   manualIncome: number;
   manualOut: number;
   expectedAmount: number;
@@ -67,8 +71,17 @@ export function CashCloseReport({
 
   function shareWhatsApp() {
     const breakdown = PAYMENT_LABELS
-      .filter(({ key }) => Math.abs(report.paymentTotals[key] || 0) > 0.001)
-      .map(({ key, label }) => `• ${label}: ${money(report.paymentTotals[key])}`)
+      .filter(({ key }) =>
+        Math.abs(report.paymentTotals[key] || 0) > 0.001
+        || Math.abs(report.refundTotals[key] || 0) > 0.001)
+      .map(({ key, label }) => {
+        const collected = report.paymentTotals[key] || 0;
+        const refunded = report.refundTotals[key] || 0;
+        const net = report.netPaymentTotals[key] || 0;
+        return refunded > 0.001
+          ? `• ${label}: neto ${money(net)} · cobrado ${money(collected)} · devuelto ${money(refunded)}`
+          : `• ${label}: ${money(net)}`;
+      })
       .join("\n");
 
     const differenceLabel = balanced
@@ -88,7 +101,8 @@ export function CashCloseReport({
       `Fondo inicial: ${money(report.openingAmount)}`,
       `Ventas: ${money(report.salesTotal)} (${report.salesCount} operación${report.salesCount === 1 ? "" : "es"})`,
       breakdown ? `\n*Ventas/cobros por medio*\n${breakdown}` : "",
-      `\nIngresos manuales: ${money(report.manualIncome)}`,
+      `\nDevoluciones del turno: ${money(report.refundTotal)}`,
+      `Ingresos manuales: ${money(report.manualIncome)}`,
       `Salidas manuales: ${money(report.manualOut)}`,
       `Efectivo esperado: ${money(report.expectedAmount)}`,
       `Efectivo contado: ${money(report.actualAmount)}`,
@@ -133,15 +147,23 @@ export function CashCloseReport({
             <div className="cash-report-kpis">
               <article><span>Fondo inicial</span><strong>{money(report.openingAmount)}</strong></article>
               <article><span>Ventas del turno</span><strong>{money(report.salesTotal)}</strong><small>{report.salesCount} operación{report.salesCount === 1 ? "" : "es"}</small></article>
+              <article><span>Devoluciones</span><strong>{money(report.refundTotal)}</strong><small>Todos los medios</small></article>
               <article><span>Efectivo esperado</span><strong>{money(report.expectedAmount)}</strong></article>
               <article><span>Efectivo contado</span><strong>{money(report.actualAmount)}</strong></article>
             </div>
 
             <section className="cash-report-section">
-              <div className="cash-report-section-title"><strong>Resumen por medio de pago</strong><span>Ventas y cobranzas registradas durante el turno</span></div>
+              <div className="cash-report-section-title"><strong>Conciliación por medio de pago</strong><span>Cobros menos devoluciones del turno</span></div>
               <div className="cash-report-payment-grid">
                 {PAYMENT_LABELS.map(({ key, label }) => (
-                  <div key={key}><span>{label}</span><strong>{money(report.paymentTotals[key])}</strong></div>
+                  <div key={key}>
+                    <span>{label}</span>
+                    <strong>{money(report.netPaymentTotals[key])}</strong>
+                    <small>
+                      Cobrado {money(report.paymentTotals[key])}
+                      {report.refundTotals[key] > 0.001 ? " · Devuelto " + money(report.refundTotals[key]) : ""}
+                    </small>
+                  </div>
                 ))}
               </div>
             </section>
