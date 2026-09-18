@@ -31,6 +31,7 @@ export function PosCustomerCard({
   selectedCustomer,
   documentType,
   taxCondition,
+  customerLocked = false,
   onCustomerQueryChange,
   onExistingCustomerChange,
   onAddCustomer,
@@ -44,6 +45,7 @@ export function PosCustomerCard({
   selectedCustomer: PosCustomer | null;
   documentType: SaleDocumentType;
   taxCondition: SaleTaxCondition;
+  customerLocked?: boolean;
   onCustomerQueryChange: (value: string) => void;
   onExistingCustomerChange: (id: string) => void;
   onAddCustomer: () => void;
@@ -71,10 +73,14 @@ export function PosCustomerCard({
           <UserRound size={17} />
           <strong>Cliente</strong>
         </div>
-        <button className="pos-v5-new-customer" type="button" onClick={onAddCustomer}>
-          <Plus size={14} />
-          Nuevo cliente
-        </button>
+        {customerLocked ? (
+          <span className="pos-customer-locked">Cliente del vale</span>
+        ) : (
+          <button className="pos-v5-new-customer" type="button" onClick={onAddCustomer}>
+            <Plus size={14} />
+            Nuevo cliente
+          </button>
+        )}
       </div>
 
       <div className="pos-v5-customer-body">
@@ -87,18 +93,20 @@ export function PosCustomerCard({
               <strong>{selectedCustomer.name}</strong>
               <span>{selectedDocumentLabel}</span>
             </div>
-            <button
-              className="pos-selected-customer-clear"
-              type="button"
-              onClick={() => {
-                onExistingCustomerChange("");
-                onCustomerQueryChange("");
-              }}
-              aria-label="Usar consumidor final"
-              title="Cambiar a consumidor final"
-            >
-              <X size={15} />
-            </button>
+            {!customerLocked && (
+              <button
+                className="pos-selected-customer-clear"
+                type="button"
+                onClick={() => {
+                  onExistingCustomerChange("");
+                  onCustomerQueryChange("");
+                }}
+                aria-label="Usar consumidor final"
+                title="Cambiar a consumidor final"
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
         ) : (
           <>
