@@ -652,15 +652,19 @@ model SaleItem {
 }
 
 model SaleItemUnit {
-  id            String   @id @default(cuid())
-  saleItemId    String
-  productUnitId String
-  createdAt     DateTime @default(now())
+  id                String    @id @default(cuid())
+  saleItemId        String
+  productUnitId     String
+  warrantyDays      Int       @default(0)
+  warrantyStartsAt  DateTime?
+  warrantyExpiresAt DateTime?
+  createdAt         DateTime  @default(now())
 
   saleItem    SaleItem    @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
   productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
 
   @@unique([saleItemId, productUnitId])
+  @@index([productUnitId, warrantyExpiresAt])
   @@map("sale_item_units")
 }
 
