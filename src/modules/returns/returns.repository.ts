@@ -27,6 +27,10 @@ export async function getReturns() {
           originalAmount: true,
           balance: true,
           status: true,
+          refundedAmount: true,
+          refundMethod: true,
+          refundReference: true,
+          refundedAt: true,
         },
       },
       items: {
@@ -58,6 +62,10 @@ export async function getReturns() {
           originalAmount: Number(row.exchangeCredit.originalAmount),
           balance: Number(row.exchangeCredit.balance),
           status: row.exchangeCredit.status,
+          refundedAmount: Number(row.exchangeCredit.refundedAmount),
+          refundMethod: row.exchangeCredit.refundMethod,
+          refundReference: row.exchangeCredit.refundReference,
+          refundedAt: row.exchangeCredit.refundedAt?.toISOString() ?? null,
         }
       : null,
     serializedDisposition: {
