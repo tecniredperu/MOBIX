@@ -69,6 +69,9 @@ export function PosPaymentCard({
   const firstMethod = first?.method ?? "CASH";
   const singlePayment = !mixed ? first : null;
   const digital = singlePayment && !["CASH", "CREDIT"].includes(singlePayment.method);
+  const referenceRequired = Boolean(
+    singlePayment && ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(singlePayment.method),
+  );
 
   return (
     <section className="panel pos-payment-card pos-v5-payment-card">
@@ -158,11 +161,11 @@ export function PosPaymentCard({
 
             {digital && (
               <label className="pos-single-reference">
-                <span>N.º operación / referencia</span>
+                <span>N.º operación / referencia{referenceRequired ? " *" : ""}</span>
                 <input
                   value={singlePayment.reference}
                   onChange={(event) => onReferenceChange(singlePayment.id, event.target.value)}
-                  placeholder="Opcional"
+                  placeholder={referenceRequired ? "Obligatorio para conciliar" : "Opcional"}
                 />
               </label>
             )}
@@ -223,11 +226,21 @@ export function PosPaymentCard({
                   </label>
 
                   <label className="payment-field reference">
-                    <span>{payment.method === "CREDIT" ? "Nota" : "Referencia"}</span>
+                    <span>
+                      {payment.method === "CREDIT"
+                        ? "Nota"
+                        : ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
+                          ? "Referencia *"
+                          : "Referencia"}
+                    </span>
                     <input
                       value={payment.reference}
                       onChange={(event) => onReferenceChange(payment.id, event.target.value)}
-                      placeholder={payment.method === "CASH" || payment.method === "CREDIT" ? "Opcional" : "N.º operación"}
+                      placeholder={
+                        ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
+                          ? "N.º operación obligatorio"
+                          : "Opcional"
+                      }
                     />
                   </label>
 
