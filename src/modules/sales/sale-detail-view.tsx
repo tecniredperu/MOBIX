@@ -116,6 +116,7 @@ export function SaleDetailView({
       id: payment.id,
       method: payment.method,
       amount: payment.amount,
+      reference: payment.reference,
     })),
   };
 
@@ -363,7 +364,10 @@ export function SaleDetailView({
             <h3>Forma de pago</h3>
             {sale.payments.map((payment: any) => (
               <div className="receipt-payment-row" key={`print-payment-${payment.id}`}>
-                <span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span>
+                <span>
+                  {PAYMENT_LABELS[payment.method] ?? payment.method}
+                  {payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}
+                </span>
                 <strong>{money(payment.amount)}</strong>
               </div>
             ))}
