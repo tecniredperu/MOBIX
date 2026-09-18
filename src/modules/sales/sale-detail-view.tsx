@@ -64,12 +64,16 @@ export function SaleDetailView({
   sale,
   created,
   change,
+  exchangeCreditId,
+  exchangeBalance,
   company,
   ticketFooter,
 }: {
   sale: any;
   created: boolean;
   change: number;
+  exchangeCreditId: string | null;
+  exchangeBalance: number;
   company: ReceiptCompany;
   ticketFooter: string | null;
 }) {
@@ -132,6 +136,8 @@ export function SaleDetailView({
           ticket={ticket}
           created={created}
           change={change}
+          exchangeCreditId={exchangeCreditId}
+          exchangeBalance={exchangeBalance}
         />
       </section>
 
