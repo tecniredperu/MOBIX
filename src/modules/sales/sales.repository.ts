@@ -269,6 +269,28 @@ export async function getSaleDetail(id: string) {
           },
         },
       },
+      returnOrders: {
+        where: { status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        include: {
+          exchangeCredit: {
+            select: {
+              id: true,
+              originalAmount: true,
+              balance: true,
+              status: true,
+              refundedAmount: true,
+            },
+          },
+          items: {
+            select: {
+              quantity: true,
+              amount: true,
+              productUnitId: true,
+            },
+          },
+        },
+      },
       items: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -366,6 +388,27 @@ export async function getSaleDetail(id: string) {
               ?? "Sin identificador",
           };
         }),
+    })),
+    returns: sale.returnOrders.map((order) => ({
+      id: order.id,
+      returnNumber: order.returnNumber,
+      type: order.type,
+      reason: order.reason,
+      refundMethod: order.refundMethod,
+      refundAmount: Number(order.refundAmount),
+      createdAt: order.createdAt.toISOString(),
+      quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      value: order.items.reduce((sum, item) => sum + Number(item.amount), 0),
+      serializedCount: order.items.filter((item) => Boolean(item.productUnitId)).length,
+      exchangeCredit: order.exchangeCredit
+        ? {
+            id: order.exchangeCredit.id,
+            originalAmount: Number(order.exchangeCredit.originalAmount),
+            balance: Number(order.exchangeCredit.balance),
+            status: order.exchangeCredit.status,
+            refundedAmount: Number(order.exchangeCredit.refundedAmount),
+          }
+        : null,
     })),
   };
 }
