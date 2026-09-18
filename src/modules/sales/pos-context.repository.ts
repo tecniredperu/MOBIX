@@ -187,7 +187,7 @@ function catalogSearchScore(item: PosCatalogItem, rawQuery: string) {
   return score;
 }
 
-async function searchAvailableIdentifiers(companyId: string, rawQuery: string) {
+async function searchAvailableIdentifiers(companyId: string, rawQuery: string, warehouseId?: string) {
   const candidate = extractIdentifierCandidate(rawQuery);
   if (candidate.length < 6 || !/^[a-z0-9-]+$/i.test(candidate)) return [];
 
@@ -201,6 +201,7 @@ async function searchAvailableIdentifiers(companyId: string, rawQuery: string) {
         : { startsWith: candidate, mode: "insensitive" },
       productUnit: {
         status: "AVAILABLE",
+        ...(warehouseId ? { warehouseId } : {}),
         product: { status: "ACTIVE", deletedAt: null },
         variant: { status: "ACTIVE" },
       },
@@ -273,7 +274,7 @@ export async function getOptimizedPosContext() {
   return { company, warehouses: warehouseOptions, catalog, customers: customerOptions };
 }
 
-export async function searchPosCatalog(q: string) {
+export async function searchPosCatalog(q: string, warehouseId?: string) {
   const company = await getActiveCompany();
   const query = q.trim();
   if (query.length < 2) return [];
@@ -284,7 +285,7 @@ export async function searchPosCatalog(q: string) {
       select: { id: true },
     }),
     loadProducts(company.id, query),
-    searchAvailableIdentifiers(company.id, query),
+    searchAvailableIdentifiers(company.id, query, warehouseId),
   ]);
 
   const matchedUnitsByVariant = new Map<string, PosUnit>();
