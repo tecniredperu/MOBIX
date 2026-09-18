@@ -9,6 +9,7 @@ import {
   Printer,
   Receipt,
   ShoppingCart,
+  WalletCards,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -48,6 +49,8 @@ export function SaleDetailActions({
   ticket,
   created = false,
   change = 0,
+  exchangeCreditId = null,
+  exchangeBalance = 0,
 }: {
   saleNumber: string;
   customerName: string;
@@ -56,6 +59,8 @@ export function SaleDetailActions({
   ticket: SaleTicketData;
   created?: boolean;
   change?: number;
+  exchangeCreditId?: string | null;
+  exchangeBalance?: number;
 }) {
   const router = useRouter();
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -172,6 +177,10 @@ export function SaleDetailActions({
 
   function newSale() {
     setCompletionOpen(false);
+    if (exchangeCreditId && exchangeBalance > 0.01) {
+      router.push("/pos?exchangeCredit=" + encodeURIComponent(exchangeCreditId));
+      return;
+    }
     router.push("/pos");
   }
 
@@ -250,6 +259,12 @@ export function SaleDetailActions({
                   <strong>{money(change)}</strong>
                 </div>
               )}
+              {exchangeCreditId && exchangeBalance > 0.01 && (
+                <div className="sale-completion-exchange">
+                  <span><WalletCards size={14} /> Saldo restante del vale</span>
+                  <strong>{money(exchangeBalance)}</strong>
+                </div>
+              )}
             </div>
 
             <div className="sale-completion-actions">
@@ -283,7 +298,7 @@ export function SaleDetailActions({
 
             <button className="primary-button sale-completion-new" type="button" onClick={newSale}>
               <ShoppingCart size={18} />
-              Nueva venta
+              {exchangeCreditId && exchangeBalance > 0.01 ? "Continuar cambio" : "Nueva venta"}
               <kbd>Enter</kbd>
             </button>
 
