@@ -1188,3 +1188,31 @@
     font-size: 21px;
   }
 }
+
+
+@media (min-width: 1241px) {
+  .pos-v5 .pos-checkout {
+    max-height: calc(100vh - 126px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: #dbe3ed transparent;
+  }
+
+  .pos-v5 .pos-checkout::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .pos-v5 .pos-checkout::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #dbe3ed;
+  }
+
+  .pos-v5 .pos-v5-total-card {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    box-shadow: 0 -8px 22px rgba(15, 23, 42, .07);
+  }
+}
