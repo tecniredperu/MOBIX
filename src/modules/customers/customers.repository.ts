@@ -169,7 +169,7 @@ export async function getCustomerDetail(id: string) {
   });
   if (!customer) return null;
 
-  const [profiles, receivables, payments] = await Promise.all([
+  const [profiles, receivables, payments, exchangeCredits] = await Promise.all([
     prisma.$queryRaw<CustomerCreditRow[]>`
       SELECT
         c."id",
@@ -220,6 +220,36 @@ export async function getCustomerDetail(id: string) {
       ORDER BY rp."paidAt" DESC
       LIMIT 100
     `,
+    prisma.exchangeCredit.findMany({
+      where: {
+        companyId: company.id,
+        customerId: customer.id,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        returnOrder: {
+          select: {
+            id: true,
+            returnNumber: true,
+            reason: true,
+            createdAt: true,
+          },
+        },
+        usages: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            sale: {
+              select: {
+                id: true,
+                saleNumber: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    }),
   ]);
 
   const profile = profiles[0];
@@ -228,6 +258,9 @@ export async function getCustomerDetail(id: string) {
   const overdue = Number(profile?.overdue ?? 0);
   const completedSales = customer.sales.filter((sale) => sale.status === "COMPLETED");
   const purchaseTotal = completedSales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  const exchangeCreditBalance = exchangeCredits
+    .filter((credit) => credit.status === "OPEN" || credit.status === "PARTIAL")
+    .reduce((sum, credit) => sum + Number(credit.balance), 0);
 
   return {
     id: customer.id,
@@ -257,6 +290,7 @@ export async function getCustomerDetail(id: string) {
       purchaseTotal,
       outstanding,
       overdue,
+      exchangeCreditBalance,
     },
     sales: customer.sales.map((sale) => ({
       id: sale.id,
@@ -290,6 +324,27 @@ export async function getCustomerDetail(id: string) {
       notes: row.notes,
       createdBy: row.createdBy,
       paidAt: row.paidAt.toISOString(),
+    })),
+    exchangeCredits: exchangeCredits.map((credit) => ({
+      id: credit.id,
+      returnOrderId: credit.returnOrderId,
+      returnNumber: credit.returnOrder.returnNumber,
+      reason: credit.returnOrder.reason,
+      originalAmount: Number(credit.originalAmount),
+      balance: Number(credit.balance),
+      status: credit.status,
+      refundedAmount: Number(credit.refundedAmount),
+      refundMethod: credit.refundMethod,
+      refundReference: credit.refundReference,
+      refundedAt: credit.refundedAt?.toISOString() ?? null,
+      createdAt: credit.createdAt.toISOString(),
+      usages: credit.usages.map((usage) => ({
+        id: usage.id,
+        saleId: usage.saleId,
+        saleNumber: usage.sale.saleNumber,
+        amount: Number(usage.amount),
+        createdAt: usage.createdAt.toISOString(),
+      })),
     })),
   };
 }
