@@ -55,11 +55,13 @@ function limaDate(value: string) {
 export function SaleDetailView({
   sale,
   created,
+  change,
   company,
   ticketFooter,
 }: {
   sale: any;
   created: boolean;
+  change: number;
   company: ReceiptCompany;
   ticketFooter: string | null;
 }) {
@@ -114,7 +116,15 @@ export function SaleDetailView({
           <h1>{DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
           <p>{limaDate(sale.createdAt)} · {sale.branch} / {sale.warehouse}</p>
         </div>
-        <SaleDetailActions saleNumber={sale.saleNumber} customerName={customerName} customerPhone={sale.customer?.phone} total={sale.total} ticket={ticket} />
+        <SaleDetailActions
+          saleNumber={sale.saleNumber}
+          customerName={customerName}
+          customerPhone={sale.customer?.phone}
+          total={sale.total}
+          ticket={ticket}
+          created={created}
+          change={change}
+        />
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
