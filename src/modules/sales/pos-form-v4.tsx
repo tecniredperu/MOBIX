@@ -20,7 +20,16 @@ import { PosCustomerCard } from "./pos/pos-customer-card";
 import { PosCustomerModal } from "./pos/pos-customer-modal";
 import { PosPaymentCard } from "./pos/pos-payment-card";
 import { PosTotalCard } from "./pos/pos-total-card";
-import { stockFor, unitLabel, type CartLine, type PaymentLine } from "./pos/pos-shared";
+import {
+  itemMatchesPosSearch,
+  stockFor,
+  unitLabel,
+  type CartLine,
+  type PaymentLine,
+  type PosCatalogFilter,
+} from "./pos/pos-shared";
+
+const FAVORITES_STORAGE_KEY = "mobix:pos:favorites";
 
 export function PosFormV4({ warehouses, catalog, customers }: {
   warehouses: PosWarehouse[];
@@ -31,6 +40,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const [isPending, startTransition] = useTransition();
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<PosCatalogFilter>("ALL");
+  const [favoriteVariantIds, setFavoriteVariantIds] = useState<Set<string>>(new Set());
   const [searchResults, setSearchResults] = useState<PosCatalogItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -49,6 +60,35 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setFavoriteVariantIds(new Set(parsed.filter((value): value is string => typeof value === "string")));
+      }
+    } catch {
+      // El POS sigue funcionando aunque el navegador bloquee localStorage.
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F2") {
+        event.preventDefault();
+        document.getElementById("pos-product-search")?.focus();
+      }
+      if (event.key === "F4") {
+        event.preventDefault();
+        setCustomerModalOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     const normalized = query.trim();
     if (normalized.length < 2) {
       setSearchResults([]);
@@ -60,7 +100,10 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     const timeout = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const response = await fetch(`/api/pos/catalog?q=${encodeURIComponent(normalized)}`, {
+        const params = new URLSearchParams({ q: normalized });
+        if (warehouseId) params.set("warehouseId", warehouseId);
+
+        const response = await fetch(`/api/pos/catalog?${params.toString()}`, {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
@@ -74,19 +117,42 @@ export function PosFormV4({ warehouses, catalog, customers }: {
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
       }
-    }, 250);
+    }, 180);
 
     return () => {
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [query]);
+  }, [query, warehouseId]);
 
   const filteredCatalog = useMemo(() => {
-    const normalized = query.trim();
-    if (normalized.length >= 2) return searchResults.slice(0, 80);
-    return catalog.slice(0, 80);
-  }, [catalog, query, searchResults]);
+    const merged = new Map<string, PosCatalogItem>();
+
+    if (query.trim().length >= 2) {
+      for (const item of searchResults) merged.set(item.variantId, item);
+    }
+    for (const item of catalog) {
+      if (!merged.has(item.variantId)) merged.set(item.variantId, item);
+    }
+
+    let items = [...merged.values()];
+
+    if (query.trim()) {
+      items = items.filter((item) => itemMatchesPosSearch(item, query));
+    }
+
+    if (activeFilter === "PHONE") {
+      items = items.filter((item) => item.type === "PHONE" || item.type === "SERIALIZED");
+    } else if (activeFilter === "ACCESSORY") {
+      items = items.filter((item) => item.type === "ACCESSORY");
+    } else if (activeFilter === "SERVICE") {
+      items = items.filter((item) => item.type === "SERVICE");
+    } else if (activeFilter === "FAVORITES") {
+      items = items.filter((item) => favoriteVariantIds.has(item.variantId));
+    }
+
+    return items.slice(0, 80);
+  }, [activeFilter, catalog, favoriteVariantIds, query, searchResults]);
 
   const knownCatalog = useMemo(() => {
     const merged = new Map<string, PosCatalogItem>();
@@ -113,6 +179,22 @@ export function PosFormV4({ warehouses, catalog, customers }: {
     creditEnabled: selectedCustomer?.creditEnabled,
     availableCredit: selectedCustomer?.availableCredit,
   }), [payments, selectedCustomer, totals.total]);
+
+  function toggleFavorite(variantId: string) {
+    setFavoriteVariantIds((current) => {
+      const next = new Set(current);
+      if (next.has(variantId)) next.delete(variantId);
+      else next.add(variantId);
+
+      try {
+        window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // Favoritos son una mejora local y nunca deben bloquear una venta.
+      }
+
+      return next;
+    });
+  }
 
   async function loadUnits(variantId: string): Promise<PosUnit[]> {
     const cacheKey = `${variantId}:${warehouseId}`;
@@ -153,13 +235,18 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 
   async function addItem(item: PosCatalogItem) {
     const stock = stockFor(item, warehouseId);
-    if (item.type !== "SERVICE" && stock <= 0) return;
+    if (item.type !== "SERVICE" && stock <= 0) {
+      setError("Este producto no tiene stock disponible en la sucursal seleccionada.");
+      return;
+    }
 
     if (item.type === "PHONE" || item.type === "SERIALIZED") {
       const cacheKey = `${item.variantId}:${warehouseId}`;
+      const preferredMatchedUnit = item.units.find((unit) => unit.warehouseId === warehouseId);
       const availableUnits = unitsByVariant[cacheKey] ?? await loadUnits(item.variantId);
-      const selectedId = unitSelections[item.variantId] || availableUnits[0]?.id;
+      const selectedId = unitSelections[item.variantId] || preferredMatchedUnit?.id || availableUnits[0]?.id;
       const selected = availableUnits.find((unit) => unit.id === selectedId);
+
       if (!selected) {
         setError("Selecciona un IMEI o serie disponible.");
         return;
@@ -168,6 +255,8 @@ export function PosFormV4({ warehouses, catalog, customers }: {
         setError("Ese IMEI/equipo ya está agregado a la venta.");
         return;
       }
+
+      setUnitSelections((current) => ({ ...current, [item.variantId]: selected.id }));
       setCart((current) => [...current, {
         key: selected.id,
         variantId: item.variantId,
@@ -250,6 +339,10 @@ export function PosFormV4({ warehouses, catalog, customers }: {
 
   function submitSale() {
     setError("");
+    if (!cart.length) {
+      setError("Agrega al menos un producto o servicio antes de cobrar.");
+      return;
+    }
     if (totals.total > 0.01 && !payments.some((payment) => Number(payment.amount) > 0.009)) {
       setError("Ingresa el monto recibido antes de confirmar la venta.");
       return;
@@ -284,12 +377,12 @@ export function PosFormV4({ warehouses, catalog, customers }: {
   }
 
   return (
-    <div className="pos-page page-stack">
+    <div className="pos-page pos-v5 page-stack">
       <section className="page-heading pos-heading">
         <div>
           <span className="eyebrow">VENTAS</span>
           <h1>Punto de venta</h1>
-          <p>Venta rápida de celulares por IMEI, accesorios y servicios. Importes expresados en soles.</p>
+          <p>Busca, agrega y cobra sin salir de esta pantalla.</p>
         </div>
         <label className="pos-warehouse">
           <span>Sucursal / almacén</span>
@@ -297,24 +390,29 @@ export function PosFormV4({ warehouses, catalog, customers }: {
             setWarehouseId(event.target.value);
             setUnitsByVariant({});
             setUnitSelections({});
+            setSearchResults([]);
           }} disabled={cart.length > 0}>
             {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.branchName} · {warehouse.name}</option>)}
           </select>
         </label>
       </section>
 
-      {error && <div className="error-banner"><strong>No se pudo completar la operación</strong><span>{error}</span></div>}
+      {error && <div className="error-banner"><strong>Revisa la operación</strong><span>{error}</span></div>}
 
       <div className="pos-layout">
         <PosCatalogPanel
           items={filteredCatalog}
           query={query}
+          activeFilter={activeFilter}
+          favoriteVariantIds={favoriteVariantIds}
           warehouseId={warehouseId}
           unitSelections={unitSelections}
           unitsByVariant={unitsByVariant}
           loadingUnits={loadingUnits}
           isSearching={isSearching}
           onQueryChange={setQuery}
+          onFilterChange={setActiveFilter}
+          onToggleFavorite={toggleFavorite}
           onLoadUnits={loadUnits}
           onUnitSelectionChange={(variantId, unitId) => setUnitSelections((current) => ({ ...current, [variantId]: unitId }))}
           onAdd={addItem}
