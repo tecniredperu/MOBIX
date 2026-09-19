@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "17 11 * * *"
   push:
-    branches: [main, feat/pos-v5-fast-search]
+    branches: [main]
     paths:
       - ".github/workflows/staging-uat.yml"
       - "scripts/uat-staging.ts"
