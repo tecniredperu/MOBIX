@@ -22,11 +22,13 @@ import {
 import {
   addCashMovementAction,
   closeCashSessionAction,
+  getCashCloseReportAction,
   openCashSessionAction,
 } from "./cash-actions";
-import { CashCloseReport, type CashCloseReportData } from "./cash-close-report";
+import { CashCloseReport } from "./cash-close-report";
 import type {
   CashBranchOption,
+  CashCloseReportData,
   CashMovementKind,
   CashOpenSession,
   CashSessionHistoryItem,
@@ -151,6 +153,18 @@ export function CashView({
       setMovementConcept("");
       setMovementReference("");
       setSuccess("Movimiento registrado.");
+    });
+  }
+
+  function openHistoricalClose(sessionId: string) {
+    setError("");
+    startTransition(async () => {
+      try {
+        const report = await getCashCloseReportAction(sessionId);
+        setClosedReport(report);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "No se pudo cargar el cierre de caja.");
+      }
     });
   }
 
@@ -359,14 +373,14 @@ export function CashView({
         <div className="panel-heading"><div><h2>Historial de cierres</h2><p>Últimos turnos de caja registrados en {companyName}</p></div></div>
         <div className="table-wrap">
           <table className="data-table cash-history-table">
-            <thead><tr><th>Apertura</th><th>Cierre</th><th>Sucursal</th><th>Responsable</th><th className="right">Inicial</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferencia</th></tr></thead>
+            <thead><tr><th>Apertura</th><th>Cierre</th><th>Sucursal</th><th>Responsable</th><th className="right">Inicial</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferencia</th><th></th></tr></thead>
             <tbody>
               {history.map((item) => (
                 <tr key={item.id}>
-                  <td>{dateTime(item.openedAt)}</td><td>{dateTime(item.closedAt)}</td><td><strong>{item.branchName}</strong></td><td>{item.userName}</td><td className="right">{money(item.openingAmount)}</td><td className="right">{money(item.expectedAmount)}</td><td className="right">{money(item.closingAmount)}</td><td className={`right cash-history-diff ${Math.abs(item.difference) <= .01 ? "balanced" : item.difference > 0 ? "positive" : "negative"}`}>{item.difference > 0 ? "+" : ""}{money(item.difference)}</td>
+                  <td>{dateTime(item.openedAt)}</td><td>{dateTime(item.closedAt)}</td><td><strong>{item.branchName}</strong></td><td>{item.userName}</td><td className="right">{money(item.openingAmount)}</td><td className="right">{money(item.expectedAmount)}</td><td className="right">{money(item.closingAmount)}</td><td className={`right cash-history-diff ${Math.abs(item.difference) <= .01 ? "balanced" : item.difference > 0 ? "positive" : "negative"}`}>{item.difference > 0 ? "+" : ""}{money(item.difference)}</td><td className="right"><button className="cash-history-open" type="button" disabled={isPending} onClick={() => openHistoricalClose(item.id)}><ReceiptText size={13}/> Ver cierre</button></td>
                 </tr>
               ))}
-              {!history.length && <tr><td colSpan={8}><div className="cash-empty-state compact"><MinusCircle size={20} /><strong>Aún no hay cierres de caja</strong></div></td></tr>}
+              {!history.length && <tr><td colSpan={9}><div className="cash-empty-state compact"><MinusCircle size={20} /><strong>Aún no hay cierres de caja</strong></div></td></tr>}
             </tbody>
           </table>
         </div>
