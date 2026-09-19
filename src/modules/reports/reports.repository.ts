@@ -177,8 +177,8 @@ export async function getReports(filters: { from?: string; to?: string }) {
   const returnsTotal = Number(returnRows[0]?.merchandiseTotal ?? 0);
   const cashRefundTotal = Number(returnRows[0]?.cashRefundTotal ?? 0);
   const returnedCost = canSeeCosts ? Number(returnRows[0]?.cost ?? 0) : null;
-  const salesTotal = Math.max(0, grossSalesTotal - returnsTotal);
-  const costTotal = canSeeCosts ? Math.max(0, grossCostTotal - Number(returnedCost ?? 0)) : null;
+  const salesTotal = grossSalesTotal - returnsTotal;
+  const costTotal = canSeeCosts ? grossCostTotal - Number(returnedCost ?? 0) : null;
   const grossProfit = canSeeCosts ? salesTotal - Number(costTotal ?? 0) : null;
 
   return {
