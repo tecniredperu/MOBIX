@@ -241,7 +241,10 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
       source: "SALE",
       direction: neutral ? "NEUTRAL" : "IN",
       label: `Venta ${payment.sale.saleNumber}`,
-      detail: PAYMENT_LABELS[method] ?? "Pago",
+      detail: [
+        PAYMENT_LABELS[method] ?? "Pago",
+        payment.reference ? "Ref. " + payment.reference : null,
+      ].filter(Boolean).join(" · "),
       amount: Number(payment.amount),
       paymentMethod: method,
       createdAt: payment.createdAt.toISOString(),
