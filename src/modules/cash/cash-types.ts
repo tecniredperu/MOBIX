@@ -25,7 +25,7 @@ export type CashPaymentTotals = Record<CashPaymentMethod, number>;
 
 export type CashActivityItem = {
   id: string;
-  source: "SALE" | "COLLECTION" | "REFUND" | "MANUAL";
+  source: "SALE" | "COLLECTION" | "REFUND" | "CANCEL" | "MANUAL";
   direction: "IN" | "OUT" | "NEUTRAL";
   label: string;
   detail: string;
