@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
+  AlertTriangle,
   BadgeCheck,
   Banknote,
   FileDown,
@@ -9,10 +10,12 @@ import {
   Printer,
   Receipt,
   ShoppingCart,
+  Trash2,
   WalletCards,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { cancelSaleAction } from "./sale-actions";
 import { buildSaleReceiptPdf } from "./sale-receipt-pdf";
 import { SaleTicketModal, type SaleTicketData } from "./sale-ticket-modal";
 
@@ -42,7 +45,10 @@ function money(value: number) {
 }
 
 export function SaleDetailActions({
+  saleId,
   saleNumber,
+  saleStatus,
+  canCancel = false,
   customerName,
   customerPhone,
   total,
@@ -52,7 +58,10 @@ export function SaleDetailActions({
   exchangeCreditId = null,
   exchangeBalance = 0,
 }: {
+  saleId: string;
   saleNumber: string;
+  saleStatus: string;
+  canCancel?: boolean;
   customerName: string;
   customerPhone?: string | null;
   total: number;
@@ -64,9 +73,13 @@ export function SaleDetailActions({
 }) {
   const router = useRouter();
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [completionOpen, setCompletionOpen] = useState(created);
   const [sharing, setSharing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState("");
 
   const phone = whatsappNumber(customerPhone);
   const companyName = ticket.company.tradeName || ticket.company.businessName;
@@ -175,6 +188,30 @@ export function SaleDetailActions({
     }
   }
 
+  function cancelSale() {
+    const reason = cancelReason.trim();
+    if (reason.length < 5) {
+      setCancelError("Describe el motivo de la anulación.");
+      return;
+    }
+
+    setCancelError("");
+    startTransition(async () => {
+      try {
+        await cancelSaleAction({ saleId, reason });
+        setCancelOpen(false);
+        setCancelReason("");
+        router.refresh();
+      } catch (cause) {
+        setCancelError(
+          cause instanceof Error
+            ? cause.message
+            : "No se pudo anular la venta.",
+        );
+      }
+    });
+  }
+
   function newSale() {
     setCompletionOpen(false);
     if (exchangeCreditId && exchangeBalance > 0.01) {
@@ -209,6 +246,18 @@ export function SaleDetailActions({
         >
           <MessageCircle size={16} /> {sharing ? "Preparando PDF..." : "WhatsApp PDF"}
         </button>
+        {canCancel && saleStatus === "COMPLETED" && (
+          <button
+            className="secondary-button sale-cancel-trigger"
+            type="button"
+            onClick={() => {
+              setCancelError("");
+              setCancelOpen(true);
+            }}
+          >
+            <Trash2 size={16} /> Anular venta
+          </button>
+        )}
       </div>
 
       {completionOpen && (
@@ -309,6 +358,77 @@ export function SaleDetailActions({
             >
               Ver detalle de la venta
             </button>
+          </section>
+        </div>
+      )}
+
+      {cancelOpen && (
+        <div className="sale-cancel-modal no-print" role="dialog" aria-modal="true" aria-labelledby="sale-cancel-title">
+          <button
+            className="sale-cancel-backdrop"
+            type="button"
+            aria-label="Cerrar"
+            onClick={() => !isPending && setCancelOpen(false)}
+          />
+          <section className="sale-cancel-card">
+            <button
+              className="sale-cancel-close"
+              type="button"
+              disabled={isPending}
+              onClick={() => setCancelOpen(false)}
+              aria-label="Cerrar"
+            >
+              <X size={17} />
+            </button>
+            <div className="sale-cancel-icon"><AlertTriangle size={24} /></div>
+            <div className="sale-cancel-heading">
+              <span>ANULACIÓN DE VENTA</span>
+              <h2 id="sale-cancel-title">{saleNumber}</h2>
+              <p>
+                La anulación revierte stock, IMEI, crédito y vale de cambio. Solo se permite mientras la caja original siga abierta.
+              </p>
+            </div>
+
+            <label className="sale-cancel-field">
+              <span>Motivo de la anulación</span>
+              <textarea
+                autoFocus
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                placeholder="Ej. venta registrada por error, medio de pago incorrecto..."
+                maxLength={240}
+              />
+              <small>{cancelReason.trim().length}/240</small>
+            </label>
+
+            <div className="sale-cancel-warning">
+              <AlertTriangle size={15} />
+              <span>
+                Si la caja ya fue cerrada, el cliente ya tiene una devolución/cambio o existe postventa, MOBIX bloqueará la anulación y deberás usar el flujo correspondiente.
+              </span>
+            </div>
+
+            {cancelError && <div className="sale-cancel-error">{cancelError}</div>}
+
+            <div className="sale-cancel-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isPending}
+                onClick={() => setCancelOpen(false)}
+              >
+                Conservar venta
+              </button>
+              <button
+                className="sale-cancel-confirm"
+                type="button"
+                disabled={isPending || cancelReason.trim().length < 5}
+                onClick={cancelSale}
+              >
+                <Trash2 size={16} />
+                {isPending ? "Anulando..." : "Confirmar anulación"}
+              </button>
+            </div>
           </section>
         </div>
       )}
