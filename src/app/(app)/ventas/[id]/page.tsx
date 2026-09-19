@@ -18,6 +18,14 @@ export default async function SaleDetailPage({
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
   const created = (Array.isArray(query.created) ? query.created[0] : query.created) === "1";
+  const changeParam = Array.isArray(query.change) ? query.change[0] : query.change;
+  const parsedChange = Number(changeParam ?? 0);
+  const change = Number.isFinite(parsedChange) ? Math.max(0, parsedChange) : 0;
+  const exchangeCreditId = Array.isArray(query.exchangeCredit) ? query.exchangeCredit[0] : query.exchangeCredit;
+  const exchangeBalanceParam = Array.isArray(query.exchangeBalance) ? query.exchangeBalance[0] : query.exchangeBalance;
+  const parsedExchangeBalance = Number(exchangeBalanceParam ?? 0);
+  const exchangeBalance = Number.isFinite(parsedExchangeBalance) ? Math.max(0, parsedExchangeBalance) : 0;
+  const canCancelSale = context.membership.role.isSystem || context.permissions.has("sales.cancel");
   const company = {
     businessName: context.company.businessName,
     tradeName: context.company.tradeName,
@@ -32,7 +40,11 @@ export default async function SaleDetailPage({
     <AppShell>
       <SaleDetailView
         sale={sale}
+        canCancelSale={canCancelSale}
         created={created}
+        change={change}
+        exchangeCreditId={exchangeCreditId ?? null}
+        exchangeBalance={exchangeBalance}
         company={company}
         ticketFooter={context.settings.ticketFooter}
       />

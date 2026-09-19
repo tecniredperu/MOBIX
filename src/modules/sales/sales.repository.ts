@@ -189,7 +189,7 @@ export async function getSales(filters: { q?: string; status?: string; documentT
   };
 
   const { start, end } = getLimaDayBounds();
-  const [sales, todaySummary] = await Promise.all([
+  const [sales, todaySummary, todayReturns] = await Promise.all([
     prisma.sale.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -203,9 +203,23 @@ export async function getSales(filters: { q?: string; status?: string; documentT
       },
     }),
     prisma.sale.aggregate({
-      where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: start, lt: end } },
+      where: {
+        companyId: company.id,
+        status: { in: ["COMPLETED", "REFUNDED"] },
+        createdAt: { gte: start, lt: end },
+      },
       _sum: { total: true },
       _count: { _all: true },
+    }),
+    prisma.returnOrder.findMany({
+      where: {
+        companyId: company.id,
+        status: "COMPLETED",
+        createdAt: { gte: start, lt: end },
+      },
+      select: {
+        items: { select: { amount: true } },
+      },
     }),
   ]);
 
@@ -226,14 +240,25 @@ export async function getSales(filters: { q?: string; status?: string; documentT
     createdAt: sale.createdAt.toISOString(),
   }));
 
-  const todayTotal = Number(todaySummary._sum.total ?? 0);
+  const todayGross = Number(todaySummary._sum.total ?? 0);
+  const todayReturnsTotal = todayReturns.reduce(
+    (sum, order) =>
+      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
+    0,
+  );
+  const todayTotal = Math.round(
+    (todayGross - todayReturnsTotal + Number.EPSILON) * 100,
+  ) / 100;
   const todayCount = todaySummary._count._all;
   return {
     items,
     summary: {
       todayTotal,
+      todayGross,
+      todayReturns: Math.round((todayReturnsTotal + Number.EPSILON) * 100) / 100,
+      todayReturnCount: todayReturns.length,
       todayCount,
-      averageTicket: todayCount ? todayTotal / todayCount : 0,
+      averageTicket: todayCount ? todayGross / todayCount : 0,
       listed: items.length,
     },
   };
@@ -249,6 +274,64 @@ export async function getSaleDetail(id: string) {
       seller: true,
       createdBy: true,
       payments: { orderBy: { createdAt: "asc" } },
+      exchangeCreditUsages: {
+        include: {
+          exchangeCredit: {
+            include: {
+              returnOrder: {
+                include: {
+                  items: {
+                    include: {
+                      product: { select: { name: true } },
+                      productUnit: {
+                        include: { identifiers: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      returnOrders: {
+        where: { status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        include: {
+          exchangeCredit: {
+            select: {
+              id: true,
+              originalAmount: true,
+              balance: true,
+              status: true,
+              refundedAmount: true,
+            },
+          },
+          items: {
+            select: {
+              quantity: true,
+              amount: true,
+              productUnitId: true,
+            },
+          },
+        },
+      },
+      serviceOrders: {
+        orderBy: { receivedAt: "desc" },
+        select: {
+          id: true,
+          serviceNumber: true,
+          serviceType: true,
+          status: true,
+          deviceName: true,
+          identifier: true,
+          warrantyCovered: true,
+          reportedIssue: true,
+          receivedAt: true,
+          deliveredAt: true,
+          finalCost: true,
+        },
+      },
       items: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -266,6 +349,26 @@ export async function getSaleDetail(id: string) {
 
   if (!sale) return null;
 
+  const cancellationAudit = sale.status === "CANCELLED"
+    ? await prisma.auditLog.findFirst({
+        where: {
+          companyId: company.id,
+          entity: "SALE",
+          entityId: sale.id,
+          action: "CANCEL",
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { name: true } },
+        },
+      })
+    : null;
+  const cancellationValues = cancellationAudit?.newValues
+    && typeof cancellationAudit.newValues === "object"
+    && !Array.isArray(cancellationAudit.newValues)
+      ? cancellationAudit.newValues as Record<string, unknown>
+      : null;
+
   return {
     id: sale.id,
     saleNumber: sale.saleNumber,
@@ -279,6 +382,15 @@ export async function getSaleDetail(id: string) {
     total: Number(sale.total),
     status: sale.status,
     createdAt: sale.createdAt.toISOString(),
+    cancellation: cancellationAudit
+      ? {
+          reason: typeof cancellationValues?.reason === "string"
+            ? cancellationValues.reason
+            : "Anulación registrada",
+          userName: cancellationAudit.user?.name ?? "Usuario",
+          createdAt: cancellationAudit.createdAt.toISOString(),
+        }
+      : null,
     branch: sale.warehouse.branch.name,
     warehouse: sale.warehouse.name,
     seller: sale.seller.name,
@@ -311,6 +423,9 @@ export async function getSaleDetail(id: string) {
           imei1: identifiers.get("IMEI_1") ?? null,
           imei2: identifiers.get("IMEI_2") ?? null,
           serial: identifiers.get("SERIAL") ?? null,
+          warrantyDays: link.warrantyDays,
+          warrantyStartsAt: link.warrantyStartsAt?.toISOString() ?? null,
+          warrantyExpiresAt: link.warrantyExpiresAt?.toISOString() ?? null,
         };
       }),
     })),
@@ -320,6 +435,63 @@ export async function getSaleDetail(id: string) {
       amount: Number(payment.amount),
       reference: payment.reference,
       notes: payment.notes,
+    })),
+    exchangeOrigins: sale.exchangeCreditUsages.map((usage) => ({
+      exchangeCreditId: usage.exchangeCreditId,
+      returnNumber: usage.exchangeCredit.returnOrder.returnNumber,
+      amount: Number(usage.amount),
+      originalAmount: Number(usage.exchangeCredit.originalAmount),
+      balance: Number(usage.exchangeCredit.balance),
+      status: usage.exchangeCredit.status,
+      refundedAmount: Number(usage.exchangeCredit.refundedAmount),
+      returnedUnits: usage.exchangeCredit.returnOrder.items
+        .filter((returnItem) => Boolean(returnItem.productUnit))
+        .map((returnItem) => {
+          const identifiers = returnItem.productUnit?.identifiers ?? [];
+          return {
+            id: returnItem.productUnitId,
+            product: returnItem.product.name,
+            identifier:
+              identifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+              ?? identifiers.find((identifier) => identifier.type === "SERIAL")?.value
+              ?? returnItem.productUnitId
+              ?? "Sin identificador",
+          };
+        }),
+    })),
+    returns: sale.returnOrders.map((order) => ({
+      id: order.id,
+      returnNumber: order.returnNumber,
+      type: order.type,
+      reason: order.reason,
+      refundMethod: order.refundMethod,
+      refundAmount: Number(order.refundAmount),
+      createdAt: order.createdAt.toISOString(),
+      quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      value: order.items.reduce((sum, item) => sum + Number(item.amount), 0),
+      serializedCount: order.items.filter((item) => Boolean(item.productUnitId)).length,
+      exchangeCredit: order.exchangeCredit
+        ? {
+            id: order.exchangeCredit.id,
+            originalAmount: Number(order.exchangeCredit.originalAmount),
+            balance: Number(order.exchangeCredit.balance),
+            status: order.exchangeCredit.status,
+            refundedAmount: Number(order.exchangeCredit.refundedAmount),
+          }
+        : null,
+    })),
+    serviceOrders: sale.serviceOrders.map((order) => ({
+      id: order.id,
+      serviceNumber: order.serviceNumber,
+      serviceType: order.serviceType,
+      status: order.status,
+      deviceName: order.deviceName,
+      identifier: order.identifier,
+      warrantyCovered: order.warrantyCovered,
+      reportedIssue: order.reportedIssue,
+      receivedAt: order.receivedAt.toISOString(),
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
+      finalCost: Number(order.finalCost),
     })),
   };
 }

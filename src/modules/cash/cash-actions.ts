@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
 import { isValidMoney, roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
-import type { CashMovementKind } from "./cash-types";
+import { calculateExpectedCash, requiresCashDifferenceNote } from "./cash-calculations";
+import { getCashSessionSummary } from "./cash.repository";
+import type { CashCloseReportData, CashMovementKind } from "./cash-types";
 
 const MOVEMENT_TYPES = new Set<CashMovementKind>([
   "INCOME",
@@ -15,6 +17,7 @@ const MOVEMENT_TYPES = new Set<CashMovementKind>([
 ]);
 
 type CashCollectionRow = { amount: unknown };
+type CashRefundRow = { id: string; amount: unknown };
 type CashSessionLockRow = {
   id: string;
   branchId: string;
@@ -163,16 +166,14 @@ export async function closeCashSessionAction(input: {
     const session = locked[0];
     if (!session) throw new Error("La caja ya fue cerrada o pertenece a otro usuario.");
 
-    const [cashPayments, cashCollections, movements] = await Promise.all([
+    const [cashPayments, cashCollections, directCashRefunds, exchangeCashRefunds, movements] = await Promise.all([
       tx.salePayment.findMany({
         where: {
           paymentMethod: "CASH",
           sale: {
             companyId: company.id,
-            branchId: session.branchId,
-            sellerId: session.userId,
-            status: "COMPLETED",
-            createdAt: { gte: session.openedAt },
+            cashSessionId: session.id,
+            status: { in: ["COMPLETED", "REFUNDED"] },
           },
         },
         select: { amount: true },
@@ -184,27 +185,64 @@ export async function closeCashSessionAction(input: {
           AND rp."cashSessionId" = ${session.id}
           AND rp."paymentMethod" = 'CASH'::"PaymentMethod"
       `,
+      tx.$queryRaw<CashRefundRow[]>`
+        SELECT ro."id", ro."refundAmount" AS "amount"
+        FROM "return_orders" ro
+        WHERE ro."companyId" = ${company.id}
+          AND ro."refundCashSessionId" = ${session.id}
+          AND ro."type" = 'RETURN'
+          AND ro."status" = 'COMPLETED'
+          AND ro."refundMethod" = 'CASH'
+          AND ro."refundAmount" > 0
+      `,
+      tx.$queryRaw<CashRefundRow[]>`
+        SELECT ec."id", ec."refundedAmount" AS "amount"
+        FROM "exchange_credits" ec
+        WHERE ec."companyId" = ${company.id}
+          AND ec."refundCashSessionId" = ${session.id}
+          AND ec."refundMethod" = 'CASH'::"PaymentMethod"
+          AND ec."refundedAmount" > 0
+      `,
       tx.cashMovement.findMany({
         where: { companyId: company.id, cashSessionId: session.id },
-        select: { type: true, amount: true },
+        select: { type: true, amount: true, reference: true },
       }),
     ]);
 
     const cashSales = roundMoney(cashPayments.reduce((sum, payment) => sum + Number(payment.amount), 0));
     const receivableCash = roundMoney(cashCollections.reduce((sum, payment) => sum + Number(payment.amount), 0));
+    const directRefundCash = roundMoney(
+      directCashRefunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+    );
+    const exchangeRefundCash = roundMoney(
+      exchangeCashRefunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+    );
+    const automaticRefundReferences = new Set([
+      ...directCashRefunds.map((refund) => refund.id),
+      ...exchangeCashRefunds.map((refund) => refund.id),
+    ]);
+
     let manualIn = 0;
     let manualOut = 0;
-
     for (const movement of movements) {
+      if (movement.reference && automaticRefundReferences.has(movement.reference)) continue;
       const amount = Number(movement.amount);
       if (movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN") manualIn += amount;
       else manualOut += amount;
     }
 
-    const expectedAmount = roundMoney(
-      Number(session.openingAmount) + cashSales + receivableCash + manualIn - manualOut,
-    );
+    const expectedAmount = calculateExpectedCash({
+      openingAmount: Number(session.openingAmount),
+      cashCollected: roundMoney(cashSales + receivableCash),
+      cashRefunded: roundMoney(directRefundCash + exchangeRefundCash),
+      manualIncome: manualIn,
+      manualOut,
+    });
     const difference = roundMoney(actualAmount - expectedAmount);
+    const closingNotes = input.notes?.trim() || null;
+    if (requiresCashDifferenceNote(difference) && !closingNotes) {
+      throw new Error("Explica el motivo del sobrante o faltante antes de cerrar la caja.");
+    }
     const closedAt = new Date();
 
     const updated = await tx.cashSession.updateMany({
@@ -214,7 +252,7 @@ export async function closeCashSessionAction(input: {
         expectedAmount,
         closingAmount: actualAmount,
         difference,
-        closingNotes: input.notes?.trim() || null,
+        closingNotes,
         closedAt,
       },
     });
@@ -234,8 +272,11 @@ export async function closeCashSessionAction(input: {
           difference,
           cashSales,
           receivableCash,
+          directRefundCash,
+          exchangeRefundCash,
           manualIn: roundMoney(manualIn),
           manualOut: roundMoney(manualOut),
+          closingNotes,
         },
       },
     });
@@ -245,6 +286,7 @@ export async function closeCashSessionAction(input: {
       expectedAmount,
       actualAmount,
       difference,
+      cashRefunds: roundMoney(directRefundCash + exchangeRefundCash),
       closedAt: closedAt.toISOString(),
     };
   });
@@ -252,4 +294,38 @@ export async function closeCashSessionAction(input: {
   revalidatePath("/caja");
   revalidatePath("/");
   return result;
+}
+
+
+export async function getCashCloseReportAction(
+  sessionId: string,
+): Promise<CashCloseReportData> {
+  const { company } = await requirePermission("cash.manage");
+  const summary = await getCashSessionSummary(sessionId);
+
+  if (!summary.closedAt || summary.expectedAmount == null || summary.closingAmount == null || summary.difference == null) {
+    throw new Error("La sesión seleccionada todavía no tiene un cierre completo.");
+  }
+
+  return {
+    sessionId: summary.id,
+    companyName: company.tradeName ?? company.businessName,
+    branchName: summary.branchName,
+    userName: summary.userName,
+    openedAt: summary.openedAt,
+    closedAt: summary.closedAt,
+    openingAmount: summary.openingAmount,
+    salesCount: summary.salesCount,
+    salesTotal: summary.salesTotal,
+    paymentTotals: summary.paymentTotals,
+    refundTotals: summary.refundTotals,
+    netPaymentTotals: summary.netPaymentTotals,
+    refundTotal: summary.refundTotal,
+    manualIncome: summary.manualIncome,
+    manualOut: summary.manualOut,
+    expectedAmount: summary.expectedAmount,
+    actualAmount: summary.closingAmount,
+    difference: summary.difference,
+    closingNotes: summary.closingNotes ?? undefined,
+  };
 }

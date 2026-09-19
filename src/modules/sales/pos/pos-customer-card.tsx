@@ -1,29 +1,38 @@
-import { ChevronDown, Plus, UserRound } from "lucide-react";
+import {
+  Building2,
+  LoaderCircle,
+  Plus,
+  ReceiptText,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
 import type {
   PosCustomer,
   SaleDocumentType,
   SaleTaxCondition,
 } from "../sale-types";
-import { formatPen } from "./pos-shared";
 
-const DOCUMENT_LABELS: Record<SaleDocumentType, string> = {
-  RECEIPT: "Boleta",
-  INVOICE: "Factura",
-  SALES_NOTE: "Nota de venta",
-};
-
-const TAX_LABELS: Record<SaleTaxCondition, string> = {
-  TAXED: "Gravado",
-  EXEMPT: "Exonerado",
-  UNAFFECTED: "Inafecto",
-};
+const DOCUMENT_OPTIONS: Array<{
+  value: SaleDocumentType;
+  label: string;
+  short: string;
+}> = [
+  { value: "RECEIPT", label: "Boleta", short: "03" },
+  { value: "INVOICE", label: "Factura", short: "01" },
+  { value: "SALES_NOTE", label: "Nota de venta", short: "NV" },
+];
 
 export function PosCustomerCard({
   customers,
   customerId,
+  customerQuery,
+  isSearchingCustomers,
   selectedCustomer,
   documentType,
   taxCondition,
+  customerLocked = false,
+  onCustomerQueryChange,
   onExistingCustomerChange,
   onAddCustomer,
   onDocumentTypeChange,
@@ -31,100 +40,163 @@ export function PosCustomerCard({
 }: {
   customers: PosCustomer[];
   customerId: string;
+  customerQuery: string;
+  isSearchingCustomers: boolean;
   selectedCustomer: PosCustomer | null;
   documentType: SaleDocumentType;
   taxCondition: SaleTaxCondition;
+  customerLocked?: boolean;
+  onCustomerQueryChange: (value: string) => void;
   onExistingCustomerChange: (id: string) => void;
   onAddCustomer: () => void;
   onDocumentTypeChange: (type: SaleDocumentType) => void;
   onTaxConditionChange: (condition: SaleTaxCondition) => void;
 }) {
-  const customerLabel = selectedCustomer?.name || "Consumidor final";
+  void customerId;
+  const invoiceNeedsRuc = documentType === "INVOICE"
+    && (
+      !selectedCustomer
+      || selectedCustomer.documentType !== "RUC"
+      || (selectedCustomer.documentNumber ?? "").replace(/\D/g, "").length !== 11
+    );
+
+  const selectedDocumentLabel = selectedCustomer
+    ? (selectedCustomer.documentType || "Documento")
+      + (selectedCustomer.documentNumber ? ": " + selectedCustomer.documentNumber : "")
+      + (selectedCustomer.phone ? " · " + selectedCustomer.phone : "")
+    : "";
 
   return (
-    <details className="panel pos-collapsible pos-customer-card">
-      <summary className="pos-collapsible-summary">
-        <div className="pos-summary-icon"><UserRound size={17} /></div>
-        <div className="pos-summary-copy">
-          <strong>Cliente y comprobante</strong>
-          <span>{customerLabel} · {DOCUMENT_LABELS[documentType]} · {TAX_LABELS[taxCondition]}</span>
+    <section className="panel pos-customer-card pos-v5-customer-card">
+      <div className="pos-v5-section-title">
+        <div>
+          <UserRound size={17} />
+          <strong>Cliente</strong>
         </div>
-        <ChevronDown className="pos-summary-chevron" size={17} />
-      </summary>
-
-      <div className="pos-collapsible-body">
-        <div className="pos-form-grid">
-          <div className="pos-customer-select-row">
-            <label>
-              <span>Cliente</span>
-              <select value={customerId} onChange={(event) => onExistingCustomerChange(event.target.value)}>
-                <option value="">Consumidor final</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.documentNumber ? ` · ${customer.documentNumber}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="secondary-button pos-add-customer-button" type="button" onClick={onAddCustomer}>
-              <Plus size={15} /> Agregar cliente
-            </button>
-          </div>
-
-          {selectedCustomer && (
-            <div className={`pos-credit-profile ${selectedCustomer.creditEnabled ? "enabled" : "disabled"}`}>
-              <div>
-                <span>Línea de crédito</span>
-                <strong>{selectedCustomer.creditEnabled ? formatPen(selectedCustomer.creditLimit) : "No habilitada"}</strong>
-              </div>
-              <div>
-                <span>Deuda actual</span>
-                <strong>{formatPen(selectedCustomer.outstanding)}</strong>
-              </div>
-              <div>
-                <span>Disponible</span>
-                <strong>{formatPen(selectedCustomer.availableCredit)}</strong>
-              </div>
-              <small>
-                {selectedCustomer.creditEnabled
-                  ? `Plazo habitual: ${selectedCustomer.creditDays} días`
-                  : "La línea de crédito puede configurarse desde Clientes."}
-              </small>
-            </div>
-          )}
-
-          {documentType === "INVOICE" && !selectedCustomer && (
-            <div className="pos-customer-required-note">
-              Para emitir factura debes seleccionar o agregar un cliente con RUC válido.
-            </div>
-          )}
-
-          <div className="pos-two-cols">
-            <label>
-              <span>Comprobante</span>
-              <select
-                value={documentType}
-                onChange={(event) => onDocumentTypeChange(event.target.value as SaleDocumentType)}
-              >
-                <option value="RECEIPT">03 · Boleta de venta</option>
-                <option value="INVOICE">01 · Factura</option>
-                <option value="SALES_NOTE">Nota de venta</option>
-              </select>
-            </label>
-            <label>
-              <span>Condición tributaria</span>
-              <select
-                value={taxCondition}
-                onChange={(event) => onTaxConditionChange(event.target.value as SaleTaxCondition)}
-              >
-                <option value="TAXED">Gravado</option>
-                <option value="EXEMPT">Exonerado</option>
-                <option value="UNAFFECTED">Inafecto</option>
-              </select>
-            </label>
-          </div>
-        </div>
+        {customerLocked ? (
+          <span className="pos-customer-locked">Cliente del vale</span>
+        ) : (
+          <button className="pos-v5-new-customer" type="button" onClick={onAddCustomer}>
+            <Plus size={14} />
+            Nuevo cliente
+          </button>
+        )}
       </div>
-    </details>
+
+      <div className="pos-v5-customer-body">
+        {selectedCustomer ? (
+          <div className="pos-selected-customer">
+            <div className="pos-selected-customer-icon">
+              {selectedCustomer.documentType === "RUC" ? <Building2 size={18} /> : <UserRound size={18} />}
+            </div>
+            <div className="pos-selected-customer-copy">
+              <strong>{selectedCustomer.name}</strong>
+              <span>{selectedDocumentLabel}</span>
+            </div>
+            {!customerLocked && (
+              <button
+                className="pos-selected-customer-clear"
+                type="button"
+                onClick={() => {
+                  onExistingCustomerChange("");
+                  onCustomerQueryChange("");
+                }}
+                aria-label="Usar consumidor final"
+                title="Cambiar a consumidor final"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="pos-customer-search">
+              {isSearchingCustomers ? <LoaderCircle className="mobix-spin" size={16} /> : <Search size={16} />}
+              <input
+                id="pos-customer-search"
+                value={customerQuery}
+                onChange={(event) => onCustomerQueryChange(event.target.value)}
+                placeholder="Buscar cliente por DNI, RUC, nombre o WhatsApp..."
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="pos-consumer-final-chip">Consumidor final</span>
+            </div>
+
+            {customerQuery.trim().length >= 2 && (
+              <div className="pos-customer-results">
+                {customers.slice(0, 6).map((customer) => {
+                  const detail = (customer.documentType || "Doc.")
+                    + (customer.documentNumber ? " " + customer.documentNumber : "")
+                    + (customer.phone ? " · " + customer.phone : "");
+
+                  return (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      onClick={() => {
+                        onExistingCustomerChange(customer.id);
+                        onCustomerQueryChange("");
+                      }}
+                    >
+                      <span className="pos-customer-result-icon">
+                        {customer.documentType === "RUC" ? <Building2 size={14} /> : <UserRound size={14} />}
+                      </span>
+                      <span>
+                        <strong>{customer.name}</strong>
+                        <small>{detail}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+                {!isSearchingCustomers && customers.length === 0 && (
+                  <div className="pos-customer-no-results">
+                    No encontramos ese cliente. Puedes registrarlo sin salir del POS.
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="pos-v5-document-row">
+          <div className="pos-v5-document-label">
+            <ReceiptText size={14} />
+            <span>Comprobante</span>
+          </div>
+          <div className="pos-document-buttons" id="pos-document-types">
+            {DOCUMENT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                className={documentType === option.value ? "active" : ""}
+                type="button"
+                onClick={() => onDocumentTypeChange(option.value)}
+              >
+                <small>{option.short}</small>
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="pos-tax-row">
+          <span>Condición tributaria</span>
+          <select
+            value={taxCondition}
+            onChange={(event) => onTaxConditionChange(event.target.value as SaleTaxCondition)}
+          >
+            <option value="TAXED">Gravado</option>
+            <option value="EXEMPT">Exonerado</option>
+            <option value="UNAFFECTED">Inafecto</option>
+          </select>
+        </div>
+
+        {invoiceNeedsRuc && (
+          <div className="pos-customer-required-note">
+            Para Factura selecciona un cliente con RUC válido de 11 dígitos.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

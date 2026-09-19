@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { ArrowLeft, ArrowUpRight, CircleDollarSign, CreditCard, Save, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CircleDollarSign, CreditCard, Repeat2, Save, UserRound, WalletCards } from "lucide-react";
 import {
   registerReceivablePaymentAction,
   updateCustomerAction,
@@ -17,6 +17,24 @@ const COLLECTION_LABELS: Record<CollectionMethod, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   OTHER: "Otro",
+};
+
+const SALE_PAYMENT_LABELS: Record<string, string> = {
+  CASH: "Efectivo",
+  YAPE: "Yape",
+  PLIN: "Plin",
+  CARD: "Tarjeta",
+  TRANSFER: "Transferencia",
+  CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
+  OTHER: "Otro",
+};
+
+const SALE_STATUS_LABELS: Record<string, string> = {
+  COMPLETED: "Completada",
+  REFUNDED: "Devuelta",
+  CANCELLED: "Anulada",
+  DRAFT: "Borrador",
 };
 
 function money(value: number) {
@@ -46,10 +64,39 @@ export function CustomerDetailView({ customer }: { customer: {
   status: string;
   createdAt: string;
   credit: { enabled: boolean; limit: number; days: number; notes: string | null; outstanding: number; overdue: number; available: number };
-  summary: { salesCount: number; purchaseTotal: number; outstanding: number; overdue: number };
+  summary: {
+    salesCount: number;
+    purchaseTotal: number;
+    grossPurchaseTotal: number;
+    returnedPurchaseTotal: number;
+    outstanding: number;
+    overdue: number;
+    exchangeCreditBalance: number;
+  };
   sales: Array<{ id: string; saleNumber: string; document: string; total: number; status: string; itemCount: number; payments: string[]; createdAt: string }>;
   receivables: Array<{ id: string; saleId: string; saleNumber: string; document: string; status: string; originalAmount: number; paidAmount: number; balance: number; dueDate: string; createdAt: string; overdue: boolean }>;
   payments: Array<{ id: string; receivableId: string; amount: number; method: string; reference: string | null; notes: string | null; createdBy: string; paidAt: string }>;
+  exchangeCredits: Array<{
+    id: string;
+    returnOrderId: string;
+    returnNumber: string;
+    reason: string;
+    originalAmount: number;
+    balance: number;
+    status: string;
+    refundedAmount: number;
+    refundMethod: string | null;
+    refundReference: string | null;
+    refundedAt: string | null;
+    createdAt: string;
+    usages: Array<{
+      id: string;
+      saleId: string;
+      saleNumber: string;
+      amount: number;
+      createdAt: string;
+    }>;
+  }>;
 } }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -111,6 +158,13 @@ export function CustomerDetailView({ customer }: { customer: {
       setError("Selecciona una cuenta por cobrar.");
       return;
     }
+    if (
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod)
+      && !paymentReference.trim()
+    ) {
+      setError("Ingresa el número de operación o referencia del cobro.");
+      return;
+    }
     run(
       () => registerReceivablePaymentAction({
         receivableId: selectedReceivable,
@@ -139,11 +193,76 @@ export function CustomerDetailView({ customer }: { customer: {
       {message && <div className="customer-success-banner"><strong>Listo</strong><span>{message}</span></div>}
 
       <section className="customer-kpi-grid">
-        <article><small>Compras</small><strong>{customer.summary.salesCount}</strong><span>{money(customer.summary.purchaseTotal)} acumulado</span></article>
+        <article><small>Compras netas</small><strong>{money(customer.summary.purchaseTotal)}</strong><span>{customer.summary.salesCount} operaciones · bruto {money(customer.summary.grossPurchaseTotal)} · retornado {money(customer.summary.returnedPurchaseTotal)}</span></article>
         <article><small>Deuda pendiente</small><strong>{money(customer.summary.outstanding)}</strong><span>{customer.summary.overdue > 0 ? `${money(customer.summary.overdue)} vencido` : "Sin mora"}</span></article>
         <article><small>Límite de crédito</small><strong>{customer.credit.enabled ? money(customer.credit.limit) : "No habilitado"}</strong><span>{customer.credit.enabled ? `${customer.credit.days} días` : "Configurable"}</span></article>
         <article><small>Crédito disponible</small><strong>{money(customer.credit.available)}</strong><span>Después de deuda actual</span></article>
       </section>
+
+      {customer.exchangeCredits.length > 0 && (
+        <section className="panel customer-exchange-section">
+          <div className="panel-heading">
+            <div>
+              <h2>Vales de cambio</h2>
+              <p>Saldos originados por cambios y su aplicación en nuevas ventas.</p>
+            </div>
+            <div className="customer-exchange-balance">
+              <span>Disponible</span>
+              <strong>{money(customer.summary.exchangeCreditBalance)}</strong>
+            </div>
+          </div>
+
+          <div className="customer-exchange-list">
+            {customer.exchangeCredits.map((credit) => {
+              const open = ["OPEN", "PARTIAL"].includes(credit.status) && credit.balance > 0.01;
+              const statusLabel = credit.refundedAmount > 0.01
+                ? "Saldo devuelto"
+                : credit.status === "USED"
+                  ? "Utilizado"
+                  : credit.status === "PARTIAL"
+                    ? "Uso parcial"
+                    : credit.status === "CANCELLED"
+                      ? "Cancelado"
+                      : "Disponible";
+
+              return (
+                <article className="customer-exchange-item" key={credit.id}>
+                  <div className="customer-exchange-icon"><WalletCards size={17} /></div>
+                  <div className="customer-exchange-copy">
+                    <span>{credit.returnNumber} · {date(credit.createdAt)}</span>
+                    <strong>{money(credit.originalAmount)} reconocido</strong>
+                    <small>{credit.reason}</small>
+                  </div>
+                  <div className="customer-exchange-status">
+                    <span className={"customer-exchange-status-chip " + credit.status.toLowerCase()}>
+                      {statusLabel}
+                    </span>
+                    <strong>{open ? money(credit.balance) + " disponible" : "Sin saldo pendiente"}</strong>
+                  </div>
+                  <div className="customer-exchange-actions">
+                    {open && (
+                      <Link href={"/pos?exchangeCredit=" + encodeURIComponent(credit.id)}>
+                        <Repeat2 size={13} /> Usar en POS
+                      </Link>
+                    )}
+                    {credit.usages.slice(0, 2).map((usage) => (
+                      <Link href={"/ventas/" + usage.saleId} key={usage.id}>
+                        {usage.saleNumber} · {money(usage.amount)}
+                      </Link>
+                    ))}
+                    {credit.refundedAt && (
+                      <small>
+                        Devuelto {date(credit.refundedAt)}
+                        {credit.refundMethod ? " · " + credit.refundMethod : ""}
+                      </small>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="customer-detail-grid">
         <section className="panel customer-info-card">
@@ -184,8 +303,8 @@ export function CustomerDetailView({ customer }: { customer: {
           {openReceivables.length ? <div className="customer-form-grid">
             <label className="span-two"><span>Cuenta por cobrar</span><select value={selectedReceivable} onChange={(event) => { const id = event.target.value; setSelectedReceivable(id); const item = openReceivables.find((row) => row.id === id); setPaymentAmount(item?.balance ?? 0); }}><option value="">Seleccionar...</option>{openReceivables.map((item) => <option value={item.id} key={item.id}>{item.saleNumber} · saldo {money(item.balance)}{item.overdue ? " · VENCIDO" : ""}</option>)}</select></label>
             <label><span>Importe</span><div className="money-input"><span>S/</span><input type="number" min="0.01" max={selectedDebt?.balance ?? undefined} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(Number(event.target.value))} /></div></label>
-            <label><span>Medio de cobro</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as CollectionMethod)}>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            <label><span>Referencia</span><input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder={paymentMethod === "CASH" ? "Opcional" : "N.º operación"} /></label>
+            <label><span>Medio de cobro</span><select value={paymentMethod} onChange={(event) => { setPaymentMethod(event.target.value as CollectionMethod); setPaymentReference(""); }}>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <label><span>Referencia{["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod) ? " *" : ""}</span><input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder={["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod) ? "N.º operación obligatorio" : "Opcional"} /></label>
             <label><span>Nota</span><input value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Opcional" /></label>
             <div className="span-two"><button className="primary-button wide" type="button" onClick={registerPayment} disabled={isPending || !selectedReceivable}>{isPending ? "Registrando..." : `Registrar abono ${money(paymentAmount)}`}</button></div>
           </div> : <div className="collection-empty"><strong>Cliente sin saldo pendiente</strong><span>No hay cuentas por cobrar abiertas.</span></div>}
@@ -199,7 +318,7 @@ export function CustomerDetailView({ customer }: { customer: {
 
       <section className="panel customer-sales-section">
         <div className="panel-heading"><div><h2>Historial de ventas</h2><p>Últimas operaciones realizadas por el cliente.</p></div></div>
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Venta</th><th>Fecha</th><th>Productos</th><th>Pago</th><th>Total</th><th></th></tr></thead><tbody>{customer.sales.map((sale) => <tr key={sale.id}><td><strong>{sale.saleNumber}</strong><small className="table-subline">{sale.document}</small></td><td>{dateTime(sale.createdAt)}</td><td>{sale.itemCount}</td><td>{sale.payments.join(" + ")}</td><td><strong>{money(sale.total)}</strong></td><td className="right"><Link className="row-detail-link" href={`/ventas/${sale.id}`}>Detalle <ArrowUpRight size={13} /></Link></td></tr>)}{!customer.sales.length && <tr><td colSpan={6}><div className="customers-empty"><span>Este cliente todavía no tiene ventas.</span></div></td></tr>}</tbody></table></div>
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Venta</th><th>Fecha</th><th>Productos</th><th>Pago</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>{customer.sales.map((sale) => <tr key={sale.id}><td><strong>{sale.saleNumber}</strong><small className="table-subline">{sale.document}</small></td><td>{dateTime(sale.createdAt)}</td><td>{sale.itemCount}</td><td>{sale.payments.map((method) => SALE_PAYMENT_LABELS[method] ?? method).join(" + ")}</td><td><strong>{money(sale.total)}</strong></td><td><span className={`status-badge sale-${sale.status.toLowerCase()}`}>{SALE_STATUS_LABELS[sale.status] ?? sale.status}</span></td><td className="right"><Link className="row-detail-link" href={`/ventas/${sale.id}`}>Detalle <ArrowUpRight size={13} /></Link></td></tr>)}{!customer.sales.length && <tr><td colSpan={7}><div className="customers-empty"><span>Este cliente todavía no tiene ventas.</span></div></td></tr>}</tbody></table></div>
       </section>
     </div>
   );

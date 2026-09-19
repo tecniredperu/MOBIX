@@ -21,6 +21,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -37,6 +38,13 @@ function limaDate(value: string) {
     timeZone: "America/Lima",
     dateStyle: "short",
     timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
   }).format(new Date(value));
 }
 
@@ -169,6 +177,9 @@ function identifierText(item: SaleTicketData["items"][number]) {
     if (identifier.imei1) parts.push(`IMEI 1: ${identifier.imei1}`);
     if (identifier.imei2) parts.push(`IMEI 2: ${identifier.imei2}`);
     if (identifier.serial) parts.push(`Serie: ${identifier.serial}`);
+    if (identifier.warrantyExpiresAt) {
+      parts.push(`Garantía hasta: ${limaOnlyDate(identifier.warrantyExpiresAt)}`);
+    }
     return parts;
   });
 }
@@ -228,6 +239,18 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   drawWrapped(ctx, documentLabel, docX + docW / 2, docY + 78, docW - 30, 34);
   ctx.font = "700 25px Arial";
   ctx.fillText(documentNumber, docX + docW / 2, docY + 151);
+
+  if (ticket.status === "CANCELLED") {
+    ctx.save();
+    ctx.strokeStyle = "#b91c1c";
+    ctx.fillStyle = "#b91c1c";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(docX + 42, docY + 118, docW - 84, 48);
+    ctx.font = "800 27px Arial";
+    ctx.fillText("ANULADO", docX + docW / 2, docY + 127);
+    ctx.restore();
+  }
+
   ctx.textAlign = "left";
 
   let y = 286;
@@ -336,7 +359,14 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   y += 30;
   ctx.font = "400 18px Arial";
   for (const payment of ticket.payments) {
-    ctx.fillText(`${PAYMENT_LABELS[payment.method] ?? payment.method}: ${money(payment.amount)}`, margin, y);
+    const reference = payment.reference && payment.method !== "EXCHANGE_CREDIT"
+      ? " · Ref. " + payment.reference
+      : "";
+    ctx.fillText(
+      `${PAYMENT_LABELS[payment.method] ?? payment.method}: ${money(payment.amount)}${reference}`,
+      margin,
+      y,
+    );
     y += 27;
   }
 
@@ -348,10 +378,14 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   ctx.stroke();
   y += 28;
   ctx.textAlign = "center";
-  ctx.fillStyle = "#374151";
+  ctx.fillStyle = ticket.status === "CANCELLED" ? "#b91c1c" : "#374151";
   ctx.font = "700 20px Arial";
-  ctx.fillText("¡Gracias por su compra!", canvas.width / 2, y);
-  if (ticket.ticketFooter) {
+  ctx.fillText(
+    ticket.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por su compra!",
+    canvas.width / 2,
+    y,
+  );
+  if (ticket.status !== "CANCELLED" && ticket.ticketFooter) {
     ctx.font = "400 16px Arial";
     drawWrapped(ctx, ticket.ticketFooter, canvas.width / 2, y + 34, 920, 22);
   }

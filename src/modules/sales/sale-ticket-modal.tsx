@@ -15,6 +15,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -34,8 +35,16 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
 export type SaleTicketData = {
   saleNumber: string;
+  status: string;
   documentType: string;
   documentSeries: string | null;
   documentNumber: string | null;
@@ -64,13 +73,20 @@ export type SaleTicketData = {
     quantity: number;
     unitPrice: number;
     total: number;
-    identifiers: Array<{ imei1: string | null; imei2: string | null; serial: string | null }>;
+    identifiers: Array<{
+      imei1: string | null;
+      imei2: string | null;
+      serial: string | null;
+      warrantyDays?: number;
+      warrantyStartsAt?: string | null;
+      warrantyExpiresAt?: string | null;
+    }>;
   }>;
   subtotal: number;
   tax: number;
   discount: number;
   total: number;
-  payments: Array<{ id: string; method: string; amount: number }>;
+  payments: Array<{ id: string; method: string; amount: number; reference?: string | null }>;
 };
 
 export function SaleTicketModal({
@@ -128,6 +144,7 @@ export function SaleTicketModal({
             <div className="ticket-document-box">
               <strong>{DOCUMENT_LABELS[ticket.documentType] ?? ticket.documentType}</strong>
               <span>{documentNumber}</span>
+              {ticket.status === "CANCELLED" && <b className="ticket-cancelled-stamp">ANULADO</b>}
             </div>
             <div className="ticket-meta">
               <span>Venta: {ticket.saleNumber}</span>
@@ -144,6 +161,9 @@ export function SaleTicketModal({
                     <span key={index}>
                       {identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : identifier.serial ? `Serie: ${identifier.serial}` : ""}
                       {identifier.imei2 ? ` · IMEI 2: ${identifier.imei2}` : ""}
+                      {identifier.warrantyExpiresAt ? (
+                        <><br />Garantía hasta: {limaOnlyDate(identifier.warrantyExpiresAt)}</>
+                      ) : null}
                     </span>
                   ))}
                   <div><span>{item.quantity} x {money(item.unitPrice)}</span><strong>{money(item.total)}</strong></div>
@@ -158,12 +178,18 @@ export function SaleTicketModal({
             </div>
             <div className="ticket-payments">
               {ticket.payments.map((payment) => (
-                <div key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span><strong>{money(payment.amount)}</strong></div>
+                <div key={payment.id}>
+                  <span>
+                    {PAYMENT_LABELS[payment.method] ?? payment.method}
+                    {payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}
+                  </span>
+                  <strong>{money(payment.amount)}</strong>
+                </div>
               ))}
             </div>
             <footer className="ticket-footer">
-              <strong>¡Gracias por tu compra!</strong>
-              {ticket.ticketFooter && <small className="ticket-custom-footer">{ticket.ticketFooter}</small>}
+              <strong>{ticket.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por tu compra!"}</strong>
+              {ticket.status !== "CANCELLED" && ticket.ticketFooter && <small className="ticket-custom-footer">{ticket.ticketFooter}</small>}
             </footer>
           </div>
         </div>

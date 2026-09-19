@@ -12,17 +12,27 @@ function date(value: string | null) {
   return new Intl.DateTimeFormat("es-PE", { dateStyle: "medium" }).format(new Date(value));
 }
 
-export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustomerOption[]; soldUnits: SoldUnitOption[] }) {
+export function ServiceForm({
+  customers,
+  soldUnits,
+  initialUnitId = "",
+  initialUnitQuery = "",
+}: {
+  customers: ServiceCustomerOption[];
+  soldUnits: SoldUnitOption[];
+  initialUnitId?: string;
+  initialUnitQuery?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [origin, setOrigin] = useState<"SOLD" | "EXTERNAL">("SOLD");
-  const [unitId, setUnitId] = useState(soldUnits[0]?.id ?? "");
+  const [unitId, setUnitId] = useState(initialUnitId || soldUnits[0]?.id || "");
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
   const [availableCustomers, setAvailableCustomers] = useState(customers);
   const [availableSoldUnits, setAvailableSoldUnits] = useState(soldUnits);
   const [customerQuery, setCustomerQuery] = useState("");
-  const [unitQuery, setUnitQuery] = useState("");
+  const [unitQuery, setUnitQuery] = useState(initialUnitQuery);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [serviceType, setServiceType] = useState<ServiceType>("TECHNICAL_SERVICE");
@@ -37,6 +47,13 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
   const [expectedAt, setExpectedAt] = useState("");
 
   const selectedUnit = useMemo(() => availableSoldUnits.find((unit) => unit.id === unitId) ?? null, [availableSoldUnits, unitId]);
+
+  useEffect(() => {
+    if (!selectedUnit) return;
+    setServiceType(selectedUnit.withinWarranty ? "WARRANTY" : "TECHNICAL_SERVICE");
+    setCustomerId(selectedUnit.customerId || "");
+    setCustomerQuery("");
+  }, [selectedUnit]);
 
   useEffect(() => {
     if (origin !== "SOLD") return;
@@ -61,7 +78,8 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
   }, [origin, unitQuery, unitId]);
 
   useEffect(() => {
-    if (origin !== "EXTERNAL") return;
+    const needsSoldCustomer = origin === "SOLD" && Boolean(selectedUnit) && !selectedUnit?.customerId;
+    if (origin !== "EXTERNAL" && !needsSoldCustomer) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoadingCustomers(true);
@@ -80,7 +98,7 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
       }
     }, 280);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [origin, customerQuery, customerId]);
+  }, [origin, customerQuery, customerId, selectedUnit]);
 
   function changeOrigin(value: "SOLD" | "EXTERNAL") {
     setOrigin(value);
@@ -92,7 +110,9 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
     startTransition(async () => {
       try {
         const result = await createServiceOrderAction({
-          customerId: origin === "EXTERNAL" ? customerId : undefined,
+          customerId: origin === "EXTERNAL" || (origin === "SOLD" && selectedUnit && !selectedUnit.customerId)
+            ? customerId
+            : undefined,
           productUnitId: origin === "SOLD" ? unitId : undefined,
           serviceType,
           deviceName: origin === "EXTERNAL" ? deviceName : undefined,
@@ -124,8 +144,18 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
           {origin === "SOLD" ? (
             <div className="service-field-stack">
               <label><span>Buscar equipo vendido / IMEI</span><input value={unitQuery} onChange={(event) => setUnitQuery(event.target.value)} placeholder="IMEI, serie, equipo, modelo o SKU..." autoComplete="off" /></label>
-              <label><span>Equipo vendido / IMEI {loadingUnits ? "· buscando..." : ""}</span><select value={unitId} onChange={(event) => { setUnitId(event.target.value); setServiceType("TECHNICAL_SERVICE"); }}><option value="">Selecciona un equipo</option>{availableSoldUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier} · {unit.productName} · {unit.customerName}</option>)}</select></label>
+              <label><span>Equipo vendido / IMEI {loadingUnits ? "· buscando..." : ""}</span><select value={unitId} onChange={(event) => setUnitId(event.target.value)}><option value="">Selecciona un equipo</option>{availableSoldUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.identifier} · {unit.productName} · {unit.customerName}</option>)}</select></label>
               {selectedUnit && <div className="service-unit-preview"><div><span>Equipo</span><strong>{selectedUnit.productName}</strong><small>{selectedUnit.brand} · {selectedUnit.variant}</small></div><div><span>Cliente</span><strong>{selectedUnit.customerName}</strong><small>Venta {selectedUnit.saleNumber}</small></div><div><span>Identificador</span><strong>{selectedUnit.identifier}</strong><small>Vendido {date(selectedUnit.soldAt)}</small></div><div className={selectedUnit.withinWarranty ? "warranty-ok" : "warranty-expired"}><span>Garantía</span><strong>{selectedUnit.withinWarranty ? "Vigente" : "No vigente"}</strong><small>{selectedUnit.warrantyExpiresAt ? `Hasta ${date(selectedUnit.warrantyExpiresAt)}` : "Sin plazo configurado"}</small></div></div>}
+              {selectedUnit && !selectedUnit.customerId && (
+                <div className="customer-form-grid service-consumer-final-customer">
+                  <div className="span-two service-form-note">
+                    <ShieldCheck size={17} />
+                    <span>Esta venta fue registrada como <strong>Consumidor final</strong>. Selecciona al cliente que entrega el equipo para continuar con la postventa.</span>
+                  </div>
+                  <label className="span-two"><span>Buscar cliente</span><input value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="Nombre, DNI/RUC o celular..." autoComplete="off" /></label>
+                  <label className="span-two"><span>Cliente {loadingCustomers ? "· buscando..." : ""}</span><select value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Selecciona un cliente</option>{availableCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.document ? ` · ${customer.document}` : ""}</option>)}</select></label>
+                </div>
+              )}
             </div>
           ) : (
             <div className="customer-form-grid">
@@ -139,7 +169,7 @@ export function ServiceForm({ customers, soldUnits }: { customers: ServiceCustom
           )}
         </section>
         <section className="panel service-form-card"><div className="section-title"><div><h2>Tipo de atención</h2><p>Define si corresponde a garantía o reparación particular.</p></div><ShieldCheck size={20} /></div><div className="service-type-options"><button type="button" className={serviceType === "TECHNICAL_SERVICE" ? "active" : ""} onClick={() => setServiceType("TECHNICAL_SERVICE")}><Wrench size={18} /><span><strong>Servicio técnico</strong><small>Diagnóstico y reparación particular</small></span></button><button type="button" disabled={origin === "EXTERNAL" || !selectedUnit?.withinWarranty} className={serviceType === "WARRANTY" ? "active warranty" : "warranty"} onClick={() => setServiceType("WARRANTY")}><ShieldCheck size={18} /><span><strong>Garantía</strong><small>{origin === "SOLD" && selectedUnit?.withinWarranty ? "Cobertura vigente" : "Requiere garantía vigente"}</small></span></button></div><div className="service-field-stack service-reception-fields"><label><span>Falla reportada *</span><textarea rows={4} value={reportedIssue} onChange={(event) => setReportedIssue(event.target.value)} placeholder="Describe lo que indica el cliente y cuándo ocurre la falla..." /></label><label><span>Estado físico al recibir</span><textarea rows={3} value={physicalCondition} onChange={(event) => setPhysicalCondition(event.target.value)} placeholder="Ej. pantalla con rayones leves, marco sin golpes..." /></label><label><span>Accesorios entregados</span><input value={accessories} onChange={(event) => setAccessories(event.target.value)} placeholder="Ej. cargador, cable, funda / Ninguno" /></label></div></section>
-        <aside className="panel service-planning-card"><div className="section-title"><div><h2>Planificación</h2><p>Información inicial para el cliente.</p></div><CalendarClock size={20} /></div><div className="service-field-stack"><label><span>Costo estimado</span><div className="money-input"><span>S/</span><input type="number" min="0" step="0.01" value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} disabled={serviceType === "WARRANTY"} /></div></label><label><span>Entrega estimada</span><input type="date" value={expectedAt} onChange={(event) => setExpectedAt(event.target.value)} /></label></div><div className="service-form-note"><ShieldCheck size={17} /><span>Al registrar un equipo vendido, MOBIX lo cambia temporalmente de <strong>Vendido</strong> a <strong>{serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</strong> hasta que sea entregado.</span></div><button className="primary-button wide service-submit" type="button" disabled={isPending || !reportedIssue.trim() || (origin === "SOLD" && !unitId) || (origin === "EXTERNAL" && (!customerId || !deviceName.trim()))} onClick={submit}>{isPending ? "Registrando..." : "Registrar recepción"}</button></aside>
+        <aside className="panel service-planning-card"><div className="section-title"><div><h2>Planificación</h2><p>Información inicial para el cliente.</p></div><CalendarClock size={20} /></div><div className="service-field-stack"><label><span>Costo estimado</span><div className="money-input"><span>S/</span><input type="number" min="0" step="0.01" value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} disabled={serviceType === "WARRANTY"} /></div></label><label><span>Entrega estimada</span><input type="date" value={expectedAt} onChange={(event) => setExpectedAt(event.target.value)} /></label></div><div className="service-form-note"><ShieldCheck size={17} /><span>Al registrar un equipo vendido, MOBIX lo cambia temporalmente de <strong>Vendido</strong> a <strong>{serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</strong> hasta que sea entregado.</span></div><button className="primary-button wide service-submit" type="button" disabled={isPending || !reportedIssue.trim() || (origin === "SOLD" && (!unitId || (selectedUnit && !selectedUnit.customerId && !customerId))) || (origin === "EXTERNAL" && (!customerId || !deviceName.trim()))} onClick={submit}>{isPending ? "Registrando..." : "Registrar recepción"}</button></aside>
       </div>
     </div>
   );

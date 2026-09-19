@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Building2, CreditCard, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, CreditCard, Repeat2, RotateCcw, Smartphone, UserRound, WalletCards, Wrench } from "lucide-react";
 import Link from "next/link";
 import { SaleDetailActions } from "./sale-detail-actions";
 
@@ -27,6 +27,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -52,14 +53,29 @@ function limaDate(value: string) {
   }).format(new Date(value));
 }
 
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+  }).format(new Date(value));
+}
+
 export function SaleDetailView({
   sale,
+  canCancelSale,
   created,
+  change,
+  exchangeCreditId,
+  exchangeBalance,
   company,
   ticketFooter,
 }: {
   sale: any;
+  canCancelSale: boolean;
   created: boolean;
+  change: number;
+  exchangeCreditId: string | null;
+  exchangeBalance: number;
   company: ReceiptCompany;
   ticketFooter: string | null;
 }) {
@@ -68,8 +84,16 @@ export function SaleDetailView({
   const documentNumber = sale.documentSeries && sale.documentNumber
     ? `${sale.documentSeries}-${sale.documentNumber}`
     : sale.saleNumber;
+  const cancellablePaymentMethods = new Set(["CASH", "CREDIT", "EXCHANGE_CREDIT"]);
+  const canCancel = canCancelSale
+    && sale.status === "COMPLETED"
+    && !sale.returns?.length
+    && !sale.serviceOrders?.some((order: any) => order.status !== "CANCELLED")
+    && sale.payments.every((payment: any) => cancellablePaymentMethods.has(payment.method));
+
   const ticket = {
     saleNumber: sale.saleNumber,
+    status: sale.status,
     documentType: sale.documentType,
     documentSeries: sale.documentSeries,
     documentNumber: sale.documentNumber,
@@ -102,6 +126,7 @@ export function SaleDetailView({
       id: payment.id,
       method: payment.method,
       amount: payment.amount,
+      reference: payment.reference,
     })),
   };
 
@@ -114,10 +139,145 @@ export function SaleDetailView({
           <h1>{DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
           <p>{limaDate(sale.createdAt)} · {sale.branch} / {sale.warehouse}</p>
         </div>
-        <SaleDetailActions saleNumber={sale.saleNumber} customerName={customerName} customerPhone={sale.customer?.phone} total={sale.total} ticket={ticket} />
+        <SaleDetailActions
+          saleId={sale.id}
+          saleNumber={sale.saleNumber}
+          saleStatus={sale.status}
+          canCancel={canCancel}
+          customerName={customerName}
+          customerPhone={sale.customer?.phone}
+          total={sale.total}
+          ticket={ticket}
+          created={created}
+          change={change}
+          exchangeCreditId={exchangeCreditId}
+          exchangeBalance={exchangeBalance}
+        />
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
+
+      {sale.status === "CANCELLED" && (
+        <div className="sale-cancelled-banner no-print">
+          <RotateCcw size={18} />
+          <div>
+            <strong>Venta anulada</strong>
+            <span>
+              {sale.cancellation
+                ? sale.cancellation.reason + " · " + sale.cancellation.userName + " · " + limaDate(sale.cancellation.createdAt)
+                : "El stock y los IMEI fueron revertidos. Esta operación ya no forma parte de la conciliación de ventas."}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {sale.returns?.length ? (
+        <section className="panel sale-return-history-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Devoluciones y cambios vinculados</h2>
+              <p>Operaciones que modificaron parcial o totalmente esta venta.</p>
+            </div>
+            <RotateCcw size={20} />
+          </div>
+          <div className="sale-return-history-list">
+            {sale.returns.map((entry: any) => (
+              <Link href={"/devoluciones/" + entry.id} className="sale-return-history-row" key={entry.id}>
+                <div className="sale-return-history-icon">
+                  {entry.type === "EXCHANGE" ? <Repeat2 size={16} /> : <RotateCcw size={16} />}
+                </div>
+                <div className="sale-return-history-copy">
+                  <span>{entry.type === "EXCHANGE" ? "Cambio" : "Devolución"}</span>
+                  <strong>{entry.returnNumber}</strong>
+                  <small>{entry.reason}</small>
+                </div>
+                <div className="sale-return-history-meta">
+                  <span>{entry.quantity} producto{entry.quantity === 1 ? "" : "s"}</span>
+                  <strong>{money(entry.value)}</strong>
+                  <small>{limaOnlyDate(entry.createdAt)}</small>
+                </div>
+                {entry.exchangeCredit && (
+                  <div className="sale-return-history-credit">
+                    <span>Vale</span>
+                    <strong>{money(entry.exchangeCredit.balance)} saldo</strong>
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {sale.serviceOrders?.length ? (
+        <section className="panel sale-service-history-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Postventa y garantía</h2>
+              <p>Atenciones técnicas vinculadas directamente a esta venta.</p>
+            </div>
+            <Wrench size={20} />
+          </div>
+          <div className="sale-service-history-list">
+            {sale.serviceOrders.map((order: any) => (
+              <Link href={"/servicio-tecnico/" + order.id} className="sale-service-history-row" key={order.id}>
+                <div className="sale-service-history-icon"><Wrench size={16} /></div>
+                <div className="sale-service-history-copy">
+                  <span>{order.serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</span>
+                  <strong>{order.serviceNumber}</strong>
+                  <small>{order.deviceName}{order.identifier ? " · " + order.identifier : ""}</small>
+                </div>
+                <div className="sale-service-history-meta">
+                  <span>{order.status}</span>
+                  <strong>{order.warrantyCovered ? "Cobertura de venta" : money(order.finalCost)}</strong>
+                  <small>{limaOnlyDate(order.receivedAt)}</small>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {sale.exchangeOrigins?.length ? (
+        <section className="panel sale-exchange-origin-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Venta vinculada a cambio</h2>
+              <p>Valor reconocido por equipo(s) entregado(s) anteriormente.</p>
+            </div>
+            <Repeat2 size={20} />
+          </div>
+          <div className="sale-exchange-origin-list">
+            {sale.exchangeOrigins.map((origin: any) => (
+              <article className="sale-exchange-origin-row" key={origin.exchangeCreditId}>
+                <div className="sale-exchange-origin-icon"><WalletCards size={18} /></div>
+                <div className="sale-exchange-origin-copy">
+                  <span>Vale de {origin.returnNumber}</span>
+                  <strong>{money(origin.amount)} aplicado en esta venta</strong>
+                  <small>
+                    Valor original {money(origin.originalAmount)}
+                    {origin.balance > 0.01
+                      ? " · Saldo actual " + money(origin.balance)
+                      : origin.refundedAmount > 0.01
+                        ? " · Saldo restante devuelto al cliente"
+                        : " · Vale utilizado"}
+                  </small>
+                </div>
+                <div className="sale-exchange-origin-units">
+                  {origin.returnedUnits.map((unit: any) => (
+                    <Link href={"/equipos/" + unit.id} key={unit.id}>
+                      <Smartphone size={13} />
+                      <span>
+                        <strong>{unit.product}</strong>
+                        <code>{unit.identifier}</code>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="sale-detail-grid">
         <article className="panel sale-info-card">
@@ -143,7 +303,7 @@ export function SaleDetailView({
               {sale.items.map((item: any) => (
                 <tr key={item.id}>
                   <td><div className="product-cell"><div className="product-thumb">{item.product.slice(0, 1)}</div><div><strong>{item.product}</strong><span>{item.brand} · {item.variant}</span></div></div></td>
-                  <td>{item.identifiers.length ? <div className="identifier-stack">{item.identifiers.map((identifier: any, index: number) => <span key={index}>{identifier.imei1 && <><b>IMEI 1</b> <code>{identifier.imei1}</code></>}{identifier.imei2 && <><br /><b>IMEI 2</b> <code>{identifier.imei2}</code></>}{identifier.serial && <><br /><b>Serie</b> <code>{identifier.serial}</code></>}</span>)}</div> : "—"}</td>
+                  <td>{item.identifiers.length ? <div className="identifier-stack">{item.identifiers.map((identifier: any, index: number) => <span key={index}>{identifier.imei1 && <><b>IMEI 1</b> <code>{identifier.imei1}</code></>}{identifier.imei2 && <><br /><b>IMEI 2</b> <code>{identifier.imei2}</code></>}{identifier.serial && <><br /><b>Serie</b> <code>{identifier.serial}</code></>}{identifier.warrantyExpiresAt && <><br /><b>Garantía</b> hasta {limaOnlyDate(identifier.warrantyExpiresAt)}</>}</span>)}</div> : "—"}</td>
                   <td className="right">{item.quantity}</td>
                   <td className="right">{money(item.unitPrice)}</td>
                   <td className="right">{item.discount ? money(item.discount) : "—"}</td>
@@ -159,7 +319,7 @@ export function SaleDetailView({
         <section className="panel sale-payments-panel">
           <div className="panel-heading"><div><h2>Pagos</h2><p>Medios utilizados en la operación.</p></div></div>
           <div className="sale-payment-list">
-            {sale.payments.map((payment: any) => <div className="sale-payment-row" key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}{payment.reference ? <small>Ref. {payment.reference}</small> : null}</span><strong>{money(payment.amount)}</strong></div>)}
+            {sale.payments.map((payment: any) => <div className="sale-payment-row" key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}{payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}</span><strong>{money(payment.amount)}</strong></div>)}
           </div>
         </section>
         <section className="panel sale-totals-panel">
@@ -186,6 +346,7 @@ export function SaleDetailView({
             <span>RUC {company.ruc || "—"}</span>
             <h1>{PRINT_DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
             <strong>{documentNumber}</strong>
+            {sale.status === "CANCELLED" && <b className="receipt-cancelled-stamp">ANULADO</b>}
           </div>
         </header>
 
@@ -213,6 +374,7 @@ export function SaleDetailView({
                     {item.identifiers.map((identifier: any, index: number) => (
                       <small key={index}>
                         {[identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : "", identifier.imei2 ? `IMEI 2: ${identifier.imei2}` : "", identifier.serial ? `Serie: ${identifier.serial}` : ""].filter(Boolean).join(" · ")}
+                        {identifier.warrantyExpiresAt ? ` · Garantía hasta: ${limaOnlyDate(identifier.warrantyExpiresAt)}` : ""}
                       </small>
                     ))}
                   </div>
@@ -230,7 +392,10 @@ export function SaleDetailView({
             <h3>Forma de pago</h3>
             {sale.payments.map((payment: any) => (
               <div className="receipt-payment-row" key={`print-payment-${payment.id}`}>
-                <span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span>
+                <span>
+                  {PAYMENT_LABELS[payment.method] ?? payment.method}
+                  {payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}
+                </span>
                 <strong>{money(payment.amount)}</strong>
               </div>
             ))}
@@ -244,8 +409,8 @@ export function SaleDetailView({
         </div>
 
         <footer className="receipt-a4-footer">
-          <strong>¡Gracias por su compra!</strong>
-          {ticketFooter && <span>{ticketFooter}</span>}
+          <strong>{sale.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por su compra!"}</strong>
+          {sale.status !== "CANCELLED" && ticketFooter && <span>{ticketFooter}</span>}
           <small>Venta {sale.saleNumber} · {companyName}</small>
         </footer>
       </section>

@@ -1,5 +1,13 @@
+import { getOperationalContext } from "@/lib/business-context";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
+import {
+  CASH_PAYMENT_METHODS,
+  calculateExpectedCash,
+  calculateNetPaymentTotals,
+  emptyCashPaymentTotals,
+  sumPaymentTotals,
+} from "./cash-calculations";
 import type {
   CashActivityItem,
   CashBranchOption,
@@ -10,16 +18,6 @@ import type {
   CashSessionHistoryItem,
 } from "./cash-types";
 
-const PAYMENT_METHODS: CashPaymentMethod[] = [
-  "CASH",
-  "YAPE",
-  "PLIN",
-  "CARD",
-  "TRANSFER",
-  "CREDIT",
-  "OTHER",
-];
-
 const PAYMENT_LABELS: Record<CashPaymentMethod, string> = {
   CASH: "Efectivo",
   YAPE: "Yape",
@@ -27,6 +25,7 @@ const PAYMENT_LABELS: Record<CashPaymentMethod, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -43,42 +42,32 @@ type ReceivableCollectionRow = {
   amount: unknown;
   paymentMethod: string;
   paidAt: Date;
+  reference: string | null;
   saleNumber: string;
   customerName: string;
 };
-
-function emptyPaymentTotals(): CashPaymentTotals {
-  return {
-    CASH: 0,
-    YAPE: 0,
-    PLIN: 0,
-    CARD: 0,
-    TRANSFER: 0,
-    CREDIT: 0,
-    OTHER: 0,
-  };
-}
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-async function getMembership(companyId: string) {
-  const membership = await prisma.companyUser.findFirst({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: { createdAt: "asc" },
-    include: {
-      user: { select: { id: true, name: true } },
-      defaultBranch: { select: { id: true } },
-    },
-  });
-
-  if (!membership) {
-    throw new Error("No existe un usuario activo para operar la caja.");
-  }
-
-  return membership;
+function paymentMethod(value: string | null | undefined): CashPaymentMethod | null {
+  if (!value) return null;
+  return CASH_PAYMENT_METHODS.includes(value as CashPaymentMethod)
+    ? value as CashPaymentMethod
+    : null;
 }
+
+function customerName(customer: {
+  businessName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+} | null | undefined) {
+  if (!customer) return "Consumidor final";
+  if (customer.businessName?.trim()) return customer.businessName;
+  return [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "Cliente";
+}
+
 
 export async function getCashSessionSummary(sessionId: string): Promise<CashOpenSession> {
   const company = await getActiveCompany();
@@ -93,20 +82,13 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
 
   if (!session) throw new Error("La sesión de caja ya no existe.");
 
-  const saleDateFilter = {
-    gte: session.openedAt,
-    ...(session.closedAt ? { lte: session.closedAt } : {}),
-  };
-
-  const [payments, saleAggregate, collections] = await Promise.all([
+  const [payments, saleAggregate, collections, directRefunds, exchangeRefunds, cancelledSales] = await Promise.all([
     prisma.salePayment.findMany({
       where: {
         sale: {
           companyId: company.id,
-          branchId: session.branchId,
-          sellerId: session.userId,
-          status: "COMPLETED",
-          createdAt: saleDateFilter,
+          cashSessionId: session.id,
+          status: { in: ["COMPLETED", "REFUNDED"] },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -117,10 +99,8 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     prisma.sale.aggregate({
       where: {
         companyId: company.id,
-        branchId: session.branchId,
-        sellerId: session.userId,
-        status: "COMPLETED",
-        createdAt: saleDateFilter,
+        cashSessionId: session.id,
+        status: { in: ["COMPLETED", "REFUNDED"] },
       },
       _sum: { total: true },
       _count: { id: true },
@@ -131,34 +111,124 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
         rp."amount",
         rp."paymentMethod"::text AS "paymentMethod",
         rp."paidAt",
+        rp."reference",
         s."saleNumber",
         COALESCE(c."businessName", NULLIF(TRIM(CONCAT(COALESCE(c."firstName", ''), ' ', COALESCE(c."lastName", ''))), ''), 'Cliente') AS "customerName"
       FROM "receivable_payments" rp
       INNER JOIN "accounts_receivable" ar ON ar."id" = rp."receivableId"
       INNER JOIN "sales" s ON s."id" = ar."saleId"
       INNER JOIN "customers" c ON c."id" = ar."customerId"
-      WHERE rp."companyId" = ${company.id} AND rp."cashSessionId" = ${session.id}
+      WHERE rp."companyId" = ${company.id}
+        AND rp."cashSessionId" = ${session.id}
       ORDER BY rp."paidAt" DESC
     `,
+    prisma.returnOrder.findMany({
+      where: {
+        companyId: company.id,
+        refundCashSessionId: session.id,
+        type: "RETURN",
+        status: "COMPLETED",
+        refundAmount: { gt: 0 },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        sale: { select: { saleNumber: true } },
+        customer: {
+          select: {
+            businessName: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    }),
+    prisma.exchangeCredit.findMany({
+      where: {
+        companyId: company.id,
+        refundCashSessionId: session.id,
+        refundedAmount: { gt: 0 },
+        refundedAt: { not: null },
+      },
+      orderBy: { refundedAt: "desc" },
+      include: {
+        customer: {
+          select: {
+            businessName: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        returnOrder: {
+          select: {
+            returnNumber: true,
+            sale: { select: { saleNumber: true } },
+          },
+        },
+      },
+    }),
+    prisma.sale.findMany({
+      where: {
+        companyId: company.id,
+        cashSessionId: session.id,
+        status: "CANCELLED",
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        saleNumber: true,
+        total: true,
+        updatedAt: true,
+      },
+    }),
   ]);
 
-  const paymentTotals = emptyPaymentTotals();
+  const paymentTotals = emptyCashPaymentTotals();
   for (const payment of payments) {
-    const method = payment.paymentMethod as CashPaymentMethod;
-    if (PAYMENT_METHODS.includes(method)) {
+    const method = paymentMethod(payment.paymentMethod);
+    if (method) {
       paymentTotals[method] = roundMoney(paymentTotals[method] + Number(payment.amount));
     }
   }
+
   for (const collection of collections) {
-    const method = collection.paymentMethod as CashPaymentMethod;
-    if (PAYMENT_METHODS.includes(method) && method !== "CREDIT") {
+    const method = paymentMethod(collection.paymentMethod);
+    if (method && method !== "CREDIT" && method !== "EXCHANGE_CREDIT") {
       paymentTotals[method] = roundMoney(paymentTotals[method] + Number(collection.amount));
     }
   }
 
+  const refundTotals = emptyCashPaymentTotals();
+  for (const refund of directRefunds) {
+    const method = paymentMethod(refund.refundMethod);
+    if (method) {
+      refundTotals[method] = roundMoney(refundTotals[method] + Number(refund.refundAmount));
+    }
+  }
+  for (const refund of exchangeRefunds) {
+    const method = paymentMethod(refund.refundMethod);
+    if (method) {
+      refundTotals[method] = roundMoney(refundTotals[method] + Number(refund.refundedAmount));
+    }
+  }
+
+  const netPaymentTotals = calculateNetPaymentTotals(paymentTotals, refundTotals);
+
+  const automaticRefundReferences = new Set<string>([
+    ...directRefunds
+      .filter((refund) => refund.refundMethod === "CASH")
+      .map((refund) => refund.id),
+    ...exchangeRefunds
+      .filter((refund) => refund.refundMethod === "CASH")
+      .map((refund) => refund.id),
+  ]);
+
+  const manualMovements = session.movements.filter(
+    (movement) => !movement.reference || !automaticRefundReferences.has(movement.reference),
+  );
+
   let manualIncome = 0;
   let manualOut = 0;
-  for (const movement of session.movements) {
+  for (const movement of manualMovements) {
     const amount = Number(movement.amount);
     if (movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN") {
       manualIncome += amount;
@@ -169,33 +239,101 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
   manualIncome = roundMoney(manualIncome);
   manualOut = roundMoney(manualOut);
 
-  const expectedCash = roundMoney(
-    Number(session.openingAmount) + paymentTotals.CASH + manualIncome - manualOut,
-  );
+  const refundTotal = sumPaymentTotals(refundTotals);
 
-  const saleActivity: CashActivityItem[] = payments.map((payment) => ({
-    id: `sale-${payment.id}`,
-    source: "SALE",
-    direction: "IN",
-    label: `Venta ${payment.sale.saleNumber}`,
-    detail: PAYMENT_LABELS[payment.paymentMethod as CashPaymentMethod] ?? "Pago",
-    amount: Number(payment.amount),
-    paymentMethod: payment.paymentMethod as CashPaymentMethod,
-    createdAt: payment.createdAt.toISOString(),
+  const expectedCash = calculateExpectedCash({
+    openingAmount: Number(session.openingAmount),
+    cashCollected: paymentTotals.CASH,
+    cashRefunded: refundTotals.CASH,
+    manualIncome,
+    manualOut,
+  });
+
+  const saleActivity: CashActivityItem[] = payments.map((payment) => {
+    const method = paymentMethod(payment.paymentMethod) ?? "OTHER";
+    const neutral = method === "CREDIT" || method === "EXCHANGE_CREDIT";
+    return {
+      id: `sale-${payment.id}`,
+      source: "SALE",
+      direction: neutral ? "NEUTRAL" : "IN",
+      label: `Venta ${payment.sale.saleNumber}`,
+      detail: [
+        PAYMENT_LABELS[method] ?? "Pago",
+        payment.reference ? "Ref. " + payment.reference : null,
+      ].filter(Boolean).join(" · "),
+      amount: Number(payment.amount),
+      paymentMethod: method,
+      createdAt: payment.createdAt.toISOString(),
+    };
+  });
+
+  const collectionActivity: CashActivityItem[] = collections.map((collection) => {
+    const method = paymentMethod(collection.paymentMethod) ?? "OTHER";
+    return {
+      id: `collection-${collection.id}`,
+      source: "COLLECTION",
+      direction: "IN",
+      label: `Cobranza ${collection.saleNumber}`,
+      detail: [
+        collection.customerName,
+        PAYMENT_LABELS[method] ?? "Cobro",
+        collection.reference ? "Ref. " + collection.reference : null,
+      ].filter(Boolean).join(" · "),
+      amount: Number(collection.amount),
+      paymentMethod: method,
+      createdAt: collection.paidAt.toISOString(),
+    };
+  });
+
+  const directRefundActivity: CashActivityItem[] = directRefunds.map((refund) => {
+    const method = paymentMethod(refund.refundMethod) ?? "OTHER";
+    return {
+      id: `return-${refund.id}`,
+      source: "REFUND",
+      direction: method === "CREDIT" ? "NEUTRAL" : "OUT",
+      label: `Devolución ${refund.returnNumber}`,
+      detail: [
+        customerName(refund.customer),
+        PAYMENT_LABELS[method] ?? "Reembolso",
+        refund.refundReference ? "Ref. " + refund.refundReference : null,
+        "Venta " + refund.sale.saleNumber,
+      ].filter(Boolean).join(" · "),
+      amount: Number(refund.refundAmount),
+      paymentMethod: method,
+      createdAt: refund.createdAt.toISOString(),
+    };
+  });
+
+  const exchangeRefundActivity: CashActivityItem[] = exchangeRefunds.map((refund) => {
+    const method = paymentMethod(refund.refundMethod) ?? "OTHER";
+    return {
+      id: `exchange-refund-${refund.id}`,
+      source: "REFUND",
+      direction: "OUT",
+      label: `Saldo devuelto ${refund.returnOrder.returnNumber}`,
+      detail: [
+        customerName(refund.customer),
+        PAYMENT_LABELS[method] ?? "Reembolso",
+        refund.refundReference ? "Ref. " + refund.refundReference : null,
+        "Venta " + refund.returnOrder.sale.saleNumber,
+      ].filter(Boolean).join(" · "),
+      amount: Number(refund.refundedAmount),
+      paymentMethod: method,
+      createdAt: (refund.refundedAt ?? refund.updatedAt).toISOString(),
+    };
+  });
+
+  const cancellationActivity: CashActivityItem[] = cancelledSales.map((sale) => ({
+    id: `cancel-${sale.id}`,
+    source: "CANCEL",
+    direction: "NEUTRAL",
+    label: `Venta anulada ${sale.saleNumber}`,
+    detail: "Stock y cobro revertidos dentro del turno",
+    amount: Number(sale.total),
+    createdAt: sale.updatedAt.toISOString(),
   }));
 
-  const collectionActivity: CashActivityItem[] = collections.map((collection) => ({
-    id: `collection-${collection.id}`,
-    source: "SALE",
-    direction: "IN",
-    label: `Cobranza ${collection.saleNumber}`,
-    detail: `${collection.customerName} · ${PAYMENT_LABELS[collection.paymentMethod as CashPaymentMethod] ?? "Cobro"}`,
-    amount: Number(collection.amount),
-    paymentMethod: collection.paymentMethod as CashPaymentMethod,
-    createdAt: collection.paidAt.toISOString(),
-  }));
-
-  const manualActivity: CashActivityItem[] = session.movements.map((movement) => {
+  const manualActivity: CashActivityItem[] = manualMovements.map((movement) => {
     const incoming = movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN";
     return {
       id: `manual-${movement.id}`,
@@ -209,9 +347,16 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     };
   });
 
-  const activity = [...saleActivity, ...collectionActivity, ...manualActivity]
+  const activity = [
+    ...saleActivity,
+    ...collectionActivity,
+    ...directRefundActivity,
+    ...exchangeRefundActivity,
+    ...cancellationActivity,
+    ...manualActivity,
+  ]
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-    .slice(0, 40);
+    .slice(0, 60);
 
   return {
     id: session.id,
@@ -220,21 +365,28 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     userId: session.user.id,
     userName: session.user.name,
     openedAt: session.openedAt.toISOString(),
+    closedAt: session.closedAt?.toISOString() ?? null,
     openingAmount: Number(session.openingAmount),
     openingNotes: session.openingNotes,
+    closingNotes: session.closingNotes,
+    expectedAmount: session.expectedAmount == null ? null : Number(session.expectedAmount),
+    closingAmount: session.closingAmount == null ? null : Number(session.closingAmount),
+    difference: session.difference == null ? null : Number(session.difference),
     paymentTotals,
+    refundTotals,
+    netPaymentTotals,
     salesCount: saleAggregate._count.id,
     salesTotal: Number(saleAggregate._sum.total ?? 0),
     manualIncome,
     manualOut,
+    refundTotal,
     expectedCash,
     activity,
   };
 }
 
 export async function getCashDeskContext() {
-  const company = await getActiveCompany();
-  const membership = await getMembership(company.id);
+  const { company, membership, user } = await getOperationalContext();
 
   const [branchesRaw, openSessionRaw, historyRaw] = await Promise.all([
     prisma.branch.findMany({
@@ -243,7 +395,7 @@ export async function getCashDeskContext() {
       select: { id: true, name: true, code: true },
     }),
     prisma.cashSession.findFirst({
-      where: { companyId: company.id, userId: membership.userId, status: "OPEN" },
+      where: { companyId: company.id, userId: user.id, status: "OPEN" },
       orderBy: { openedAt: "desc" },
       select: { id: true },
     }),
@@ -283,8 +435,8 @@ export async function getCashDeskContext() {
   return {
     companyName: company.tradeName ?? company.businessName,
     currentUser: {
-      id: membership.user.id,
-      name: membership.user.name,
+      id: user.id,
+      name: user.name,
       defaultBranchId: membership.defaultBranchId,
     },
     branches,

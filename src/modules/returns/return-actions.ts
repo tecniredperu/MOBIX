@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePaths } from "@/lib/revalidation";
 
 const REFUND_METHODS = new Set(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "CREDIT", "OTHER"] as const);
+const EXCHANGE_REFUND_METHODS = new Set(["CASH", "YAPE", "PLIN", "CARD", "TRANSFER", "OTHER"] as const);
 const RETURN_PATHS = [
   "/devoluciones",
   "/ventas",
@@ -20,15 +21,29 @@ const RETURN_PATHS = [
 ] as const;
 
 type RefundMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "CREDIT" | "OTHER";
+type ExchangeRefundMethod = "CASH" | "YAPE" | "PLIN" | "CARD" | "TRANSFER" | "OTHER";
 type ReturnType = "RETURN" | "EXCHANGE";
+type ReturnDisposition = "RESTOCK" | "QUARANTINE" | "DAMAGED";
+
+const RETURN_DISPOSITIONS = new Set<ReturnDisposition>([
+  "RESTOCK",
+  "QUARANTINE",
+  "DAMAGED",
+]);
 
 type CreateReturnInput = {
   saleId: string;
   type: ReturnType;
   reason: string;
   refundMethod?: string;
+  refundReference?: string;
   notes?: string;
-  items: Array<{ saleItemId: string; quantity: number; productUnitId?: string }>;
+  items: Array<{
+    saleItemId: string;
+    quantity: number;
+    productUnitId?: string;
+    disposition?: ReturnDisposition;
+  }>;
 };
 
 type ReceivableLockRow = {
@@ -62,8 +77,9 @@ async function returnedQuantityMap(
 }
 
 export async function createReturnAction(input: CreateReturnInput) {
-  const { company, membership } = await requirePermission("returns.manage");
+  const { company, membership, settings } = await requirePermission("returns.manage");
   const reason = input.reason?.trim();
+  const refundReference = input.refundReference?.trim() || null;
 
   if (!input.saleId || !input.items.length) {
     throw new Error("Selecciona la venta y al menos un producto.");
@@ -77,6 +93,13 @@ export async function createReturnAction(input: CreateReturnInput) {
   if (input.type === "RETURN" && !REFUND_METHODS.has(input.refundMethod as RefundMethod)) {
     throw new Error("Selecciona el medio por el que se devolverá el dinero.");
   }
+  if (
+    input.type === "RETURN"
+    && ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.refundMethod ?? "")
+    && !refundReference
+  ) {
+    throw new Error("Ingresa el número de operación o referencia de la devolución.");
+  }
 
   const sale = await prisma.sale.findFirst({
     where: { id: input.saleId, companyId: company.id, status: "COMPLETED" },
@@ -84,7 +107,22 @@ export async function createReturnAction(input: CreateReturnInput) {
       items: {
         include: {
           product: true,
-          units: { include: { productUnit: true } },
+          units: {
+            include: {
+              productUnit: {
+                include: {
+                  serviceOrders: {
+                    where: {
+                      companyId: company.id,
+                      status: { notIn: ["DELIVERED", "CANCELLED"] },
+                    },
+                    select: { id: true },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -111,20 +149,33 @@ export async function createReturnAction(input: CreateReturnInput) {
 
     const serialized = item.product.type === "PHONE" || item.product.type === "SERIALIZED";
     let unitId: string | null = null;
+    let disposition: ReturnDisposition = "RESTOCK";
+
     if (serialized) {
       if (line.quantity !== 1 || !line.productUnitId) {
         throw new Error(`Selecciona el IMEI/serie exacto de ${item.product.name}.`);
       }
+
       const link = item.units.find((unit) => unit.productUnitId === line.productUnitId);
       if (!link || link.productUnit.status !== "SOLD") {
         throw new Error(`El IMEI de ${item.product.name} no está disponible para devolución.`);
+      }
+      if (link.productUnit.serviceOrders.length) {
+        throw new Error(
+          `El IMEI de ${item.product.name} tiene una atención de postventa abierta. Ciérrala antes de registrar una devolución o cambio.`,
+        );
+      }
+
+      disposition = line.disposition ?? "QUARANTINE";
+      if (!RETURN_DISPOSITIONS.has(disposition)) {
+        throw new Error("Selecciona qué ocurrirá con el equipo que regresa.");
       }
       unitId = line.productUnitId;
     }
 
     const amount = roundMoney((Number(item.total) / item.quantity) * line.quantity);
     merchandiseAmount = roundMoney(merchandiseAmount + amount);
-    return { item, quantity: line.quantity, unitId, amount };
+    return { item, quantity: line.quantity, unitId, amount, disposition };
   });
 
   const refundAmount = input.type === "RETURN" ? merchandiseAmount : 0;
@@ -151,7 +202,7 @@ export async function createReturnAction(input: CreateReturnInput) {
     }
 
     let cashSessionId: string | null = null;
-    if (input.type === "RETURN" && input.refundMethod === "CASH") {
+    if (input.type === "RETURN") {
       const sessions = await tx.$queryRaw<CashSessionRow[]>`
         SELECT "id"
         FROM "cash_sessions"
@@ -163,11 +214,15 @@ export async function createReturnAction(input: CreateReturnInput) {
         LIMIT 1
         FOR UPDATE
       `;
-      const session = sessions[0];
-      if (!session) {
-        throw new Error("Para devolver dinero en efectivo debes tener una caja abierta en la sucursal de la venta.");
+      cashSessionId = sessions[0]?.id ?? null;
+
+      if (!cashSessionId && (input.refundMethod === "CASH" || settings.requireCashSession)) {
+        throw new Error(
+          input.refundMethod === "CASH"
+            ? "Para devolver dinero en efectivo debes tener una caja abierta en la sucursal de la venta."
+            : "Debes tener una caja abierta en la sucursal de la venta para registrar esta devolución y conciliar el medio de pago.",
+        );
       }
-      cashSessionId = session.id;
     }
 
     let creditReceivable: ReceivableLockRow | null = null;
@@ -218,11 +273,29 @@ export async function createReturnAction(input: CreateReturnInput) {
         status: "COMPLETED",
         reason,
         refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
+        refundReference: input.type === "RETURN" ? refundReference : null,
         refundAmount,
+        refundCashSessionId: input.type === "RETURN" ? cashSessionId : null,
         notes: input.notes?.trim() || null,
         createdById: membership.userId,
       },
     });
+
+    let exchangeCreditId: string | null = null;
+    if (input.type === "EXCHANGE") {
+      exchangeCreditId = randomUUID();
+      await tx.exchangeCredit.create({
+        data: {
+          id: exchangeCreditId,
+          companyId: company.id,
+          returnOrderId: returnId,
+          customerId: sale.customerId,
+          originalAmount: merchandiseAmount,
+          balance: merchandiseAmount,
+          status: "OPEN",
+        },
+      });
+    }
 
     for (const row of validated) {
       await tx.returnItem.create({
@@ -233,6 +306,7 @@ export async function createReturnAction(input: CreateReturnInput) {
           productId: row.item.productId,
           variantId: row.item.variantId,
           productUnitId: row.unitId,
+          disposition: row.disposition,
           quantity: row.quantity,
           unitPrice: Number(row.item.unitPrice),
           unitCost: Number(row.item.unitCost),
@@ -241,13 +315,25 @@ export async function createReturnAction(input: CreateReturnInput) {
       });
 
       if (row.unitId) {
+        const targetStatus = row.disposition === "RESTOCK"
+          ? "AVAILABLE"
+          : row.disposition === "DAMAGED"
+            ? "DAMAGED"
+            : "RETURNED";
+
         const updated = await tx.productUnit.updateMany({
           where: { id: row.unitId, companyId: company.id, status: "SOLD" },
-          data: { status: "AVAILABLE", warehouseId: sale.warehouseId },
+          data: { status: targetStatus, warehouseId: sale.warehouseId },
         });
         if (updated.count !== 1) {
           throw new Error("El estado del IMEI cambió durante la devolución.");
         }
+
+        const dispositionLabel = row.disposition === "RESTOCK"
+          ? "disponible para venta"
+          : row.disposition === "DAMAGED"
+            ? "dañado / no vendible"
+            : "en revisión";
 
         await tx.inventoryMovement.create({
           data: {
@@ -261,7 +347,7 @@ export async function createReturnAction(input: CreateReturnInput) {
             unitCost: Number(row.item.unitCost),
             referenceType: "RETURN",
             referenceId: returnId,
-            notes: `Reingreso por ${input.type === "EXCHANGE" ? "cambio" : "devolución"} ${returnNumber}`,
+            notes: `Reingreso por ${input.type === "EXCHANGE" ? "cambio" : "devolución"} ${returnNumber} · ${dispositionLabel}`,
             createdById: membership.userId,
           },
         });
@@ -321,6 +407,18 @@ export async function createReturnAction(input: CreateReturnInput) {
       }
     }
 
+    const finalReturnedMap = await returnedQuantityMap(tx, company.id, sale.id);
+    const saleFullyReturned = sale.items.every(
+      (item) => (finalReturnedMap.get(item.id) ?? 0) >= item.quantity,
+    );
+
+    if (saleFullyReturned) {
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: { status: "REFUNDED" },
+      });
+    }
+
     if (input.type === "RETURN" && input.refundMethod === "CASH" && cashSessionId) {
       await tx.cashMovement.create({
         data: {
@@ -370,15 +468,168 @@ export async function createReturnAction(input: CreateReturnInput) {
           merchandiseAmount,
           refundAmount,
           refundMethod: input.type === "RETURN" ? input.refundMethod || null : null,
+          refundReference: input.type === "RETURN" ? refundReference : null,
           reason,
+          saleFullyReturned,
+          resultingSaleStatus: saleFullyReturned ? "REFUNDED" : sale.status,
+          itemDispositions: validated
+            .filter((row) => Boolean(row.unitId))
+            .map((row) => ({
+              productUnitId: row.unitId,
+              disposition: row.disposition,
+            })),
         },
       },
     });
 
-    return { id: returnId, returnNumber, amount: refundAmount, merchandiseAmount };
+    return {
+      id: returnId,
+      returnNumber,
+      amount: refundAmount,
+      merchandiseAmount,
+      exchangeCreditId,
+      saleFullyReturned,
+    };
   });
 
   revalidatePaths(RETURN_PATHS);
   if (sale.customerId) revalidatePaths([`/clientes/${sale.customerId}`]);
+  return result;
+}
+
+
+type ExchangeCreditRefundLockRow = {
+  id: string;
+  balance: unknown;
+  status: string;
+  returnNumber: string;
+  saleNumber: string;
+  branchId: string;
+};
+
+export async function refundExchangeCreditAction(input: {
+  exchangeCreditId: string;
+  method: ExchangeRefundMethod;
+  reference?: string;
+}) {
+  const { company, membership, settings } = await requirePermission("returns.manage");
+  const exchangeCreditId = input.exchangeCreditId?.trim();
+  const reference = input.reference?.trim() || null;
+
+  if (!exchangeCreditId) throw new Error("No se identificó el vale de cambio.");
+  if (!EXCHANGE_REFUND_METHODS.has(input.method)) {
+    throw new Error("Selecciona un medio válido para devolver el saldo.");
+  }
+  if (["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.method) && !reference) {
+    throw new Error("Ingresa el número de operación o referencia de la devolución.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<ExchangeCreditRefundLockRow[]>`
+      SELECT ec."id", ec."balance", ec."status",
+             ro."returnNumber", s."saleNumber", s."branchId"
+      FROM "exchange_credits" ec
+      JOIN "return_orders" ro ON ro."id" = ec."returnOrderId"
+      JOIN "sales" s ON s."id" = ro."saleId"
+      WHERE ec."id" = ${exchangeCreditId}
+        AND ec."companyId" = ${company.id}
+        AND ec."status" IN ('OPEN','PARTIAL')
+      LIMIT 1
+      FOR UPDATE OF ec
+    `;
+
+    const credit = rows[0];
+    if (!credit) {
+      throw new Error("El vale ya fue utilizado, reembolsado o no está disponible.");
+    }
+
+    const amount = roundMoney(Number(credit.balance ?? 0));
+    if (amount <= 0.01) throw new Error("El vale ya no tiene saldo por devolver.");
+
+    let cashSessionId: string | null = null;
+    {
+      const sessions = await tx.$queryRaw<CashSessionRow[]>`
+        SELECT "id"
+        FROM "cash_sessions"
+        WHERE "companyId" = ${company.id}
+          AND "branchId" = ${credit.branchId}
+          AND "userId" = ${membership.userId}
+          AND "status" = 'OPEN'::"CashSessionStatus"
+        ORDER BY "openedAt" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+      cashSessionId = sessions[0]?.id ?? null;
+
+      if (!cashSessionId && (input.method === "CASH" || settings.requireCashSession)) {
+        throw new Error(
+          input.method === "CASH"
+            ? "Para devolver el saldo en efectivo debes tener una caja abierta en la sucursal de la venta original."
+            : "Debes tener una caja abierta en la sucursal de la venta original para conciliar esta devolución.",
+        );
+      }
+    }
+
+    if (input.method === "CASH" && cashSessionId) {
+      await tx.cashMovement.create({
+        data: {
+          companyId: company.id,
+          cashSessionId,
+          type: "EXPENSE",
+          amount,
+          concept: `Devolución de saldo de vale ${credit.returnNumber}`,
+          reference: exchangeCreditId,
+          createdById: membership.userId,
+        },
+      });
+    }
+
+    await tx.exchangeCredit.update({
+      where: { id: exchangeCreditId },
+      data: {
+        balance: 0,
+        status: "USED",
+        refundedAmount: amount,
+        refundMethod: input.method,
+        refundReference: reference,
+        refundedAt: new Date(),
+        refundedById: membership.userId,
+        refundCashSessionId: cashSessionId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "UPDATE",
+        entity: "EXCHANGE_CREDIT",
+        entityId: exchangeCreditId,
+        oldValues: {
+          status: credit.status,
+          balance: amount,
+        },
+        newValues: {
+          status: "USED",
+          balance: 0,
+          refundedAmount: amount,
+          refundMethod: input.method,
+          refundReference: reference,
+          returnNumber: credit.returnNumber,
+          saleNumber: credit.saleNumber,
+          cashSessionId,
+        },
+      },
+    });
+
+    return {
+      id: exchangeCreditId,
+      amount,
+      method: input.method,
+      returnNumber: credit.returnNumber,
+    };
+  });
+
+  revalidatePaths(["/devoluciones", "/caja", "/reportes", "/pos"]);
   return result;
 }

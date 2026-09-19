@@ -22,7 +22,24 @@ function dateTime(value: string | null) {
   return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
-export function ServiceTicketModal({ open, onClose, order }: { open: boolean; onClose: () => void; order: any }) {
+export function ServiceTicketModal({
+  open,
+  onClose,
+  order,
+  company,
+}: {
+  open: boolean;
+  onClose: () => void;
+  order: any;
+  company: {
+    businessName: string;
+    tradeName: string | null;
+    ruc: string | null;
+    phone: string | null;
+    address: string | null;
+    logoUrl: string | null;
+  };
+}) {
   if (!open) return null;
 
   function printTicket() {
@@ -47,14 +64,18 @@ export function ServiceTicketModal({ open, onClose, order }: { open: boolean; on
         <div className="service-ticket-scroll">
           <article className="service-ticket-paper">
             <header>
-              <strong>MOBIX</strong>
-              <span>Servicio técnico y postventa</span>
+              {company.logoUrl && <img src={company.logoUrl} alt={"Logo de " + (company.tradeName || company.businessName)} />}
+              <strong>{company.tradeName || company.businessName}</strong>
+              {company.ruc && <span>RUC {company.ruc}</span>}
+              {company.phone && <span>Tel. {company.phone}</span>}
               <b>{order.serviceType === "WARRANTY" ? "GARANTÍA" : "SERVICIO TÉCNICO"}</b>
             </header>
             <div className="service-ticket-meta">
               <p><span>Orden</span><strong>{order.serviceNumber}</strong></p>
               <p><span>Recepción</span><strong>{dateTime(order.receivedAt)}</strong></p>
               <p><span>Estado</span><strong>{STATUS_LABELS[order.status as ServiceStatus] ?? order.status}</strong></p>
+              {order.saleNumber && <p><span>Venta</span><strong>{order.saleNumber}</strong></p>}
+              {order.warrantyExpiresAt && <p><span>Garantía</span><strong>Hasta {dateTime(order.warrantyExpiresAt)}</strong></p>}
               <p><span>Cliente</span><strong>{order.customer.name}</strong></p>
               {order.customer.documentNumber && <p><span>Documento</span><strong>{order.customer.documentType} {order.customer.documentNumber}</strong></p>}
               {order.customer.phone && <p><span>Celular</span><strong>{order.customer.phone}</strong></p>}

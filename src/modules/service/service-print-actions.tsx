@@ -1,8 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { MessageCircle, Printer, Receipt } from "lucide-react";
+import { Download, MessageCircle, Printer, Receipt, Smartphone } from "lucide-react";
 import { ServiceTicketModal } from "./service-ticket-modal";
+import {
+  buildServiceReceiptPdf,
+  type ServiceReceiptData,
+} from "./service-receipt-pdf";
 import type { ServiceStatus } from "./service-types";
 
 const STATUS_LABELS: Record<ServiceStatus, string> = {
@@ -16,34 +21,78 @@ const STATUS_LABELS: Record<ServiceStatus, string> = {
 };
 
 function money(value: number) {
-  return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 }).format(value || 0);
+  return new Intl.NumberFormat("es-PE", {
+    style: "currency",
+    currency: "PEN",
+    minimumFractionDigits: 2,
+  }).format(value || 0);
 }
 
 function dateTime(value: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function whatsappNumber(value?: string | null) {
   const digits = value?.replace(/\D/g, "") ?? "";
   if (!digits) return "";
-  return digits.startsWith("51") ? digits : `51${digits}`;
+  return digits.startsWith("51") ? digits : "51" + digits;
 }
 
-function ServicePrintCopy({ order, copyLabel }: { order: any; copyLabel: "CLIENTE" | "TALLER" }) {
+function downloadFile(file: File) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+type Company = ServiceReceiptData["company"];
+
+function ServicePrintCopy({
+  order,
+  company,
+  copyLabel,
+}: {
+  order: any;
+  company: Company;
+  copyLabel: "CLIENTE" | "TALLER";
+}) {
+  const companyName = company.tradeName || company.businessName;
+
   return (
     <article className="service-a4-copy">
       <header className="service-a4-header">
-        <div><strong>MOBIX</strong><span>Servicio técnico y postventa</span></div>
-        <div className="service-a4-title"><b>FICHA DE RECEPCIÓN</b><span>{copyLabel}</span></div>
-        <div className="service-a4-number"><small>Orden</small><strong>{order.serviceNumber}</strong></div>
+        <div className="service-a4-company">
+          {company.logoUrl && <img src={company.logoUrl} alt={"Logo de " + companyName} />}
+          <div>
+            <strong>{companyName}</strong>
+            {company.ruc && <span>RUC {company.ruc}</span>}
+            {company.address && <span>{company.address}</span>}
+          </div>
+        </div>
+        <div className="service-a4-title">
+          <b>FICHA DE RECEPCIÓN</b>
+          <span>{copyLabel}</span>
+        </div>
+        <div className="service-a4-number">
+          <small>Orden</small>
+          <strong>{order.serviceNumber}</strong>
+        </div>
       </header>
 
       <div className="service-a4-meta-grid">
         <div><span>Fecha de recepción</span><strong>{dateTime(order.receivedAt)}</strong></div>
         <div><span>Tipo de atención</span><strong>{order.serviceType === "WARRANTY" ? "Garantía" : "Servicio técnico"}</strong></div>
         <div><span>Estado</span><strong>{STATUS_LABELS[order.status as ServiceStatus] ?? order.status}</strong></div>
-        <div><span>Entrega estimada</span><strong>{dateTime(order.expectedAt)}</strong></div>
+        <div><span>Venta / garantía</span><strong>{order.saleNumber || "No vinculada"}</strong>{order.warrantyExpiresAt && <small>Hasta {dateTime(order.warrantyExpiresAt)}</small>}</div>
       </div>
 
       <div className="service-a4-two-cols">
@@ -78,17 +127,64 @@ function ServicePrintCopy({ order, copyLabel }: { order: any; copyLabel: "CLIENT
         <div><span>Firma del cliente</span></div>
         <div><span>Recepción / Taller</span></div>
       </div>
-      <footer>El cliente declara haber entregado el equipo en las condiciones descritas. Conserve su copia para el recojo.</footer>
+      <footer>
+        El cliente declara haber entregado el equipo en las condiciones descritas. Conserve su copia para el recojo.
+      </footer>
     </article>
   );
 }
 
-export function ServicePrintActions({ order }: { order: any }) {
+export function ServicePrintActions({
+  order,
+  company,
+}: {
+  order: any;
+  company: Company;
+}) {
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  const companyName = company.tradeName || company.businessName;
   const phone = whatsappNumber(order.customer.phone);
-  const message = encodeURIComponent(
-    `Hola ${order.customer.name}. Estado de su equipo ${order.deviceName} (${order.serviceNumber}): ${STATUS_LABELS[order.status as ServiceStatus]}. ${order.identifier ? `${order.identifier}. ` : ""}${order.expectedAt ? `Entrega estimada: ${dateTime(order.expectedAt)}. ` : ""}MOBIX.`,
-  );
+  const receipt: ServiceReceiptData = {
+    company,
+    serviceNumber: order.serviceNumber,
+    serviceType: order.serviceType,
+    status: order.status,
+    receivedAt: order.receivedAt,
+    expectedAt: order.expectedAt,
+    saleNumber: order.saleNumber,
+    warrantyExpiresAt: order.warrantyExpiresAt,
+    deviceName: order.deviceName,
+    brand: order.brand,
+    model: order.model,
+    identifier: order.identifier,
+    reportedIssue: order.reportedIssue,
+    physicalCondition: order.physicalCondition,
+    accessories: order.accessories,
+    diagnosis: order.diagnosis,
+    technicianName: order.technicianName,
+    estimatedCost: Number(order.estimatedCost || 0),
+    finalCost: Number(order.finalCost || 0),
+    customer: {
+      name: order.customer.name,
+      documentType: order.customer.documentType,
+      documentNumber: order.customer.documentNumber,
+      phone: order.customer.phone,
+    },
+  };
+
+  const plainMessage = [
+    "Hola " + order.customer.name + " 👋",
+    "",
+    "Te enviamos la ficha de recepción " + order.serviceNumber + " de " + companyName + ".",
+    "Equipo: " + order.deviceName + (order.identifier ? " · " + order.identifier : "") + ".",
+    "Estado actual: " + (STATUS_LABELS[order.status as ServiceStatus] ?? order.status) + ".",
+    order.expectedAt ? "Entrega estimada: " + dateTime(order.expectedAt) + "." : "",
+    "",
+    "Adjuntamos la ficha completa en PDF para que puedas conservarla.",
+  ].filter(Boolean).join("\n");
 
   function printA4() {
     document.body.classList.add("print-service-a4");
@@ -98,21 +194,106 @@ export function ServicePrintActions({ order }: { order: any }) {
     window.setTimeout(cleanup, 1200);
   }
 
+  async function downloadPdf() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const file = await buildServiceReceiptPdf(receipt);
+      downloadFile(file);
+    } catch (error) {
+      console.error(error);
+      window.alert("No se pudo generar la ficha PDF. Intenta nuevamente.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function shareWhatsAppPdf() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const file = await buildServiceReceiptPdf(receipt);
+      const canShareFiles =
+        typeof navigator.share === "function"
+        && typeof navigator.canShare === "function"
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          title: "Servicio " + order.serviceNumber,
+          text: plainMessage,
+          files: [file],
+        });
+        return;
+      }
+
+      downloadFile(file);
+      const encoded = encodeURIComponent(plainMessage);
+      const url = phone
+        ? "https://wa.me/" + phone + "?text=" + encoded
+        : "https://wa.me/?text=" + encoded;
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.alert(
+        "MOBIX descargó la ficha PDF y abrió WhatsApp. Adjunta el archivo descargado antes de enviar.",
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.error(error);
+      window.alert("No se pudo preparar la ficha PDF. Intenta nuevamente.");
+    } finally {
+      setSharing(false);
+    }
+  }
+
   return (
     <>
       <div className="service-detail-actions no-print">
-        <button className="secondary-button" type="button" onClick={printA4}><Printer size={15} /> A4 · 2 copias</button>
-        <button className="secondary-button" type="button" onClick={() => setTicketOpen(true)}><Receipt size={15} /> Ticket 80 mm</button>
-        {phone && <a className="secondary-button whatsapp-button" href={`https://wa.me/${phone}?text=${message}`} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp</a>}
+        {order.productUnitId && (
+          <Link className="secondary-button" href={"/equipos/" + order.productUnitId}>
+            <Smartphone size={15} /> Ver equipo
+          </Link>
+        )}
+        {order.saleId && (
+          <Link className="secondary-button" href={"/ventas/" + order.saleId}>
+            <Receipt size={15} /> Ver venta
+          </Link>
+        )}
+        <button className="secondary-button" type="button" onClick={printA4}>
+          <Printer size={15} /> A4 · 2 copias
+        </button>
+        <button className="secondary-button" type="button" onClick={() => setTicketOpen(true)}>
+          <Receipt size={15} /> Ticket 80 mm
+        </button>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={downloading}
+          onClick={() => void downloadPdf()}
+        >
+          <Download size={15} /> {downloading ? "Generando..." : "PDF"}
+        </button>
+        <button
+          className="secondary-button whatsapp-button"
+          type="button"
+          disabled={sharing}
+          onClick={() => void shareWhatsAppPdf()}
+        >
+          <MessageCircle size={15} /> {sharing ? "Preparando..." : "WhatsApp PDF"}
+        </button>
       </div>
 
       <div className="service-a4-print-sheet" aria-hidden="true">
-        <ServicePrintCopy order={order} copyLabel="CLIENTE" />
+        <ServicePrintCopy order={order} company={company} copyLabel="CLIENTE" />
         <div className="service-a4-cut"><span>✂</span><i /></div>
-        <ServicePrintCopy order={order} copyLabel="TALLER" />
+        <ServicePrintCopy order={order} company={company} copyLabel="TALLER" />
       </div>
 
-      <ServiceTicketModal open={ticketOpen} onClose={() => setTicketOpen(false)} order={order} />
+      <ServiceTicketModal
+        open={ticketOpen}
+        onClose={() => setTicketOpen(false)}
+        order={order}
+        company={company}
+      />
     </>
   );
 }

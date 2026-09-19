@@ -2,7 +2,7 @@
 
 import { Download, Printer, TrendingUp, WalletCards, Boxes, CircleDollarSign, TriangleAlert, ReceiptText, LockKeyhole } from "lucide-react";
 
-const PAYMENT_LABELS: Record<string,string> = { CASH:"Efectivo", YAPE:"Yape", PLIN:"Plin", CARD:"Tarjeta", TRANSFER:"Transferencia", CREDIT:"Crédito", OTHER:"Otro" };
+const PAYMENT_LABELS: Record<string,string> = { CASH:"Efectivo", YAPE:"Yape", PLIN:"Plin", CARD:"Tarjeta", TRANSFER:"Transferencia", CREDIT:"Crédito", EXCHANGE_CREDIT:"Vale de cambio", OTHER:"Otro" };
 function money(value:number|null|undefined){return value==null?"Restringido":new Intl.NumberFormat("es-PE",{style:"currency",currency:"PEN",minimumFractionDigits:2}).format(value||0)}
 function pct(value:number|null|undefined){return value==null?"Restringido":`${value.toFixed(1)}%`}
 
@@ -24,12 +24,12 @@ export function ReportsView({data}:{data:any}){
     {!data.canSeeCosts&&<div className="business-info-banner"><LockKeyhole size={16}/><div><strong>Vista comercial sin costos</strong><span>Tu rol puede consultar ventas y desempeño, pero los costos, stock valorizado y utilidad están restringidos.</span></div></div>}
     <form className="panel report-filter no-print" method="get"><label><span>Desde</span><input type="date" name="from" defaultValue={data.range.from}/></label><label><span>Hasta</span><input type="date" name="to" defaultValue={data.range.to}/></label><button className="primary-button" type="submit">Aplicar periodo</button></form>
     <section className="report-kpis">
-      <article><CircleDollarSign/><span>Ventas netas</span><strong>{money(data.summary.salesTotal)}</strong><small>Bruto {money(data.summary.grossSalesTotal)} · {data.summary.transactions} operaciones · Ticket {money(data.summary.averageTicket)}</small></article>
+      <article><CircleDollarSign/><span>Ventas netas</span><strong>{money(data.summary.salesTotal)}</strong><small>Bruto {money(data.summary.grossSalesTotal)} · retornado {money(data.summary.returnsTotal)} · {data.summary.transactions} operaciones</small></article>
       {data.canSeeCosts&&<article><TrendingUp/><span>Utilidad bruta neta</span><strong>{money(data.summary.grossProfit)}</strong><small>Después de devoluciones · Margen {pct(data.summary.margin)}</small></article>}
       {data.canSeeCosts&&<article><WalletCards/><span>Costo neto vendido</span><strong>{money(data.summary.costTotal)}</strong><small>Costo retornado {money(data.summary.returnedCost)} · Compras {money(data.summary.purchasesTotal)}</small></article>}
       {data.canSeeCosts&&<article><Boxes/><span>Stock valorizado</span><strong>{money(data.summary.inventoryValue)}</strong><small>Equipos + accesorios disponibles</small></article>}
       <article><ReceiptText/><span>Cuentas por cobrar</span><strong>{money(data.summary.receivableTotal)}</strong><small>Vencido {money(data.summary.overdueTotal)}</small></article>
-      <article><TriangleAlert/><span>Devoluciones</span><strong>{money(data.summary.returnsTotal)}</strong><small>{data.summary.returnsCount} operaciones descontadas del resultado</small></article>
+      <article><TriangleAlert/><span>Devoluciones / cambios</span><strong>{money(data.summary.returnsTotal)}</strong><small>{data.summary.returnsCount} operaciones · efectivo reembolsado {money(data.summary.cashRefundTotal)} · {data.summary.cancelledCount} anuladas</small></article>
     </section>
     <section className="report-grid-two">
       <article className="panel report-chart"><div className="panel-heading"><div><h2>Ventas brutas por día</h2><p>{data.canSeeCosts?"Operación comercial diaria antes de descontar devoluciones":"Ingresos de ventas del periodo"}</p></div></div><div className="report-bars">{data.daily.length?data.daily.map((d:any)=><div className="report-bar-row" key={d.date}><span>{new Date(`${d.date}T12:00:00`).toLocaleDateString("es-PE",{day:"2-digit",month:"short"})}</span><div><i style={{width:`${Math.max(2,(d.sales/maxDaily)*100)}%`}}/></div><strong>{money(d.sales)}</strong>{data.canSeeCosts&&<small>Util. bruta {money(d.profit)}</small>}</div>):<div className="empty-table-state">Sin ventas en el periodo.</div>}</div></article>

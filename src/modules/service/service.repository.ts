@@ -23,7 +23,8 @@ function displayCustomer(customer: {
   businessName: string | null;
   firstName: string | null;
   lastName: string | null;
-}) {
+} | null | undefined) {
+  if (!customer) return "Consumidor final";
   if (customer.businessName?.trim()) return customer.businessName;
   return [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "Cliente";
 }
@@ -111,18 +112,24 @@ async function loadSoldUnits(companyId: string, q = "", take = 20): Promise<Sold
 
   return rows.flatMap((unit) => {
     const links = [...unit.saleLinks].sort((a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt);
-    const latest = links[0]?.saleItem.sale;
-    if (!latest?.customerId || !latest.customer) return [];
-    const warrantyDays = unit.product.warrantyDays ?? 0;
-    const expires = warrantyExpiry(latest.createdAt, warrantyDays);
+    const latestLink = links[0];
+    const latest = latestLink?.saleItem.sale;
+    if (!latest) return [];
+
+    const legacyWarrantyDays = unit.product.warrantyDays ?? 0;
+    const warrantyDays = latestLink.warrantyDays || legacyWarrantyDays;
+    const warrantyStartsAt = latestLink.warrantyStartsAt ?? latest.createdAt;
+    const expires = latestLink.warrantyExpiresAt
+      ?? warrantyExpiry(warrantyStartsAt, warrantyDays);
+
     return [{
       id: unit.id,
       saleId: latest.id,
       saleNumber: latest.saleNumber,
       soldAt: latest.createdAt.toISOString(),
-      customerId: latest.customerId,
+      customerId: latest.customerId ?? "",
       customerName: displayCustomer(latest.customer),
-      customerPhone: latest.customer.whatsapp ?? latest.customer.phone,
+      customerPhone: latest.customer?.whatsapp ?? latest.customer?.phone ?? null,
       productName: unit.product.name,
       brand: unit.product.brand?.name ?? "Sin marca",
       model: unit.product.model,

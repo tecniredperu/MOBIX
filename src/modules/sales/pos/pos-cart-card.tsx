@@ -6,17 +6,26 @@ export function PosCartCard({
   onQuantityChange,
   onPriceChange,
   onRemove,
+  onClear,
 }: {
   cart: CartLine[];
   onQuantityChange: (key: string, quantity: number) => void;
   onPriceChange: (key: string, value: number) => void;
   onRemove: (key: string) => void;
+  onClear: () => void;
 }) {
+  const units = cart.reduce((sum, line) => sum + line.quantity, 0);
+
   return (
-    <section className="panel pos-cart-card">
+    <section className="panel pos-cart-card pos-v5-cart-card">
       <div className="pos-card-title">
-        <div><ShoppingCart size={18} /><strong>Venta actual</strong></div>
-        <span>{cart.length} línea{cart.length === 1 ? "" : "s"}</span>
+        <div><ShoppingCart size={18} /><strong>Venta actual ({units})</strong></div>
+        {cart.length > 0 && (
+          <button className="pos-clear-cart" type="button" onClick={onClear}>
+            <Trash2 size={14} />
+            Limpiar
+          </button>
+        )}
       </div>
       <div className="pos-cart-lines">
         {cart.map((line) => (
@@ -74,7 +83,7 @@ export function PosCartCard({
           <div className="pos-empty-cart">
             <ShoppingCart size={24} />
             <strong>Carrito vacío</strong>
-            <span>Agrega productos desde el catálogo.</span>
+            <span>Busca un producto o escanea su código / IMEI.</span>
           </div>
         )}
       </div>

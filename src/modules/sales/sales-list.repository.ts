@@ -57,7 +57,7 @@ export async function getSalesPage(filters: {
   };
 
   const { start, end } = getLimaDayBounds();
-  const [sales, total, todaySummary] = await Promise.all([
+  const [sales, total, todaySummary, todayReturns] = await Promise.all([
     prisma.sale.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -73,9 +73,23 @@ export async function getSalesPage(filters: {
     }),
     prisma.sale.count({ where }),
     prisma.sale.aggregate({
-      where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: start, lt: end } },
+      where: {
+        companyId: company.id,
+        status: { in: ["COMPLETED", "REFUNDED"] },
+        createdAt: { gte: start, lt: end },
+      },
       _sum: { total: true },
       _count: { _all: true },
+    }),
+    prisma.returnOrder.findMany({
+      where: {
+        companyId: company.id,
+        status: "COMPLETED",
+        createdAt: { gte: start, lt: end },
+      },
+      select: {
+        items: { select: { amount: true } },
+      },
     }),
   ]);
 
@@ -95,15 +109,26 @@ export async function getSalesPage(filters: {
     seller: sale.seller.name,
     createdAt: sale.createdAt.toISOString(),
   }));
-  const todayTotal = Number(todaySummary._sum.total ?? 0);
+  const todayGross = Number(todaySummary._sum.total ?? 0);
+  const todayReturnsTotal = todayReturns.reduce(
+    (sum, order) =>
+      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
+    0,
+  );
+  const todayTotal = Math.round(
+    (todayGross - todayReturnsTotal + Number.EPSILON) * 100,
+  ) / 100;
   const todayCount = todaySummary._count._all;
 
   return {
     items,
     summary: {
       todayTotal,
+      todayGross,
+      todayReturns: Math.round((todayReturnsTotal + Number.EPSILON) * 100) / 100,
+      todayReturnCount: todayReturns.length,
       todayCount,
-      averageTicket: todayCount ? todayTotal / todayCount : 0,
+      averageTicket: todayCount ? todayGross / todayCount : 0,
       listed: total,
     },
     pagination: { page, pageSize, total },

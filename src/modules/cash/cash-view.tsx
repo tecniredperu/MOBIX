@@ -15,17 +15,21 @@ import {
   Plus,
   PlusCircle,
   ReceiptText,
+  Repeat2,
   Smartphone,
   WalletCards,
 } from "lucide-react";
+import { requiresCashDifferenceNote } from "./cash-calculations";
 import {
   addCashMovementAction,
   closeCashSessionAction,
+  getCashCloseReportAction,
   openCashSessionAction,
 } from "./cash-actions";
-import { CashCloseReport, type CashCloseReportData } from "./cash-close-report";
+import { CashCloseReport } from "./cash-close-report";
 import type {
   CashBranchOption,
+  CashCloseReportData,
   CashMovementKind,
   CashOpenSession,
   CashSessionHistoryItem,
@@ -45,6 +49,8 @@ const PAYMENT_CARDS = [
   { key: "PLIN" as const, label: "Plin", icon: Smartphone },
   { key: "CARD" as const, label: "Tarjeta", icon: CreditCard },
   { key: "TRANSFER" as const, label: "Transferencia", icon: Landmark },
+  { key: "CREDIT" as const, label: "Crédito", icon: WalletCards },
+  { key: "EXCHANGE_CREDIT" as const, label: "Vale de cambio", icon: Repeat2 },
 ];
 
 function money(value: number) {
@@ -151,8 +157,24 @@ export function CashView({
     });
   }
 
+  function openHistoricalClose(sessionId: string) {
+    setError("");
+    startTransition(async () => {
+      try {
+        const report = await getCashCloseReportAction(sessionId);
+        setClosedReport(report);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "No se pudo cargar el cierre de caja.");
+      }
+    });
+  }
+
   function closeCash() {
     if (!openSession) return;
+    if (closeDifference !== null && requiresCashDifferenceNote(closeDifference) && !closingNotes.trim()) {
+      setError("Explica el motivo del sobrante o faltante antes de cerrar la caja.");
+      return;
+    }
     const sessionSnapshot = openSession;
     const notesSnapshot = closingNotes;
 
@@ -174,6 +196,9 @@ export function CashView({
         salesCount: sessionSnapshot.salesCount,
         salesTotal: sessionSnapshot.salesTotal,
         paymentTotals: sessionSnapshot.paymentTotals,
+        refundTotals: sessionSnapshot.refundTotals,
+        netPaymentTotals: sessionSnapshot.netPaymentTotals,
+        refundTotal: sessionSnapshot.refundTotal,
         manualIncome: sessionSnapshot.manualIncome,
         manualOut: sessionSnapshot.manualOut,
         expectedAmount: result.expectedAmount,
@@ -275,7 +300,7 @@ export function CashView({
               <span>Ventas del turno</span><strong>{money(openSession.salesTotal)}</strong><small>{openSession.salesCount} operación{openSession.salesCount === 1 ? "" : "es"}</small>
             </article>
             <article className="cash-summary-card">
-              <span>Movimientos netos</span><strong>{money(openSession.manualIncome - openSession.manualOut)}</strong><small>Ingresos {money(openSession.manualIncome)} · Salidas {money(openSession.manualOut)}</small>
+              <span>Devoluciones del turno</span><strong>{money(openSession.refundTotal)}</strong><small>Ya descontadas en la conciliación</small>
             </article>
           </section>
 
@@ -283,7 +308,16 @@ export function CashView({
             {PAYMENT_CARDS.map(({ key, label, icon: Icon }) => (
               <article className={`cash-payment-card ${key === "CASH" ? "cash-main" : ""}`} key={key}>
                 <span className="cash-payment-icon"><Icon size={17} /></span>
-                <div><span>{label}</span><strong>{money(openSession.paymentTotals[key])}</strong></div>
+                <div>
+                  <span>{label}</span>
+                  <strong>{money(openSession.netPaymentTotals[key])}</strong>
+                  <small>
+                    {key === "EXCHANGE_CREDIT" ? "Aplicado" : "Cobrado"} {money(openSession.paymentTotals[key])}
+                    {openSession.refundTotals[key] > 0.001
+                      ? " · Devuelto " + money(openSession.refundTotals[key])
+                      : ""}
+                  </small>
+                </div>
               </article>
             ))}
           </section>
@@ -291,7 +325,7 @@ export function CashView({
           <section className="cash-work-grid">
             <article className="panel cash-activity-panel">
               <div className="panel-heading cash-panel-heading">
-                <div><h2>Movimientos del turno</h2><p>Ventas cobradas y movimientos manuales de caja</p></div>
+                <div><h2>Movimientos del turno</h2><p>Ventas, cobranzas, devoluciones y movimientos manuales</p></div>
                 <span className="cash-turn-meta">{openSession.userName} · {dateTime(openSession.openedAt)}</span>
               </div>
               <div className="cash-activity-list">
@@ -331,8 +365,37 @@ export function CashView({
                       <span>Diferencia</span><strong>{closeDifference > 0 ? "+" : ""}{money(closeDifference)}</strong><small>{Math.abs(closeDifference) <= .01 ? "Caja cuadrada" : closeDifference > 0 ? "Sobrante" : "Faltante"}</small>
                     </div>
                   )}
-                  <label><span>Observación de cierre</span><textarea value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} placeholder="Opcional" /></label>
-                  <button className="cash-close-button" type="button" disabled={isPending || actualCash.trim() === ""} onClick={closeCash}>{isPending ? "Procesando..." : "Confirmar cierre de caja"}</button>
+                  <label>
+                    <span>
+                      Observación de cierre
+                      {closeDifference !== null && requiresCashDifferenceNote(closeDifference) ? " · obligatoria" : ""}
+                    </span>
+                    <textarea
+                      value={closingNotes}
+                      onChange={(event) => setClosingNotes(event.target.value)}
+                      placeholder={
+                        closeDifference !== null && requiresCashDifferenceNote(closeDifference)
+                          ? "Explica el motivo del sobrante o faltante..."
+                          : "Opcional"
+                      }
+                    />
+                  </label>
+                  <button
+                    className="cash-close-button"
+                    type="button"
+                    disabled={
+                      isPending
+                      || actualCash.trim() === ""
+                      || (
+                        closeDifference !== null
+                        && requiresCashDifferenceNote(closeDifference)
+                        && !closingNotes.trim()
+                      )
+                    }
+                    onClick={closeCash}
+                  >
+                    {isPending ? "Procesando..." : "Confirmar cierre de caja"}
+                  </button>
                 </div>
               </article>
             </aside>
@@ -344,14 +407,14 @@ export function CashView({
         <div className="panel-heading"><div><h2>Historial de cierres</h2><p>Últimos turnos de caja registrados en {companyName}</p></div></div>
         <div className="table-wrap">
           <table className="data-table cash-history-table">
-            <thead><tr><th>Apertura</th><th>Cierre</th><th>Sucursal</th><th>Responsable</th><th className="right">Inicial</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferencia</th></tr></thead>
+            <thead><tr><th>Apertura</th><th>Cierre</th><th>Sucursal</th><th>Responsable</th><th className="right">Inicial</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferencia</th><th></th></tr></thead>
             <tbody>
               {history.map((item) => (
                 <tr key={item.id}>
-                  <td>{dateTime(item.openedAt)}</td><td>{dateTime(item.closedAt)}</td><td><strong>{item.branchName}</strong></td><td>{item.userName}</td><td className="right">{money(item.openingAmount)}</td><td className="right">{money(item.expectedAmount)}</td><td className="right">{money(item.closingAmount)}</td><td className={`right cash-history-diff ${Math.abs(item.difference) <= .01 ? "balanced" : item.difference > 0 ? "positive" : "negative"}`}>{item.difference > 0 ? "+" : ""}{money(item.difference)}</td>
+                  <td>{dateTime(item.openedAt)}</td><td>{dateTime(item.closedAt)}</td><td><strong>{item.branchName}</strong></td><td>{item.userName}</td><td className="right">{money(item.openingAmount)}</td><td className="right">{money(item.expectedAmount)}</td><td className="right">{money(item.closingAmount)}</td><td className={`right cash-history-diff ${Math.abs(item.difference) <= .01 ? "balanced" : item.difference > 0 ? "positive" : "negative"}`}>{item.difference > 0 ? "+" : ""}{money(item.difference)}</td><td className="right"><button className="cash-history-open" type="button" disabled={isPending} onClick={() => openHistoricalClose(item.id)}><ReceiptText size={13}/> Ver cierre</button></td>
                 </tr>
               ))}
-              {!history.length && <tr><td colSpan={8}><div className="cash-empty-state compact"><MinusCircle size={20} /><strong>Aún no hay cierres de caja</strong></div></td></tr>}
+              {!history.length && <tr><td colSpan={9}><div className="cash-empty-state compact"><MinusCircle size={20} /><strong>Aún no hay cierres de caja</strong></div></td></tr>}
             </tbody>
           </table>
         </div>

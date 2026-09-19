@@ -1,7 +1,9 @@
 "use client";
 
-import { MessageCircle, Printer, X } from "lucide-react";
-import type { CashPaymentTotals } from "./cash-types";
+import { useState } from "react";
+import { Download, MessageCircle, Printer, X } from "lucide-react";
+import { buildCashClosePdf } from "./cash-close-pdf";
+import type { CashCloseReportData, CashPaymentTotals } from "./cash-types";
 
 const PAYMENT_LABELS: Array<{ key: keyof CashPaymentTotals; label: string }> = [
   { key: "CASH", label: "Efectivo" },
@@ -10,6 +12,7 @@ const PAYMENT_LABELS: Array<{ key: keyof CashPaymentTotals; label: string }> = [
   { key: "CARD", label: "Tarjeta" },
   { key: "TRANSFER", label: "Transferencia" },
   { key: "CREDIT", label: "Crédito" },
+  { key: "EXCHANGE_CREDIT", label: "Vale de cambio" },
   { key: "OTHER", label: "Otro" },
 ];
 
@@ -29,24 +32,7 @@ function dateTime(value: string) {
   }).format(new Date(value));
 }
 
-export type CashCloseReportData = {
-  sessionId: string;
-  companyName: string;
-  branchName: string;
-  userName: string;
-  openedAt: string;
-  closedAt: string;
-  openingAmount: number;
-  salesCount: number;
-  salesTotal: number;
-  paymentTotals: CashPaymentTotals;
-  manualIncome: number;
-  manualOut: number;
-  expectedAmount: number;
-  actualAmount: number;
-  difference: number;
-  closingNotes?: string;
-};
+
 
 export function CashCloseReport({
   report,
@@ -55,6 +41,8 @@ export function CashCloseReport({
   report: CashCloseReportData;
   onClose: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const balanced = Math.abs(report.difference) <= 0.01;
 
   function printReport() {
@@ -65,38 +53,103 @@ export function CashCloseReport({
     window.setTimeout(cleanup, 1200);
   }
 
-  function shareWhatsApp() {
+  function downloadFile(file: File) {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function buildMessage() {
     const breakdown = PAYMENT_LABELS
-      .filter(({ key }) => Math.abs(report.paymentTotals[key] || 0) > 0.001)
-      .map(({ key, label }) => `• ${label}: ${money(report.paymentTotals[key])}`)
+      .filter(({ key }) =>
+        Math.abs(report.paymentTotals[key] || 0) > 0.001
+        || Math.abs(report.refundTotals[key] || 0) > 0.001)
+      .map(({ key, label }) => {
+        const collected = report.paymentTotals[key] || 0;
+        const refunded = report.refundTotals[key] || 0;
+        const net = report.netPaymentTotals[key] || 0;
+        return refunded > 0.001
+          ? "• " + label + ": neto " + money(net) + " · cobrado " + money(collected) + " · devuelto " + money(refunded)
+          : "• " + label + ": " + money(net);
+      })
       .join("\n");
 
     const differenceLabel = balanced
       ? "Caja cuadrada"
       : report.difference > 0
-        ? `Sobrante: ${money(report.difference)}`
-        : `Faltante: ${money(Math.abs(report.difference))}`;
+        ? "Sobrante: " + money(report.difference)
+        : "Faltante: " + money(Math.abs(report.difference));
 
-    const message = [
-      `*REPORTE DE CIERRE DE CAJA - MOBIX*`,
+    return [
+      "*REPORTE DE CIERRE DE CAJA - MOBIX*",
       report.companyName,
-      `Sucursal: ${report.branchName}`,
-      `Vendedor: ${report.userName}`,
-      `Apertura: ${dateTime(report.openedAt)}`,
-      `Cierre: ${dateTime(report.closedAt)}`,
+      "Sucursal: " + report.branchName,
+      "Responsable: " + report.userName,
+      "Apertura: " + dateTime(report.openedAt),
+      "Cierre: " + dateTime(report.closedAt),
       "",
-      `Fondo inicial: ${money(report.openingAmount)}`,
-      `Ventas: ${money(report.salesTotal)} (${report.salesCount} operación${report.salesCount === 1 ? "" : "es"})`,
-      breakdown ? `\n*Ventas/cobros por medio*\n${breakdown}` : "",
-      `\nIngresos manuales: ${money(report.manualIncome)}`,
-      `Salidas manuales: ${money(report.manualOut)}`,
-      `Efectivo esperado: ${money(report.expectedAmount)}`,
-      `Efectivo contado: ${money(report.actualAmount)}`,
-      `Resultado: ${differenceLabel}`,
-      report.closingNotes?.trim() ? `Observación: ${report.closingNotes.trim()}` : "",
+      "Fondo inicial: " + money(report.openingAmount),
+      "Ventas: " + money(report.salesTotal) + " (" + report.salesCount + " operación" + (report.salesCount === 1 ? "" : "es") + ")",
+      breakdown ? "\n*Conciliación por medio*\n" + breakdown : "",
+      "\nDevoluciones del turno: " + money(report.refundTotal),
+      "Ingresos manuales: " + money(report.manualIncome),
+      "Salidas manuales: " + money(report.manualOut),
+      "Efectivo esperado: " + money(report.expectedAmount),
+      "Efectivo contado: " + money(report.actualAmount),
+      "Resultado: " + differenceLabel,
+      report.closingNotes?.trim() ? "Observación: " + report.closingNotes.trim() : "",
     ].filter(Boolean).join("\n");
+  }
 
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  async function downloadPdf() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const file = await buildCashClosePdf(report);
+      downloadFile(file);
+    } catch (error) {
+      console.error(error);
+      window.alert("No se pudo generar el PDF del cierre.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function shareWhatsApp() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const file = await buildCashClosePdf(report);
+      const message = buildMessage();
+      const canShareFiles =
+        typeof navigator.share === "function"
+        && typeof navigator.canShare === "function"
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          title: "Cierre de caja " + report.branchName,
+          text: message,
+          files: [file],
+        });
+        return;
+      }
+
+      downloadFile(file);
+      window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
+      window.alert("MOBIX descargó el PDF del cierre y abrió WhatsApp. Adjunta el archivo descargado antes de enviar.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.error(error);
+      window.alert("No se pudo preparar el cierre de caja para compartir.");
+    } finally {
+      setSharing(false);
+    }
   }
 
   return (
@@ -110,7 +163,8 @@ export function CashCloseReport({
           </div>
           <div className="cash-report-actions">
             <button className="secondary-button" type="button" onClick={printReport}><Printer size={16} /> Imprimir</button>
-            <button className="secondary-button whatsapp-button" type="button" onClick={shareWhatsApp}><MessageCircle size={16} /> WhatsApp</button>
+            <button className="secondary-button" type="button" disabled={downloading} onClick={() => void downloadPdf()}><Download size={16} /> {downloading ? "Generando..." : "PDF"}</button>
+            <button className="secondary-button whatsapp-button" type="button" disabled={sharing} onClick={() => void shareWhatsApp()}><MessageCircle size={16} /> {sharing ? "Preparando..." : "WhatsApp PDF"}</button>
             <button className="cash-report-close" type="button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button>
           </div>
         </div>
@@ -133,15 +187,23 @@ export function CashCloseReport({
             <div className="cash-report-kpis">
               <article><span>Fondo inicial</span><strong>{money(report.openingAmount)}</strong></article>
               <article><span>Ventas del turno</span><strong>{money(report.salesTotal)}</strong><small>{report.salesCount} operación{report.salesCount === 1 ? "" : "es"}</small></article>
+              <article><span>Devoluciones</span><strong>{money(report.refundTotal)}</strong><small>Todos los medios</small></article>
               <article><span>Efectivo esperado</span><strong>{money(report.expectedAmount)}</strong></article>
               <article><span>Efectivo contado</span><strong>{money(report.actualAmount)}</strong></article>
             </div>
 
             <section className="cash-report-section">
-              <div className="cash-report-section-title"><strong>Resumen por medio de pago</strong><span>Ventas y cobranzas registradas durante el turno</span></div>
+              <div className="cash-report-section-title"><strong>Conciliación por medio de pago</strong><span>Cobros menos devoluciones del turno</span></div>
               <div className="cash-report-payment-grid">
                 {PAYMENT_LABELS.map(({ key, label }) => (
-                  <div key={key}><span>{label}</span><strong>{money(report.paymentTotals[key])}</strong></div>
+                  <div key={key}>
+                    <span>{label}</span>
+                    <strong>{money(report.netPaymentTotals[key])}</strong>
+                    <small>
+                      Cobrado {money(report.paymentTotals[key])}
+                      {report.refundTotals[key] > 0.001 ? " · Devuelto " + money(report.refundTotals[key]) : ""}
+                    </small>
+                  </div>
                 ))}
               </div>
             </section>

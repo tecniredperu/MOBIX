@@ -45,6 +45,12 @@ enum ProductUnitStatus {
   INACTIVE
 }
 
+enum ReturnDisposition {
+  RESTOCK
+  QUARANTINE
+  DAMAGED
+}
+
 enum DeviceIdentifierType {
   IMEI_1
   IMEI_2
@@ -86,7 +92,15 @@ enum PaymentMethod {
   CARD
   TRANSFER
   CREDIT
+  EXCHANGE_CREDIT
   OTHER
+}
+
+enum ExchangeCreditStatus {
+  OPEN
+  PARTIAL
+  USED
+  CANCELLED
 }
 
 enum InventoryMovementType {
@@ -171,6 +185,7 @@ model Company {
   returnOrders        ReturnOrder[]
   stockTransfers      StockTransfer[]
   serviceOrders       ServiceOrder[]
+  exchangeCredits      ExchangeCredit[]
 
   @@unique([ruc])
   @@index([status])
@@ -578,7 +593,8 @@ model Customer {
   sales         Sale[]
   receivables   AccountReceivable[]
   returnOrders  ReturnOrder[]
-  serviceOrders ServiceOrder[]
+  serviceOrders  ServiceOrder[]
+  exchangeCredits ExchangeCredit[]
 
   @@unique([companyId, documentNumber])
   @@index([companyId, status])
@@ -592,6 +608,7 @@ model Sale {
   branchId       String
   warehouseId    String
   customerId     String?
+  cashSessionId  String?
   saleNumber     String
   documentType   DocumentType @default(SALES_NOTE)
   documentSeries String?
@@ -612,18 +629,21 @@ model Sale {
   branch        Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
   warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   customer      Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cashSession   CashSession?       @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
   seller        User               @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: Restrict)
   createdBy     User               @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   items         SaleItem[]
   payments      SalePayment[]
-  receivable    AccountReceivable?
-  returnOrders  ReturnOrder[]
-  serviceOrders ServiceOrder[]
+  receivable          AccountReceivable?
+  returnOrders        ReturnOrder[]
+  serviceOrders       ServiceOrder[]
+  exchangeCreditUsages ExchangeCreditUsage[]
 
   @@unique([companyId, saleNumber])
   @@index([companyId, branchId, createdAt])
   @@index([companyId, customerId, createdAt])
   @@index([companyId, status, createdAt])
+  @@index([cashSessionId, createdAt])
   @@map("sales")
 }
 
@@ -652,15 +672,19 @@ model SaleItem {
 }
 
 model SaleItemUnit {
-  id            String   @id @default(cuid())
-  saleItemId    String
-  productUnitId String
-  createdAt     DateTime @default(now())
+  id                String    @id @default(cuid())
+  saleItemId        String
+  productUnitId     String
+  warrantyDays      Int       @default(0)
+  warrantyStartsAt  DateTime?
+  warrantyExpiresAt DateTime?
+  createdAt         DateTime  @default(now())
 
   saleItem    SaleItem    @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
   productUnit ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
 
   @@unique([saleItemId, productUnitId])
+  @@index([productUnitId, warrantyExpiresAt])
   @@map("sale_item_units")
 }
 
@@ -748,8 +772,11 @@ model CashSession {
   company            Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branch             Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
   user               User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  movements          CashMovement[]
-  receivablePayments ReceivablePayment[]
+  movements                CashMovement[]
+  receivablePayments       ReceivablePayment[]
+  sales                     Sale[]
+  refundReturnOrders       ReturnOrder[]      @relation("ReturnRefundCashSession")
+  refundedExchangeCredits  ExchangeCredit[]   @relation("ExchangeCreditRefundCashSession")
 
   @@index([companyId, branchId, status, openedAt])
   @@index([companyId, userId, status, openedAt])
@@ -850,37 +877,43 @@ model ReturnOrder {
   type         String   @default("RETURN")
   status       String   @default("COMPLETED")
   reason       String
-  refundMethod String?
-  refundAmount Decimal  @default(0) @db.Decimal(14, 2)
-  notes        String?
+  refundMethod        String?
+  refundReference     String?
+  refundAmount        Decimal  @default(0) @db.Decimal(14, 2)
+  refundCashSessionId String?
+  notes               String?
   createdById  String
   createdAt    DateTime @default(now())
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict, map: "return_orders_company_fkey")
   sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict, map: "return_orders_sale_fkey")
   customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull, map: "return_orders_customer_fkey")
-  warehouse Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
-  createdBy User       @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
-  items     ReturnItem[]
+  warehouse         Warehouse    @relation(fields: [warehouseId], references: [id], onDelete: Restrict, map: "return_orders_warehouse_fkey")
+  refundCashSession CashSession?  @relation("ReturnRefundCashSession", fields: [refundCashSessionId], references: [id], onDelete: SetNull)
+  createdBy      User            @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, map: "return_orders_created_by_fkey")
+  items          ReturnItem[]
+  exchangeCredit ExchangeCredit?
 
   @@unique([companyId, returnNumber], map: "return_orders_company_number_key")
   @@index([companyId, createdAt], map: "return_orders_company_date_idx")
   @@index([saleId], map: "return_orders_sale_idx")
+  @@index([refundCashSessionId], map: "return_orders_refund_cash_session_idx")
   @@map("return_orders")
 }
 
 model ReturnItem {
-  id            String   @id
+  id            String            @id
   returnOrderId String
   saleItemId    String
   productId     String
   variantId     String
   productUnitId String?
+  disposition   ReturnDisposition @default(RESTOCK)
   quantity      Int
-  unitPrice     Decimal  @db.Decimal(14, 2)
-  unitCost      Decimal  @db.Decimal(14, 2)
-  amount        Decimal  @db.Decimal(14, 2)
-  createdAt     DateTime @default(now())
+  unitPrice     Decimal           @db.Decimal(14, 2)
+  unitCost      Decimal           @db.Decimal(14, 2)
+  amount        Decimal           @db.Decimal(14, 2)
+  createdAt     DateTime          @default(now())
 
   returnOrder ReturnOrder     @relation(fields: [returnOrderId], references: [id], onDelete: Cascade, map: "return_items_order_fkey")
   saleItem    SaleItem        @relation(fields: [saleItemId], references: [id], onDelete: Restrict, map: "return_items_sale_item_fkey")
@@ -891,6 +924,50 @@ model ReturnItem {
   @@index([returnOrderId], map: "return_items_order_idx")
   @@index([saleItemId], map: "return_items_sale_item_idx")
   @@map("return_items")
+}
+
+model ExchangeCredit {
+  id              String               @id @default(cuid())
+  companyId       String
+  returnOrderId   String               @unique
+  customerId      String?
+  originalAmount  Decimal              @db.Decimal(14, 2)
+  balance         Decimal              @db.Decimal(14, 2)
+  status          ExchangeCreditStatus @default(OPEN)
+  refundedAmount  Decimal              @default(0) @db.Decimal(14, 2)
+  refundMethod    PaymentMethod?
+  refundReference     String?
+  refundedAt          DateTime?
+  refundedById        String?
+  refundCashSessionId String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  company     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  returnOrder ReturnOrder           @relation(fields: [returnOrderId], references: [id], onDelete: Restrict)
+  customer          Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  refundCashSession CashSession?          @relation("ExchangeCreditRefundCashSession", fields: [refundCashSessionId], references: [id], onDelete: SetNull)
+  usages            ExchangeCreditUsage[]
+
+  @@index([companyId, status, createdAt])
+  @@index([customerId, status])
+  @@index([refundCashSessionId])
+  @@map("exchange_credits")
+}
+
+model ExchangeCreditUsage {
+  id               String   @id @default(cuid())
+  exchangeCreditId String
+  saleId           String
+  amount           Decimal  @db.Decimal(14, 2)
+  createdAt        DateTime @default(now())
+
+  exchangeCredit ExchangeCredit @relation(fields: [exchangeCreditId], references: [id], onDelete: Restrict)
+  sale           Sale           @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@unique([exchangeCreditId, saleId])
+  @@index([saleId])
+  @@map("exchange_credit_usages")
 }
 
 model StockTransfer {

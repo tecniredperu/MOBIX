@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import type { SaleTaxCondition } from "../sale-types";
 import { formatPen } from "./pos-shared";
 
@@ -39,114 +38,74 @@ export function PosTotalCard({
   onDiscountChange: (value: number) => void;
   onConfirm: () => void;
 }) {
-  const statusClass = !creditReady || invalidOverpayment
-    ? "pending"
-    : change > 0.01
-      ? "change"
-      : paymentComplete
-        ? "ok"
-        : "pending";
+  const disabled = isPending || !hasCart || !paymentComplete;
 
-  const statusLabel = !creditReady
-    ? "Crédito no disponible"
+  const statusText = !creditReady
+    ? "Revisa la línea de crédito"
     : invalidOverpayment
-      ? "Revisa el exceso de pago"
-      : paymentComplete
-        ? "Cobro cubierto"
-        : "Cobro pendiente";
-
-  const statusValue = !creditReady
-    ? "Revisa la línea de crédito del cliente"
-    : invalidOverpayment
-      ? "El vuelto solo puede salir de efectivo"
+      ? "El exceso solo puede devolverse desde efectivo"
       : pendingAmount > 0.01
-        ? `Falta ${formatPen(pendingAmount)}`
+        ? "Falta " + formatPen(pendingAmount)
         : change > 0.01
-          ? `Vuelto ${formatPen(change)}`
+          ? "Vuelto " + formatPen(change)
           : "Pago completo";
 
-  const confirmText = isPending
-    ? "Procesando venta..."
-    : change > 0.01
-      ? `Cobrar · Vuelto ${formatPen(change)}`
-      : creditAmount > 0.01
-        ? `Confirmar · Crédito ${formatPen(creditAmount)}`
-        : `Cobrar ${formatPen(total)}`;
-
   return (
-    <section className="panel pos-total-card pos-total-compact">
-      <div className="pos-total-main">
-        <span>Total a cobrar</span>
+    <section className="panel pos-total-card pos-v5-total-card">
+      <div className="pos-v5-discount-row">
+        <span>Descuento</span>
+        <div>
+          <span>S/</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={discount || ""}
+            placeholder="0.00"
+            onChange={(event) => onDiscountChange(Number(event.target.value))}
+          />
+        </div>
+      </div>
+
+      <div className="pos-v5-summary-lines">
+        <div>
+          <span>{taxCondition === "TAXED" ? "Valor de venta" : "Subtotal"}</span>
+          <strong>{formatPen(subtotal)}</strong>
+        </div>
+        <div>
+          <span>Descuento</span>
+          <strong>{discount > 0 ? "- " + formatPen(discount) : formatPen(0)}</strong>
+        </div>
+        <div>
+          <span>IGV {taxCondition === "TAXED" ? "(18%)" : ""}</span>
+          <strong>{formatPen(tax)}</strong>
+        </div>
+      </div>
+
+      <div className="pos-v5-grand-total">
+        <span>Total</span>
         <strong>{formatPen(total)}</strong>
       </div>
 
-      <div className="cash-change-box pos-cash-compact">
-        <div>
-          <span>Cubierto</span>
-          <strong>{formatPen(tendered)}</strong>
-        </div>
-        <div className={change > 0.01 ? "change-value" : ""}>
-          <span>Vuelto</span>
-          <strong>{formatPen(change)}</strong>
-        </div>
-      </div>
-
-      <div className={`payment-balance ${statusClass} pos-balance-compact`}>
-        <span>
-          {statusLabel}
-          <small>
-            Efectivo: {formatPen(cashReceived)}
-            {creditAmount > 0 ? ` · Crédito: ${formatPen(creditAmount)}` : ""}
-          </small>
-        </span>
-        <strong>{statusValue}</strong>
+      <div className={paymentComplete ? "pos-v5-payment-status ok" : "pos-v5-payment-status pending"}>
+        <span>{statusText}</span>
+        <small>
+          Cubierto: {formatPen(tendered)}
+          {cashReceived > 0.01 ? " · Efectivo: " + formatPen(cashReceived) : ""}
+          {creditAmount > 0.01 ? " · Crédito: " + formatPen(creditAmount) : ""}
+        </small>
       </div>
 
       <button
-        className="primary-button wide pos-confirm pos-confirm-compact"
+        id="pos-confirm-sale"
+        className="primary-button wide pos-v5-confirm"
         type="button"
-        disabled={isPending || !hasCart || !paymentComplete}
+        disabled={disabled}
         onClick={onConfirm}
       >
-        {confirmText}
+        <span>{isPending ? "Procesando venta..." : "Cobrar " + formatPen(total)}</span>
+        <kbd>F9</kbd>
       </button>
-
-      <details className="pos-breakdown">
-        <summary>
-          <span>Descuento y desglose</span>
-          <ChevronDown size={15} />
-        </summary>
-        <div className="pos-breakdown-body">
-          <label className="discount-row">
-            <span>Descuento</span>
-            <div>
-              <span>S/</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={discount}
-                onChange={(event) => onDiscountChange(Number(event.target.value))}
-              />
-            </div>
-          </label>
-          <div className="summary-row">
-            <span>{taxCondition === "TAXED" ? "Valor de venta" : "Subtotal"}</span>
-            <strong>{formatPen(subtotal)}</strong>
-          </div>
-          <div className="summary-row">
-            <span>IGV {taxCondition === "TAXED" ? "18%" : ""}</span>
-            <strong>{formatPen(tax)}</strong>
-          </div>
-          <div className="summary-row total">
-            <span>Total</span>
-            <strong>{formatPen(total)}</strong>
-          </div>
-          <p className="tax-note">
-            Los precios son finales. El crédito genera una cuenta por cobrar y no se considera ingreso de efectivo hasta registrar un abono.
-          </p>
-        </div>
-      </details>
     </section>
   );
 }

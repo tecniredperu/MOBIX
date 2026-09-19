@@ -20,6 +20,7 @@ const PAYMENT_METHODS = new Set<SalePaymentMethod>([
   "CARD",
   "TRANSFER",
   "CREDIT",
+  "EXCHANGE_CREDIT",
   "OTHER",
 ]);
 const DOCUMENT_TYPES = new Set<SaleDocumentType>(["RECEIPT", "INVOICE", "SALES_NOTE"]);
@@ -44,6 +45,35 @@ type CreditCustomerRow = {
 
 type NextNumberRow = { next: unknown };
 
+type ExchangeCreditLockRow = {
+  id: string;
+  customerId: string | null;
+  balance: unknown;
+  status: string;
+};
+
+type ExistingPaymentReferenceRow = {
+  id: string;
+  saleNumber: string;
+};
+
+type CancelSaleLockRow = {
+  id: string;
+  status: string;
+  cashSessionId: string | null;
+  warehouseId: string;
+  saleNumber: string;
+};
+
+type ExchangeCreditCancelLockRow = {
+  id: string;
+  originalAmount: unknown;
+  balance: unknown;
+  status: string;
+  refundedAmount: unknown;
+  refundedAt: Date | null;
+};
+
 type UnitSnapshot = {
   id: string;
   variantId: string;
@@ -54,6 +84,13 @@ type UnitSnapshot = {
 
 function cleanDocument(value?: string) {
   return value?.replace(/\D/g, "") ?? "";
+}
+
+function normalizePaymentReference(value?: string | null) {
+  return (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function validateCustomerDocument(documentType: string | undefined, documentNumber: string) {
@@ -206,6 +243,22 @@ export async function createSaleAction(input: CreateSaleInput) {
     if (!Number.isFinite(payment.amount) || payment.amount <= 0) {
       throw new Error("Todos los pagos deben ser mayores a cero.");
     }
+    if (payment.method === "EXCHANGE_CREDIT" && !payment.reference?.trim()) {
+      throw new Error("El vale de cambio no tiene una referencia válida.");
+    }
+    if (
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
+      && !payment.reference?.trim()
+    ) {
+      throw new Error(
+        `Ingresa el número de operación o referencia para ${payment.method === "CARD" ? "Tarjeta" : payment.method.charAt(0) + payment.method.slice(1).toLowerCase()}.`,
+      );
+    }
+  }
+
+  const exchangePayments = input.payments.filter((payment) => payment.method === "EXCHANGE_CREDIT");
+  if (exchangePayments.length > 1) {
+    throw new Error("Solo se puede aplicar un vale de cambio por venta.");
   }
 
   const paid = roundMoney(input.payments.reduce((sum, payment) => sum + payment.amount, 0));
@@ -223,20 +276,52 @@ export async function createSaleAction(input: CreateSaleInput) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    if (settings.requireCashSession) {
-      const cashRows = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT "id"
-        FROM "cash_sessions"
-        WHERE "companyId" = ${company.id}
-          AND "branchId" = ${warehouse.branchId}
-          AND "userId" = ${membership.userId}
-          AND "status" = 'OPEN'::"CashSessionStatus"
-        ORDER BY "openedAt" DESC
-        LIMIT 1
-        FOR UPDATE
+    const cashRows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "cash_sessions"
+      WHERE "companyId" = ${company.id}
+        AND "branchId" = ${warehouse.branchId}
+        AND "userId" = ${membership.userId}
+        AND "status" = 'OPEN'::"CashSessionStatus"
+      ORDER BY "openedAt" DESC
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const saleCashSessionId = cashRows[0]?.id ?? null;
+    if (settings.requireCashSession && !saleCashSessionId) {
+      throw new Error("Debes abrir caja en esta sucursal antes de registrar una venta.");
+    }
+
+    const uniqueReferencePayments = input.payments.filter((payment) =>
+      ["YAPE", "PLIN", "TRANSFER"].includes(payment.method)
+      && Boolean(payment.reference?.trim()),
+    );
+
+    for (const payment of uniqueReferencePayments) {
+      const normalizedReference = normalizePaymentReference(payment.reference);
+      if (!normalizedReference) continue;
+
+      const lockKey = company.id + ":" + payment.method + ":" + normalizedReference;
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
       `;
-      if (!cashRows.length) {
-        throw new Error("Debes abrir caja en esta sucursal antes de registrar una venta.");
+
+      const existingReference = await tx.$queryRaw<ExistingPaymentReferenceRow[]>`
+        SELECT sp."id", s."saleNumber"
+        FROM "sale_payments" sp
+        INNER JOIN "sales" s ON s."id" = sp."saleId"
+        WHERE s."companyId" = ${company.id}
+          AND sp."paymentMethod"::text = ${payment.method}
+          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        LIMIT 1
+      `;
+
+      if (existingReference[0]) {
+        throw new Error(
+          "La referencia " + payment.reference?.trim()
+          + " de " + payment.method
+          + " ya fue utilizada en la venta " + existingReference[0].saleNumber + ".",
+        );
       }
     }
 
@@ -265,6 +350,37 @@ export async function createSaleAction(input: CreateSaleInput) {
         ? await tx.customer.update({ where: { id: customer.id }, data: customerData })
         : await tx.customer.create({ data: { companyId: company.id, ...customerData } });
       customerId = customer.id;
+    }
+
+    let exchangeCreditLock: ExchangeCreditLockRow | null = null;
+    const exchangePayment = exchangePayments[0];
+    if (exchangePayment) {
+      const exchangeCreditId = exchangePayment.reference!.trim();
+      const rows = await tx.$queryRaw<ExchangeCreditLockRow[]>`
+        SELECT "id", "customerId", "balance", "status"
+        FROM "exchange_credits"
+        WHERE "id" = ${exchangeCreditId}
+          AND "companyId" = ${company.id}
+          AND "status" IN ('OPEN','PARTIAL')
+        LIMIT 1
+        FOR UPDATE
+      `;
+      exchangeCreditLock = rows[0] ?? null;
+      if (!exchangeCreditLock) {
+        throw new Error("El vale de cambio ya fue utilizado, cancelado o no está disponible.");
+      }
+
+      const availableExchange = roundMoney(Number(exchangeCreditLock.balance ?? 0));
+      if (exchangePayment.amount > availableExchange + 0.01) {
+        throw new Error("El vale de cambio solo tiene S/ " + availableExchange.toFixed(2) + " disponibles.");
+      }
+
+      if (exchangeCreditLock.customerId) {
+        if (customerId && customerId !== exchangeCreditLock.customerId) {
+          throw new Error("El vale de cambio pertenece a otro cliente.");
+        }
+        if (!customerId) customerId = exchangeCreditLock.customerId;
+      }
     }
 
     let creditDays = 30;
@@ -336,6 +452,7 @@ export async function createSaleAction(input: CreateSaleInput) {
         branchId: warehouse.branchId,
         warehouseId: warehouse.id,
         customerId,
+        cashSessionId: saleCashSessionId,
         saleNumber,
         documentType: input.documentType,
         documentSeries,
@@ -424,7 +541,24 @@ export async function createSaleAction(input: CreateSaleInput) {
             throw new Error(`El equipo de ${variant.product.name} acaba de ser vendido por otro usuario.`);
           }
 
-          await tx.saleItemUnit.create({ data: { saleItemId: saleItem.id, productUnitId: unitId } });
+          const warrantyDays = Math.max(
+            0,
+            Number(variant.product.warrantyDays || settings.defaultWarrantyDays || 0),
+          );
+          const warrantyStartsAt = warrantyDays > 0 ? sale.createdAt : null;
+          const warrantyExpiresAt = warrantyStartsAt
+            ? new Date(warrantyStartsAt.getTime() + warrantyDays * 86_400_000)
+            : null;
+
+          await tx.saleItemUnit.create({
+            data: {
+              saleItemId: saleItem.id,
+              productUnitId: unitId,
+              warrantyDays,
+              warrantyStartsAt,
+              warrantyExpiresAt,
+            },
+          });
           await tx.inventoryMovement.create({
             data: {
               companyId: company.id,
@@ -478,6 +612,33 @@ export async function createSaleAction(input: CreateSaleInput) {
       });
     }
 
+    let exchangeCreditUsed = 0;
+    let exchangeCreditBalance = 0;
+    if (exchangePayment && exchangeCreditLock) {
+      exchangeCreditUsed = roundMoney(exchangePayment.amount);
+      exchangeCreditBalance = roundMoney(
+        Math.max(0, Number(exchangeCreditLock.balance ?? 0) - exchangeCreditUsed),
+      );
+
+      const exchangeCustomerId = exchangeCreditLock.customerId ?? customerId;
+      await tx.exchangeCredit.update({
+        where: { id: exchangeCreditLock.id },
+        data: {
+          balance: exchangeCreditBalance,
+          status: exchangeCreditBalance <= 0.01 ? "USED" : "PARTIAL",
+          ...(exchangeCustomerId ? { customerId: exchangeCustomerId } : {}),
+        },
+      });
+
+      await tx.exchangeCreditUsage.create({
+        data: {
+          exchangeCreditId: exchangeCreditLock.id,
+          saleId: sale.id,
+          amount: exchangeCreditUsed,
+        },
+      });
+    }
+
     let receivableId: string | null = null;
     if (creditAmount > 0 && customerId) {
       receivableId = randomUUID();
@@ -513,6 +674,9 @@ export async function createSaleAction(input: CreateSaleInput) {
           total,
           creditAmount,
           receivableId,
+          exchangeCreditId: exchangeCreditLock?.id ?? null,
+          exchangeCreditUsed,
+          exchangeCreditBalance,
           paymentMethods: input.payments.map((payment) => payment.method),
         },
       },
@@ -523,5 +687,310 @@ export async function createSaleAction(input: CreateSaleInput) {
 
   revalidatePaths(SALE_PATHS);
   if (input.customerId) revalidatePaths([`/clientes/${input.customerId}`]);
+  return result;
+}
+
+
+export async function cancelSaleAction(input: {
+  saleId: string;
+  reason: string;
+}) {
+  const { company, membership, settings } = await requirePermission("sales.cancel");
+  const saleId = input.saleId?.trim();
+  const reason = input.reason?.trim();
+
+  if (!saleId) throw new Error("No se identificó la venta a anular.");
+  if (!reason || reason.length < 5) {
+    throw new Error("Describe brevemente el motivo de la anulación.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<CancelSaleLockRow[]>`
+      SELECT "id", "status"::text, "cashSessionId", "warehouseId", "saleNumber"
+      FROM "sales"
+      WHERE "id" = ${saleId}
+        AND "companyId" = ${company.id}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const locked = lockedRows[0];
+    if (!locked) throw new Error("La venta ya no existe.");
+    if (locked.status !== "COMPLETED") {
+      throw new Error("Solo se pueden anular ventas completadas.");
+    }
+
+    const sale = await tx.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        cashSession: { select: { id: true, status: true, userId: true } },
+        returnOrders: {
+          where: { status: "COMPLETED" },
+          select: { id: true, returnNumber: true },
+        },
+        serviceOrders: {
+          where: { status: { not: "CANCELLED" } },
+          select: { id: true, serviceNumber: true },
+        },
+        receivable: {
+          include: {
+            payments: { select: { id: true, amount: true } },
+          },
+        },
+        exchangeCreditUsages: {
+          select: {
+            id: true,
+            exchangeCreditId: true,
+            amount: true,
+          },
+        },
+        payments: {
+          select: {
+            paymentMethod: true,
+            amount: true,
+            reference: true,
+          },
+        },
+        items: {
+          include: {
+            product: { select: { name: true, type: true } },
+            units: {
+              include: {
+                productUnit: { select: { id: true, status: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!sale) throw new Error("La venta ya no está disponible.");
+
+    if (sale.returnOrders.length) {
+      throw new Error(
+        "Esta venta ya tiene una devolución o cambio registrado. Gestiona cualquier ajuste desde Postventa.",
+      );
+    }
+    if (sale.serviceOrders.length) {
+      throw new Error(
+        "Esta venta tiene una atención de garantía o servicio técnico activa. Ciérrala antes de intentar anular.",
+      );
+    }
+
+    if (sale.cashSessionId) {
+      if (
+        !sale.cashSession
+        || sale.cashSession.status !== "OPEN"
+        || sale.cashSession.userId !== membership.userId
+      ) {
+        throw new Error(
+          "La caja original de esta venta ya fue cerrada o pertenece a otro usuario. Registra una devolución en lugar de anular la venta.",
+        );
+      }
+    } else if (settings.requireCashSession) {
+      throw new Error(
+        "Esta venta no tiene una sesión de caja abierta asociada. Registra una devolución para mantener la conciliación.",
+      );
+    }
+
+    const digitalPayments = sale.payments.filter((payment) =>
+      ["YAPE", "PLIN", "CARD", "TRANSFER", "OTHER"].includes(payment.paymentMethod),
+    );
+    if (digitalPayments.length) {
+      throw new Error(
+        "Esta venta tiene un cobro digital registrado. Para mantener la conciliación y la referencia del reembolso, procesa una Devolución en lugar de anular.",
+      );
+    }
+
+    if (sale.receivable) {
+      const paidAmount = roundMoney(
+        sale.receivable.payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      );
+      if (paidAmount > 0.01) {
+        throw new Error(
+          "La venta tiene cobranzas registradas sobre su crédito. Debes procesar una devolución o ajuste de cobranza.",
+        );
+      }
+    }
+
+    for (const usage of sale.exchangeCreditUsages) {
+      const creditRows = await tx.$queryRaw<ExchangeCreditCancelLockRow[]>`
+        SELECT "id", "originalAmount", "balance", "status"::text, "refundedAmount", "refundedAt"
+        FROM "exchange_credits"
+        WHERE "id" = ${usage.exchangeCreditId}
+          AND "companyId" = ${company.id}
+        LIMIT 1
+        FOR UPDATE
+      `;
+      const credit = creditRows[0];
+      if (!credit) throw new Error("El vale utilizado en esta venta ya no existe.");
+
+      if (Number(credit.refundedAmount ?? 0) > 0.01 || credit.refundedAt) {
+        throw new Error(
+          "El vale utilizado en esta venta ya tuvo una devolución de saldo. No es posible anular automáticamente esta operación.",
+        );
+      }
+      if (credit.status === "CANCELLED") {
+        throw new Error("El vale utilizado en esta venta está cancelado.");
+      }
+
+      const originalAmount = roundMoney(Number(credit.originalAmount ?? 0));
+      const restoredBalance = roundMoney(
+        Math.min(originalAmount, Number(credit.balance ?? 0) + Number(usage.amount)),
+      );
+
+      await tx.exchangeCredit.update({
+        where: { id: credit.id },
+        data: {
+          balance: restoredBalance,
+          status: restoredBalance >= originalAmount - 0.01 ? "OPEN" : "PARTIAL",
+        },
+      });
+      await tx.exchangeCreditUsage.delete({ where: { id: usage.id } });
+    }
+
+    for (const item of sale.items) {
+      const serialized = item.product.type === "PHONE" || item.product.type === "SERIALIZED";
+
+      if (serialized) {
+        for (const link of item.units) {
+          if (link.productUnit.status !== "SOLD") {
+            throw new Error(
+              "El equipo " + item.product.name + " ya cambió de estado. Usa el flujo de devolución/cambio.",
+            );
+          }
+
+          const updated = await tx.productUnit.updateMany({
+            where: {
+              id: link.productUnit.id,
+              companyId: company.id,
+              status: "SOLD",
+            },
+            data: {
+              status: "AVAILABLE",
+              warehouseId: sale.warehouseId,
+            },
+          });
+          if (updated.count !== 1) {
+            throw new Error("El estado de uno de los IMEI cambió durante la anulación.");
+          }
+
+          await tx.inventoryMovement.create({
+            data: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              productId: item.productId,
+              variantId: item.variantId,
+              productUnitId: link.productUnit.id,
+              movementType: "RETURN_IN",
+              quantity: 1,
+              unitCost: Number(item.unitCost),
+              referenceType: "SALE_CANCEL",
+              referenceId: sale.id,
+              notes: "Reingreso por anulación de venta " + sale.saleNumber,
+              createdById: membership.userId,
+            },
+          });
+        }
+      } else if (item.product.type === "ACCESSORY") {
+        await lockInventoryBalance(tx, company.id, sale.warehouseId, item.variantId);
+
+        await tx.inventoryBalance.upsert({
+          where: {
+            companyId_warehouseId_variantId: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              variantId: item.variantId,
+            },
+          },
+          create: {
+            companyId: company.id,
+            warehouseId: sale.warehouseId,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            averageCost: Number(item.unitCost),
+          },
+          update: {
+            quantity: { increment: item.quantity },
+          },
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            companyId: company.id,
+            warehouseId: sale.warehouseId,
+            productId: item.productId,
+            variantId: item.variantId,
+            movementType: "RETURN_IN",
+            quantity: item.quantity,
+            unitCost: Number(item.unitCost),
+            referenceType: "SALE_CANCEL",
+            referenceId: sale.id,
+            notes: "Reingreso por anulación de venta " + sale.saleNumber,
+            createdById: membership.userId,
+          },
+        });
+      }
+    }
+
+    if (sale.receivable) {
+      await tx.accountReceivable.update({
+        where: { id: sale.receivable.id },
+        data: {
+          status: "CANCELLED",
+          balance: 0,
+          notes: [
+            sale.receivable.notes?.trim(),
+            "Cuenta anulada junto con la venta " + sale.saleNumber + ".",
+          ].filter(Boolean).join(" "),
+        },
+      });
+    }
+
+    await tx.sale.update({
+      where: { id: sale.id },
+      data: { status: "CANCELLED" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "CANCEL",
+        entity: "SALE",
+        entityId: sale.id,
+        oldValues: {
+          status: "COMPLETED",
+          saleNumber: sale.saleNumber,
+          total: Number(sale.total),
+        },
+        newValues: {
+          status: "CANCELLED",
+          reason,
+          restoredSerializedUnits: sale.items.reduce(
+            (sum, item) => sum + item.units.length,
+            0,
+          ),
+          restoredAccessoryUnits: sale.items.reduce(
+            (sum, item) => sum + (item.product.type === "ACCESSORY" ? item.quantity : 0),
+            0,
+          ),
+          paymentMethods: sale.payments.map((payment) => payment.paymentMethod),
+          restoredExchangeCredits: sale.exchangeCreditUsages.map((usage) => ({
+            exchangeCreditId: usage.exchangeCreditId,
+            amount: Number(usage.amount),
+          })),
+        },
+      },
+    });
+
+    return {
+      id: sale.id,
+      saleNumber: sale.saleNumber,
+      status: "CANCELLED" as const,
+    };
+  });
+
+  revalidatePaths(SALE_PATHS);
+  revalidatePaths([`/ventas/${result.id}`]);
   return result;
 }

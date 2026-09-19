@@ -12,6 +12,7 @@ export type CashPaymentMethod =
   | "CARD"
   | "TRANSFER"
   | "CREDIT"
+  | "EXCHANGE_CREDIT"
   | "OTHER";
 
 export type CashBranchOption = {
@@ -24,7 +25,7 @@ export type CashPaymentTotals = Record<CashPaymentMethod, number>;
 
 export type CashActivityItem = {
   id: string;
-  source: "SALE" | "MANUAL";
+  source: "SALE" | "COLLECTION" | "REFUND" | "CANCEL" | "MANUAL";
   direction: "IN" | "OUT" | "NEUTRAL";
   label: string;
   detail: string;
@@ -40,13 +41,21 @@ export type CashOpenSession = {
   userId: string;
   userName: string;
   openedAt: string;
+  closedAt: string | null;
   openingAmount: number;
   openingNotes: string | null;
+  closingNotes: string | null;
+  expectedAmount: number | null;
+  closingAmount: number | null;
+  difference: number | null;
   paymentTotals: CashPaymentTotals;
+  refundTotals: CashPaymentTotals;
+  netPaymentTotals: CashPaymentTotals;
   salesCount: number;
   salesTotal: number;
   manualIncome: number;
   manualOut: number;
+  refundTotal: number;
   expectedCash: number;
   activity: CashActivityItem[];
 };
@@ -61,4 +70,27 @@ export type CashSessionHistoryItem = {
   expectedAmount: number;
   closingAmount: number;
   difference: number;
+};
+
+
+export type CashCloseReportData = {
+  sessionId: string;
+  companyName: string;
+  branchName: string;
+  userName: string;
+  openedAt: string;
+  closedAt: string;
+  openingAmount: number;
+  salesCount: number;
+  salesTotal: number;
+  paymentTotals: CashPaymentTotals;
+  refundTotals: CashPaymentTotals;
+  netPaymentTotals: CashPaymentTotals;
+  refundTotal: number;
+  manualIncome: number;
+  manualOut: number;
+  expectedAmount: number;
+  actualAmount: number;
+  difference: number;
+  closingNotes?: string;
 };

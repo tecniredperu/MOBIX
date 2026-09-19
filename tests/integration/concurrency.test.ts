@@ -335,6 +335,255 @@ test("postventa respeta la máquina de estados", async () => {
   assert.equal(closed.status, "DELIVERED");
 });
 
+
+test("un vale de cambio no puede gastarse dos veces en cajas concurrentes", async () => {
+  const fixture = await createFixture();
+  const originalSale = await createSale(fixture, 100);
+  const [replacementA, replacementB] = await Promise.all([
+    createSale(fixture, 120),
+    createSale(fixture, 130),
+  ]);
+
+  const returnOrder = await testDb.returnOrder.create({
+    data: {
+      id: randomUUID(),
+      companyId: fixture.company.id,
+      saleId: originalSale.id,
+      customerId: fixture.customer.id,
+      warehouseId: fixture.warehouse.id,
+      returnNumber: unique("DV-X"),
+      type: "EXCHANGE",
+      status: "COMPLETED",
+      reason: "Cambio concurrente UAT",
+      refundAmount: 0,
+      createdById: fixture.user.id,
+    },
+  });
+
+  const credit = await testDb.exchangeCredit.create({
+    data: {
+      companyId: fixture.company.id,
+      returnOrderId: returnOrder.id,
+      customerId: fixture.customer.id,
+      originalAmount: 100,
+      balance: 100,
+      status: "OPEN",
+    },
+  });
+
+  async function consume(saleId: string, amount: number) {
+    return testDb.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string; balance: unknown; status: string }>>`
+        SELECT "id", "balance", "status"
+        FROM "exchange_credits"
+        WHERE "id" = ${credit.id}
+          AND "companyId" = ${fixture.company.id}
+          AND "status" IN ('OPEN','PARTIAL')
+        LIMIT 1
+        FOR UPDATE
+      `;
+
+      const locked = rows[0];
+      if (!locked) throw new Error("Vale no disponible.");
+
+      const balance = Number(locked.balance ?? 0);
+      if (amount > balance + 0.01) {
+        throw new Error("Saldo insuficiente.");
+      }
+
+      const nextBalance = Math.round((balance - amount) * 100) / 100;
+      await tx.exchangeCredit.update({
+        where: { id: credit.id },
+        data: {
+          balance: nextBalance,
+          status: nextBalance <= 0.01 ? "USED" : "PARTIAL",
+        },
+      });
+      await tx.exchangeCreditUsage.create({
+        data: {
+          exchangeCreditId: credit.id,
+          saleId,
+          amount,
+        },
+      });
+    });
+  }
+
+  const attempts = await Promise.allSettled([
+    consume(replacementA.id, 80),
+    consume(replacementB.id, 80),
+  ]);
+
+  assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+
+  const current = await testDb.exchangeCredit.findUniqueOrThrow({
+    where: { id: credit.id },
+    include: { usages: true },
+  });
+  assert.equal(Number(current.balance), 20);
+  assert.equal(current.status, "PARTIAL");
+  assert.equal(current.usages.length, 1);
+  assert.equal(Number(current.usages[0].amount), 80);
+});
+
+
+test("una referencia Yape no puede registrarse dos veces en ventas concurrentes", async () => {
+  const fixture = await createFixture();
+  const [saleA, saleB] = await Promise.all([
+    createSale(fixture, 40),
+    createSale(fixture, 40),
+  ]);
+  const normalizedReference = "987654321";
+  const lockKey = fixture.company.id + ":YAPE:" + normalizedReference;
+
+  async function registerPayment(saleId: string) {
+    return testDb.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const existing = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT sp."id"
+        FROM "sale_payments" sp
+        INNER JOIN "sales" s ON s."id" = sp."saleId"
+        WHERE s."companyId" = ${fixture.company.id}
+          AND sp."paymentMethod"::text = 'YAPE'
+          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        LIMIT 1
+      `;
+      if (existing[0]) throw new Error("Referencia duplicada.");
+
+      await tx.salePayment.create({
+        data: {
+          saleId,
+          paymentMethod: "YAPE",
+          amount: 40,
+          reference: "987 654 321",
+        },
+      });
+    });
+  }
+
+  const attempts = await Promise.allSettled([
+    registerPayment(saleA.id),
+    registerPayment(saleB.id),
+  ]);
+
+  assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+
+  const payments = await testDb.salePayment.findMany({
+    where: {
+      paymentMethod: "YAPE",
+      sale: { companyId: fixture.company.id },
+      reference: "987 654 321",
+    },
+  });
+  assert.equal(payments.length, 1);
+});
+
+
+test("una referencia Yape no puede reutilizarse entre venta y cobranza concurrentes", async () => {
+  const fixture = await createFixture();
+  const [saleA, saleB] = await Promise.all([
+    createSale(fixture, 40),
+    createSale(fixture, 40),
+  ]);
+
+  const receivable = await testDb.accountReceivable.create({
+    data: {
+      id: randomUUID(),
+      companyId: fixture.company.id,
+      customerId: fixture.customer.id,
+      saleId: saleB.id,
+      originalAmount: 40,
+      paidAmount: 0,
+      balance: 40,
+      dueDate: new Date(Date.now() + 30 * 86_400_000),
+    },
+  });
+
+  const normalizedReference = "445566778";
+  const lockKey = fixture.company.id + ":YAPE:" + normalizedReference;
+
+  async function ensureUnused(tx: any) {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+    `;
+
+    const duplicate = await tx.$queryRaw<Array<{ source: string }>>`
+      SELECT "source"
+      FROM (
+        SELECT 'VENTA'::text AS "source"
+        FROM "sale_payments" sp
+        INNER JOIN "sales" s ON s."id" = sp."saleId"
+        WHERE s."companyId" = ${fixture.company.id}
+          AND sp."paymentMethod"::text = 'YAPE'
+          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+
+        UNION ALL
+
+        SELECT 'ABONO'::text AS "source"
+        FROM "receivable_payments" rp
+        WHERE rp."companyId" = ${fixture.company.id}
+          AND rp."paymentMethod"::text = 'YAPE'
+          AND regexp_replace(upper(COALESCE(rp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+      ) refs
+      LIMIT 1
+    `;
+
+    if (duplicate[0]) throw new Error("Referencia duplicada.");
+  }
+
+  const attempts = await Promise.allSettled([
+    testDb.$transaction(async (tx) => {
+      await ensureUnused(tx);
+      await tx.salePayment.create({
+        data: {
+          saleId: saleA.id,
+          paymentMethod: "YAPE",
+          amount: 40,
+          reference: "445 566 778",
+        },
+      });
+    }),
+    testDb.$transaction(async (tx) => {
+      await ensureUnused(tx);
+      await tx.receivablePayment.create({
+        data: {
+          id: randomUUID(),
+          companyId: fixture.company.id,
+          receivableId: receivable.id,
+          amount: 40,
+          paymentMethod: "YAPE",
+          reference: "445-566-778",
+          createdById: fixture.user.id,
+        },
+      });
+    }),
+  ]);
+
+  assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+
+  const [salePayments, collectionPayments] = await Promise.all([
+    testDb.salePayment.count({
+      where: {
+        sale: { companyId: fixture.company.id },
+        paymentMethod: "YAPE",
+      },
+    }),
+    testDb.receivablePayment.count({
+      where: {
+        companyId: fixture.company.id,
+        paymentMethod: "YAPE",
+      },
+    }),
+  ]);
+  assert.equal(salePayments + collectionPayments, 1);
+});
+
 test.after(async () => {
   await testDb.$disconnect();
 });
