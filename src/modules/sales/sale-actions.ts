@@ -57,6 +57,23 @@ type ExistingPaymentReferenceRow = {
   saleNumber: string;
 };
 
+type CancelSaleLockRow = {
+  id: string;
+  status: string;
+  cashSessionId: string | null;
+  warehouseId: string;
+  saleNumber: string;
+};
+
+type ExchangeCreditCancelLockRow = {
+  id: string;
+  originalAmount: unknown;
+  balance: unknown;
+  status: string;
+  refundedAmount: unknown;
+  refundedAt: Date | null;
+};
+
 type UnitSnapshot = {
   id: string;
   variantId: string;
@@ -670,5 +687,293 @@ export async function createSaleAction(input: CreateSaleInput) {
 
   revalidatePaths(SALE_PATHS);
   if (input.customerId) revalidatePaths([`/clientes/${input.customerId}`]);
+  return result;
+}
+
+
+export async function cancelSaleAction(input: {
+  saleId: string;
+  reason: string;
+}) {
+  const { company, membership, settings } = await requirePermission("sales.create");
+  const saleId = input.saleId?.trim();
+  const reason = input.reason?.trim();
+
+  if (!saleId) throw new Error("No se identificó la venta a anular.");
+  if (!reason || reason.length < 5) {
+    throw new Error("Describe brevemente el motivo de la anulación.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<CancelSaleLockRow[]>`
+      SELECT "id", "status"::text, "cashSessionId", "warehouseId", "saleNumber"
+      FROM "sales"
+      WHERE "id" = ${saleId}
+        AND "companyId" = ${company.id}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const locked = lockedRows[0];
+    if (!locked) throw new Error("La venta ya no existe.");
+    if (locked.status !== "COMPLETED") {
+      throw new Error("Solo se pueden anular ventas completadas.");
+    }
+
+    const sale = await tx.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        cashSession: { select: { id: true, status: true, userId: true } },
+        returnOrders: {
+          where: { status: "COMPLETED" },
+          select: { id: true, returnNumber: true },
+        },
+        serviceOrders: {
+          where: { status: { not: "CANCELLED" } },
+          select: { id: true, serviceNumber: true },
+        },
+        receivable: {
+          include: {
+            payments: { select: { id: true, amount: true } },
+          },
+        },
+        exchangeCreditUsages: {
+          select: {
+            id: true,
+            exchangeCreditId: true,
+            amount: true,
+          },
+        },
+        items: {
+          include: {
+            product: { select: { name: true, type: true } },
+            units: {
+              include: {
+                productUnit: { select: { id: true, status: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!sale) throw new Error("La venta ya no está disponible.");
+
+    if (sale.returnOrders.length) {
+      throw new Error(
+        "Esta venta ya tiene una devolución o cambio registrado. Gestiona cualquier ajuste desde Postventa.",
+      );
+    }
+    if (sale.serviceOrders.length) {
+      throw new Error(
+        "Esta venta tiene una atención de garantía o servicio técnico activa. Ciérrala antes de intentar anular.",
+      );
+    }
+
+    if (sale.cashSessionId) {
+      if (
+        !sale.cashSession
+        || sale.cashSession.status !== "OPEN"
+        || sale.cashSession.userId !== membership.userId
+      ) {
+        throw new Error(
+          "La caja original de esta venta ya fue cerrada o pertenece a otro usuario. Registra una devolución en lugar de anular la venta.",
+        );
+      }
+    } else if (settings.requireCashSession) {
+      throw new Error(
+        "Esta venta no tiene una sesión de caja abierta asociada. Registra una devolución para mantener la conciliación.",
+      );
+    }
+
+    if (sale.receivable) {
+      const paidAmount = roundMoney(
+        sale.receivable.payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      );
+      if (paidAmount > 0.01) {
+        throw new Error(
+          "La venta tiene cobranzas registradas sobre su crédito. Debes procesar una devolución o ajuste de cobranza.",
+        );
+      }
+    }
+
+    for (const usage of sale.exchangeCreditUsages) {
+      const creditRows = await tx.$queryRaw<ExchangeCreditCancelLockRow[]>`
+        SELECT "id", "originalAmount", "balance", "status"::text, "refundedAmount", "refundedAt"
+        FROM "exchange_credits"
+        WHERE "id" = ${usage.exchangeCreditId}
+          AND "companyId" = ${company.id}
+        LIMIT 1
+        FOR UPDATE
+      `;
+      const credit = creditRows[0];
+      if (!credit) throw new Error("El vale utilizado en esta venta ya no existe.");
+
+      if (Number(credit.refundedAmount ?? 0) > 0.01 || credit.refundedAt) {
+        throw new Error(
+          "El vale utilizado en esta venta ya tuvo una devolución de saldo. No es posible anular automáticamente esta operación.",
+        );
+      }
+      if (credit.status === "CANCELLED") {
+        throw new Error("El vale utilizado en esta venta está cancelado.");
+      }
+
+      const originalAmount = roundMoney(Number(credit.originalAmount ?? 0));
+      const restoredBalance = roundMoney(
+        Math.min(originalAmount, Number(credit.balance ?? 0) + Number(usage.amount)),
+      );
+
+      await tx.exchangeCredit.update({
+        where: { id: credit.id },
+        data: {
+          balance: restoredBalance,
+          status: restoredBalance >= originalAmount - 0.01 ? "OPEN" : "PARTIAL",
+        },
+      });
+      await tx.exchangeCreditUsage.delete({ where: { id: usage.id } });
+    }
+
+    for (const item of sale.items) {
+      const serialized = item.product.type === "PHONE" || item.product.type === "SERIALIZED";
+
+      if (serialized) {
+        for (const link of item.units) {
+          if (link.productUnit.status !== "SOLD") {
+            throw new Error(
+              "El equipo " + item.product.name + " ya cambió de estado. Usa el flujo de devolución/cambio.",
+            );
+          }
+
+          const updated = await tx.productUnit.updateMany({
+            where: {
+              id: link.productUnit.id,
+              companyId: company.id,
+              status: "SOLD",
+            },
+            data: {
+              status: "AVAILABLE",
+              warehouseId: sale.warehouseId,
+            },
+          });
+          if (updated.count !== 1) {
+            throw new Error("El estado de uno de los IMEI cambió durante la anulación.");
+          }
+
+          await tx.inventoryMovement.create({
+            data: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              productId: item.productId,
+              variantId: item.variantId,
+              productUnitId: link.productUnit.id,
+              movementType: "RETURN_IN",
+              quantity: 1,
+              unitCost: Number(item.unitCost),
+              referenceType: "SALE_CANCEL",
+              referenceId: sale.id,
+              notes: "Reingreso por anulación de venta " + sale.saleNumber,
+              createdById: membership.userId,
+            },
+          });
+        }
+      } else if (item.product.type === "ACCESSORY") {
+        await lockInventoryBalance(tx, company.id, sale.warehouseId, item.variantId);
+
+        await tx.inventoryBalance.upsert({
+          where: {
+            companyId_warehouseId_variantId: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              variantId: item.variantId,
+            },
+          },
+          create: {
+            companyId: company.id,
+            warehouseId: sale.warehouseId,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            averageCost: Number(item.unitCost),
+          },
+          update: {
+            quantity: { increment: item.quantity },
+          },
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            companyId: company.id,
+            warehouseId: sale.warehouseId,
+            productId: item.productId,
+            variantId: item.variantId,
+            movementType: "RETURN_IN",
+            quantity: item.quantity,
+            unitCost: Number(item.unitCost),
+            referenceType: "SALE_CANCEL",
+            referenceId: sale.id,
+            notes: "Reingreso por anulación de venta " + sale.saleNumber,
+            createdById: membership.userId,
+          },
+        });
+      }
+    }
+
+    if (sale.receivable) {
+      await tx.accountReceivable.update({
+        where: { id: sale.receivable.id },
+        data: {
+          status: "CANCELLED",
+          balance: 0,
+          notes: [
+            sale.receivable.notes?.trim(),
+            "Cuenta anulada junto con la venta " + sale.saleNumber + ".",
+          ].filter(Boolean).join(" "),
+        },
+      });
+    }
+
+    await tx.sale.update({
+      where: { id: sale.id },
+      data: { status: "CANCELLED" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        userId: membership.userId,
+        action: "CANCEL",
+        entity: "SALE",
+        entityId: sale.id,
+        oldValues: {
+          status: "COMPLETED",
+          saleNumber: sale.saleNumber,
+          total: Number(sale.total),
+        },
+        newValues: {
+          status: "CANCELLED",
+          reason,
+          restoredSerializedUnits: sale.items.reduce(
+            (sum, item) => sum + item.units.length,
+            0,
+          ),
+          restoredAccessoryUnits: sale.items.reduce(
+            (sum, item) => sum + (item.product.type === "ACCESSORY" ? item.quantity : 0),
+            0,
+          ),
+          restoredExchangeCredits: sale.exchangeCreditUsages.map((usage) => ({
+            exchangeCreditId: usage.exchangeCreditId,
+            amount: Number(usage.amount),
+          })),
+        },
+      },
+    });
+
+    return {
+      id: sale.id,
+      saleNumber: sale.saleNumber,
+      status: "CANCELLED" as const,
+    };
+  });
+
+  revalidatePaths(SALE_PATHS);
+  revalidatePaths([`/ventas/${result.id}`]);
   return result;
 }
