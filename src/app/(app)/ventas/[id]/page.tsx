@@ -25,6 +25,7 @@ export default async function SaleDetailPage({
   const exchangeBalanceParam = Array.isArray(query.exchangeBalance) ? query.exchangeBalance[0] : query.exchangeBalance;
   const parsedExchangeBalance = Number(exchangeBalanceParam ?? 0);
   const exchangeBalance = Number.isFinite(parsedExchangeBalance) ? Math.max(0, parsedExchangeBalance) : 0;
+  const canCancelSale = context.membership.role.isSystem || context.permissions.has("sales.cancel");
   const company = {
     businessName: context.company.businessName,
     tradeName: context.company.tradeName,
@@ -39,6 +40,7 @@ export default async function SaleDetailPage({
     <AppShell>
       <SaleDetailView
         sale={sale}
+        canCancelSale={canCancelSale}
         created={created}
         change={change}
         exchangeCreditId={exchangeCreditId ?? null}
