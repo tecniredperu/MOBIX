@@ -19,6 +19,24 @@ const COLLECTION_LABELS: Record<CollectionMethod, string> = {
   OTHER: "Otro",
 };
 
+const SALE_PAYMENT_LABELS: Record<string, string> = {
+  CASH: "Efectivo",
+  YAPE: "Yape",
+  PLIN: "Plin",
+  CARD: "Tarjeta",
+  TRANSFER: "Transferencia",
+  CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
+  OTHER: "Otro",
+};
+
+const SALE_STATUS_LABELS: Record<string, string> = {
+  COMPLETED: "Completada",
+  REFUNDED: "Devuelta",
+  CANCELLED: "Anulada",
+  DRAFT: "Borrador",
+};
+
 function money(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(value || 0);
 }
@@ -46,7 +64,15 @@ export function CustomerDetailView({ customer }: { customer: {
   status: string;
   createdAt: string;
   credit: { enabled: boolean; limit: number; days: number; notes: string | null; outstanding: number; overdue: number; available: number };
-  summary: { salesCount: number; purchaseTotal: number; outstanding: number; overdue: number; exchangeCreditBalance: number };
+  summary: {
+    salesCount: number;
+    purchaseTotal: number;
+    grossPurchaseTotal: number;
+    returnedPurchaseTotal: number;
+    outstanding: number;
+    overdue: number;
+    exchangeCreditBalance: number;
+  };
   sales: Array<{ id: string; saleNumber: string; document: string; total: number; status: string; itemCount: number; payments: string[]; createdAt: string }>;
   receivables: Array<{ id: string; saleId: string; saleNumber: string; document: string; status: string; originalAmount: number; paidAmount: number; balance: number; dueDate: string; createdAt: string; overdue: boolean }>;
   payments: Array<{ id: string; receivableId: string; amount: number; method: string; reference: string | null; notes: string | null; createdBy: string; paidAt: string }>;
@@ -167,7 +193,7 @@ export function CustomerDetailView({ customer }: { customer: {
       {message && <div className="customer-success-banner"><strong>Listo</strong><span>{message}</span></div>}
 
       <section className="customer-kpi-grid">
-        <article><small>Compras</small><strong>{customer.summary.salesCount}</strong><span>{money(customer.summary.purchaseTotal)} acumulado</span></article>
+        <article><small>Compras netas</small><strong>{money(customer.summary.purchaseTotal)}</strong><span>{customer.summary.salesCount} operaciones · bruto {money(customer.summary.grossPurchaseTotal)} · retornado {money(customer.summary.returnedPurchaseTotal)}</span></article>
         <article><small>Deuda pendiente</small><strong>{money(customer.summary.outstanding)}</strong><span>{customer.summary.overdue > 0 ? `${money(customer.summary.overdue)} vencido` : "Sin mora"}</span></article>
         <article><small>Límite de crédito</small><strong>{customer.credit.enabled ? money(customer.credit.limit) : "No habilitado"}</strong><span>{customer.credit.enabled ? `${customer.credit.days} días` : "Configurable"}</span></article>
         <article><small>Crédito disponible</small><strong>{money(customer.credit.available)}</strong><span>Después de deuda actual</span></article>
@@ -292,7 +318,7 @@ export function CustomerDetailView({ customer }: { customer: {
 
       <section className="panel customer-sales-section">
         <div className="panel-heading"><div><h2>Historial de ventas</h2><p>Últimas operaciones realizadas por el cliente.</p></div></div>
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Venta</th><th>Fecha</th><th>Productos</th><th>Pago</th><th>Total</th><th></th></tr></thead><tbody>{customer.sales.map((sale) => <tr key={sale.id}><td><strong>{sale.saleNumber}</strong><small className="table-subline">{sale.document}</small></td><td>{dateTime(sale.createdAt)}</td><td>{sale.itemCount}</td><td>{sale.payments.join(" + ")}</td><td><strong>{money(sale.total)}</strong></td><td className="right"><Link className="row-detail-link" href={`/ventas/${sale.id}`}>Detalle <ArrowUpRight size={13} /></Link></td></tr>)}{!customer.sales.length && <tr><td colSpan={6}><div className="customers-empty"><span>Este cliente todavía no tiene ventas.</span></div></td></tr>}</tbody></table></div>
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Venta</th><th>Fecha</th><th>Productos</th><th>Pago</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>{customer.sales.map((sale) => <tr key={sale.id}><td><strong>{sale.saleNumber}</strong><small className="table-subline">{sale.document}</small></td><td>{dateTime(sale.createdAt)}</td><td>{sale.itemCount}</td><td>{sale.payments.map((method) => SALE_PAYMENT_LABELS[method] ?? method).join(" + ")}</td><td><strong>{money(sale.total)}</strong></td><td><span className={`status-badge sale-${sale.status.toLowerCase()}`}>{SALE_STATUS_LABELS[sale.status] ?? sale.status}</span></td><td className="right"><Link className="row-detail-link" href={`/ventas/${sale.id}`}>Detalle <ArrowUpRight size={13} /></Link></td></tr>)}{!customer.sales.length && <tr><td colSpan={7}><div className="customers-empty"><span>Este cliente todavía no tiene ventas.</span></div></td></tr>}</tbody></table></div>
       </section>
     </div>
   );
