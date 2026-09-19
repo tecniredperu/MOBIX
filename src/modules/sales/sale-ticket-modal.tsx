@@ -188,8 +188,8 @@ export function SaleTicketModal({
               ))}
             </div>
             <footer className="ticket-footer">
-              <strong>¡Gracias por tu compra!</strong>
-              {ticket.ticketFooter && <small className="ticket-custom-footer">{ticket.ticketFooter}</small>}
+              <strong>{ticket.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por tu compra!"}</strong>
+              {ticket.status !== "CANCELLED" && ticket.ticketFooter && <small className="ticket-custom-footer">{ticket.ticketFooter}</small>}
             </footer>
           </div>
         </div>
