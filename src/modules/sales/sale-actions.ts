@@ -52,6 +52,11 @@ type ExchangeCreditLockRow = {
   status: string;
 };
 
+type ExistingPaymentReferenceRow = {
+  id: string;
+  saleNumber: string;
+};
+
 type UnitSnapshot = {
   id: string;
   variantId: string;
@@ -62,6 +67,13 @@ type UnitSnapshot = {
 
 function cleanDocument(value?: string) {
   return value?.replace(/\D/g, "") ?? "";
+}
+
+function normalizePaymentReference(value?: string | null) {
+  return (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function validateCustomerDocument(documentType: string | undefined, documentNumber: string) {
@@ -261,6 +273,39 @@ export async function createSaleAction(input: CreateSaleInput) {
     const saleCashSessionId = cashRows[0]?.id ?? null;
     if (settings.requireCashSession && !saleCashSessionId) {
       throw new Error("Debes abrir caja en esta sucursal antes de registrar una venta.");
+    }
+
+    const uniqueReferencePayments = input.payments.filter((payment) =>
+      ["YAPE", "PLIN", "TRANSFER"].includes(payment.method)
+      && Boolean(payment.reference?.trim()),
+    );
+
+    for (const payment of uniqueReferencePayments) {
+      const normalizedReference = normalizePaymentReference(payment.reference);
+      if (!normalizedReference) continue;
+
+      const lockKey = company.id + ":" + payment.method + ":" + normalizedReference;
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const existingReference = await tx.$queryRaw<ExistingPaymentReferenceRow[]>`
+        SELECT sp."id", s."saleNumber"
+        FROM "sale_payments" sp
+        INNER JOIN "sales" s ON s."id" = sp."saleId"
+        WHERE s."companyId" = ${company.id}
+          AND sp."paymentMethod"::text = ${payment.method}
+          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        LIMIT 1
+      `;
+
+      if (existingReference[0]) {
+        throw new Error(
+          "La referencia " + payment.reference?.trim()
+          + " de " + payment.method
+          + " ya fue utilizada en la venta " + existingReference[0].saleNumber + ".",
+        );
+      }
     }
 
     let customerId: string | null = null;
