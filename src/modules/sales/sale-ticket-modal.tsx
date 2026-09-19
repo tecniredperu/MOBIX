@@ -44,6 +44,7 @@ function limaOnlyDate(value: string) {
 
 export type SaleTicketData = {
   saleNumber: string;
+  status: string;
   documentType: string;
   documentSeries: string | null;
   documentNumber: string | null;
@@ -143,6 +144,7 @@ export function SaleTicketModal({
             <div className="ticket-document-box">
               <strong>{DOCUMENT_LABELS[ticket.documentType] ?? ticket.documentType}</strong>
               <span>{documentNumber}</span>
+              {ticket.status === "CANCELLED" && <b className="ticket-cancelled-stamp">ANULADO</b>}
             </div>
             <div className="ticket-meta">
               <span>Venta: {ticket.saleNumber}</span>
