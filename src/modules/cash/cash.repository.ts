@@ -42,6 +42,7 @@ type ReceivableCollectionRow = {
   amount: unknown;
   paymentMethod: string;
   paidAt: Date;
+  reference: string | null;
   saleNumber: string;
   customerName: string;
 };
@@ -110,6 +111,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
         rp."amount",
         rp."paymentMethod"::text AS "paymentMethod",
         rp."paidAt",
+        rp."reference",
         s."saleNumber",
         COALESCE(c."businessName", NULLIF(TRIM(CONCAT(COALESCE(c."firstName", ''), ' ', COALESCE(c."lastName", ''))), ''), 'Cliente') AS "customerName"
       FROM "receivable_payments" rp
@@ -272,7 +274,11 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
       source: "COLLECTION",
       direction: "IN",
       label: `Cobranza ${collection.saleNumber}`,
-      detail: `${collection.customerName} · ${PAYMENT_LABELS[method] ?? "Cobro"}`,
+      detail: [
+        collection.customerName,
+        PAYMENT_LABELS[method] ?? "Cobro",
+        collection.reference ? "Ref. " + collection.reference : null,
+      ].filter(Boolean).join(" · "),
       amount: Number(collection.amount),
       paymentMethod: method,
       createdAt: collection.paidAt.toISOString(),
