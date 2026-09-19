@@ -404,8 +404,8 @@ export function SaleDetailView({
         </div>
 
         <footer className="receipt-a4-footer">
-          <strong>¡Gracias por su compra!</strong>
-          {ticketFooter && <span>{ticketFooter}</span>}
+          <strong>{sale.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por su compra!"}</strong>
+          {sale.status !== "CANCELLED" && ticketFooter && <span>{ticketFooter}</span>}
           <small>Venta {sale.saleNumber} · {companyName}</small>
         </footer>
       </section>
