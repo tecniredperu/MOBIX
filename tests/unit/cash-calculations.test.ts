@@ -4,6 +4,7 @@ import {
   calculateExpectedCash,
   calculateNetPaymentTotals,
   emptyCashPaymentTotals,
+  requiresCashDifferenceNote,
   sumPaymentTotals,
 } from "../../src/modules/cash/cash-calculations";
 
@@ -50,4 +51,13 @@ test("la conciliación conserva centavos correctamente", () => {
   });
 
   assert.equal(expected, 24.99);
+});
+
+
+test("cierre con sobrante o faltante exige una explicación", () => {
+  assert.equal(requiresCashDifferenceNote(0), false);
+  assert.equal(requiresCashDifferenceNote(0.01), false);
+  assert.equal(requiresCashDifferenceNote(-0.01), false);
+  assert.equal(requiresCashDifferenceNote(0.02), true);
+  assert.equal(requiresCashDifferenceNote(-5.5), true);
 });
