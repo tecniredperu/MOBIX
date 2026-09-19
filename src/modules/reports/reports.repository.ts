@@ -14,7 +14,12 @@ function endOfDay(value: string | undefined, fallback: Date) {
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 
 type ReceivableRow = { balance: unknown; dueDate: Date };
-type ReturnSummaryRow = { total: unknown; count: bigint; cost: unknown };
+type ReturnSummaryRow = {
+  merchandiseTotal: unknown;
+  cashRefundTotal: unknown;
+  count: bigint;
+  cost: unknown;
+};
 
 export async function getReports(filters: { from?: string; to?: string }) {
   const { company, membership, permissions } = await requirePermission("reports.view");
@@ -39,7 +44,11 @@ export async function getReports(filters: { from?: string; to?: string }) {
   }
 
   const sales = await safe("Ventas del periodo", [], () => prisma.sale.findMany({
-    where: { companyId: company.id, status: "COMPLETED", createdAt: { gte: from, lte: to } },
+    where: {
+      companyId: company.id,
+      status: { in: ["COMPLETED", "REFUNDED"] },
+      createdAt: { gte: from, lte: to },
+    },
     include: {
       items: { include: { product: { include: { brand: true, category: true } }, variant: true } },
       payments: true,
@@ -100,15 +109,49 @@ export async function getReports(filters: { from?: string; to?: string }) {
     }
   }
 
-  const [receivables, cashClosures, returnRows] = await Promise.all([
+  const [receivables, cashClosures, returnRows, cancelledCount] = await Promise.all([
     safe<ReceivableRow[]>("Cuentas por cobrar", [], () => prisma.$queryRaw<ReceivableRow[]>`SELECT "balance", "dueDate" FROM "accounts_receivable" WHERE "companyId" = ${company.id} AND "status" IN ('OPEN', 'PARTIAL')`),
     safe("Cierres de caja", [], () => prisma.cashSession.findMany({ where: { companyId: company.id, status: "CLOSED", closedAt: { gte: from, lte: to } }, select: { difference: true } })),
     safe<ReturnSummaryRow[]>("Devoluciones", [], () => prisma.$queryRaw<ReturnSummaryRow[]>`
       SELECT
-        COALESCE((SELECT SUM(ro."refundAmount") FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "total",
-        (SELECT COUNT(*) FROM "return_orders" ro WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}) AS "count",
-        COALESCE((SELECT SUM(ri."unitCost" * ri."quantity") FROM "return_items" ri INNER JOIN "return_orders" ro ON ro."id"=ri."returnOrderId" WHERE ro."companyId"=${company.id} AND ro."status"='COMPLETED' AND ro."createdAt" BETWEEN ${from} AND ${to}),0) AS "cost"
+        COALESCE((
+          SELECT SUM(ri."amount")
+          FROM "return_items" ri
+          INNER JOIN "return_orders" ro ON ro."id"=ri."returnOrderId"
+          WHERE ro."companyId"=${company.id}
+            AND ro."status"='COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ),0) AS "merchandiseTotal",
+        COALESCE((
+          SELECT SUM(ro."refundAmount")
+          FROM "return_orders" ro
+          WHERE ro."companyId"=${company.id}
+            AND ro."status"='COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ),0) AS "cashRefundTotal",
+        (
+          SELECT COUNT(*)
+          FROM "return_orders" ro
+          WHERE ro."companyId"=${company.id}
+            AND ro."status"='COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ) AS "count",
+        COALESCE((
+          SELECT SUM(ri."unitCost" * ri."quantity")
+          FROM "return_items" ri
+          INNER JOIN "return_orders" ro ON ro."id"=ri."returnOrderId"
+          WHERE ro."companyId"=${company.id}
+            AND ro."status"='COMPLETED'
+            AND ro."createdAt" BETWEEN ${from} AND ${to}
+        ),0) AS "cost"
     `),
+    safe("Ventas anuladas", 0, () => prisma.sale.count({
+      where: {
+        companyId: company.id,
+        status: "CANCELLED",
+        updatedAt: { gte: from, lte: to },
+      },
+    })),
   ]);
 
   let purchasesTotal: number | null = null;
@@ -131,7 +174,8 @@ export async function getReports(filters: { from?: string; to?: string }) {
   const receivableTotal = receivables.reduce((sum, item) => sum + Number(item.balance), 0);
   const overdueTotal = receivables.filter((item) => new Date(item.dueDate) < now).reduce((sum, item) => sum + Number(item.balance), 0);
   const cashDifference = cashClosures.reduce((sum, item) => sum + Number(item.difference ?? 0), 0);
-  const returnsTotal = Number(returnRows[0]?.total ?? 0);
+  const returnsTotal = Number(returnRows[0]?.merchandiseTotal ?? 0);
+  const cashRefundTotal = Number(returnRows[0]?.cashRefundTotal ?? 0);
   const returnedCost = canSeeCosts ? Number(returnRows[0]?.cost ?? 0) : null;
   const salesTotal = Math.max(0, grossSalesTotal - returnsTotal);
   const costTotal = canSeeCosts ? Math.max(0, grossCostTotal - Number(returnedCost ?? 0)) : null;
@@ -158,7 +202,9 @@ export async function getReports(filters: { from?: string; to?: string }) {
       discountTotal,
       cashDifference,
       returnsTotal,
+      cashRefundTotal,
       returnsCount: Number(returnRows[0]?.count ?? 0),
+      cancelledCount,
     },
     daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
     topProducts: [...products.values()].sort((a, b) => b.sales - a.sales).slice(0, 12),
