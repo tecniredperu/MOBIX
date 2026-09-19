@@ -324,6 +324,26 @@ export async function getSaleDetail(id: string) {
 
   if (!sale) return null;
 
+  const cancellationAudit = sale.status === "CANCELLED"
+    ? await prisma.auditLog.findFirst({
+        where: {
+          companyId: company.id,
+          entity: "SALE",
+          entityId: sale.id,
+          action: "CANCEL",
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { name: true } },
+        },
+      })
+    : null;
+  const cancellationValues = cancellationAudit?.newValues
+    && typeof cancellationAudit.newValues === "object"
+    && !Array.isArray(cancellationAudit.newValues)
+      ? cancellationAudit.newValues as Record<string, unknown>
+      : null;
+
   return {
     id: sale.id,
     saleNumber: sale.saleNumber,
@@ -337,6 +357,15 @@ export async function getSaleDetail(id: string) {
     total: Number(sale.total),
     status: sale.status,
     createdAt: sale.createdAt.toISOString(),
+    cancellation: cancellationAudit
+      ? {
+          reason: typeof cancellationValues?.reason === "string"
+            ? cancellationValues.reason
+            : "Anulación registrada",
+          userName: cancellationAudit.user?.name ?? "Usuario",
+          createdAt: cancellationAudit.createdAt.toISOString(),
+        }
+      : null,
     branch: sale.warehouse.branch.name,
     warehouse: sale.warehouse.name,
     seller: sale.seller.name,
