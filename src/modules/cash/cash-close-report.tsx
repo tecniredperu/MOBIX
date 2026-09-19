@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageCircle, Printer, X } from "lucide-react";
-import type { CashPaymentTotals } from "./cash-types";
+import type { CashCloseReportData, CashPaymentTotals } from "./cash-types";
 
 const PAYMENT_LABELS: Array<{ key: keyof CashPaymentTotals; label: string }> = [
   { key: "CASH", label: "Efectivo" },
@@ -30,27 +30,7 @@ function dateTime(value: string) {
   }).format(new Date(value));
 }
 
-export type CashCloseReportData = {
-  sessionId: string;
-  companyName: string;
-  branchName: string;
-  userName: string;
-  openedAt: string;
-  closedAt: string;
-  openingAmount: number;
-  salesCount: number;
-  salesTotal: number;
-  paymentTotals: CashPaymentTotals;
-  refundTotals: CashPaymentTotals;
-  netPaymentTotals: CashPaymentTotals;
-  refundTotal: number;
-  manualIncome: number;
-  manualOut: number;
-  expectedAmount: number;
-  actualAmount: number;
-  difference: number;
-  closingNotes?: string;
-};
+
 
 export function CashCloseReport({
   report,
