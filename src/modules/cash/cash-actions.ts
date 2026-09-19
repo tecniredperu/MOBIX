@@ -5,7 +5,8 @@ import { requirePermission } from "@/lib/business-context";
 import { isValidMoney, roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { calculateExpectedCash } from "./cash-calculations";
-import type { CashMovementKind } from "./cash-types";
+import { getCashSessionSummary } from "./cash.repository";
+import type { CashCloseReportData, CashMovementKind } from "./cash-types";
 
 const MOVEMENT_TYPES = new Set<CashMovementKind>([
   "INCOME",
@@ -288,4 +289,38 @@ export async function closeCashSessionAction(input: {
   revalidatePath("/caja");
   revalidatePath("/");
   return result;
+}
+
+
+export async function getCashCloseReportAction(
+  sessionId: string,
+): Promise<CashCloseReportData> {
+  const { company } = await requirePermission("cash.manage");
+  const summary = await getCashSessionSummary(sessionId);
+
+  if (!summary.closedAt || summary.expectedAmount == null || summary.closingAmount == null || summary.difference == null) {
+    throw new Error("La sesión seleccionada todavía no tiene un cierre completo.");
+  }
+
+  return {
+    sessionId: summary.id,
+    companyName: company.tradeName ?? company.businessName,
+    branchName: summary.branchName,
+    userName: summary.userName,
+    openedAt: summary.openedAt,
+    closedAt: summary.closedAt,
+    openingAmount: summary.openingAmount,
+    salesCount: summary.salesCount,
+    salesTotal: summary.salesTotal,
+    paymentTotals: summary.paymentTotals,
+    refundTotals: summary.refundTotals,
+    netPaymentTotals: summary.netPaymentTotals,
+    refundTotal: summary.refundTotal,
+    manualIncome: summary.manualIncome,
+    manualOut: summary.manualOut,
+    expectedAmount: summary.expectedAmount,
+    actualAmount: summary.closingAmount,
+    difference: summary.difference,
+    closingNotes: summary.closingNotes ?? undefined,
+  };
 }
