@@ -675,7 +675,7 @@ export function PosFormV4({
     }
 
     setPayments((current) => current.map((payment) => payment.id === id
-      ? { ...payment, method }
+      ? { ...payment, method, reference: "" }
       : payment));
   }
 
