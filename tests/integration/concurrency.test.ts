@@ -427,6 +427,62 @@ test("un vale de cambio no puede gastarse dos veces en cajas concurrentes", asyn
   assert.equal(Number(current.usages[0].amount), 80);
 });
 
+
+test("una referencia Yape no puede registrarse dos veces en ventas concurrentes", async () => {
+  const fixture = await createFixture();
+  const [saleA, saleB] = await Promise.all([
+    createSale(fixture, 40),
+    createSale(fixture, 40),
+  ]);
+  const normalizedReference = "987654321";
+  const lockKey = fixture.company.id + ":YAPE:" + normalizedReference;
+
+  async function registerPayment(saleId: string) {
+    return testDb.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const existing = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT sp."id"
+        FROM "sale_payments" sp
+        INNER JOIN "sales" s ON s."id" = sp."saleId"
+        WHERE s."companyId" = ${fixture.company.id}
+          AND sp."paymentMethod"::text = 'YAPE'
+          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        LIMIT 1
+      `;
+      if (existing[0]) throw new Error("Referencia duplicada.");
+
+      await tx.salePayment.create({
+        data: {
+          saleId,
+          paymentMethod: "YAPE",
+          amount: 40,
+          reference: "987 654 321",
+        },
+      });
+    });
+  }
+
+  const attempts = await Promise.allSettled([
+    registerPayment(saleA.id),
+    registerPayment(saleB.id),
+  ]);
+
+  assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+
+  const payments = await testDb.salePayment.findMany({
+    where: {
+      paymentMethod: "YAPE",
+      sale: { companyId: fixture.company.id },
+      reference: "987 654 321",
+    },
+  });
+  assert.equal(payments.length, 1);
+});
+
 test.after(async () => {
   await testDb.$disconnect();
 });
