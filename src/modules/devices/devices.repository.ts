@@ -207,9 +207,9 @@ export async function getDeviceDetail(id: string) {
   if (!unit) return null;
 
   const identifiers = new Map(unit.identifiers.map((identifier) => [identifier.type, identifier.value]));
-  const saleLinks = [...unit.saleLinks].sort(
-    (a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt,
-  );
+  const saleLinks = unit.saleLinks
+    .filter((link) => link.saleItem.sale.status !== "CANCELLED")
+    .sort((a, b) => +b.saleItem.sale.createdAt - +a.saleItem.sale.createdAt);
   const latestLink = saleLinks[0] ?? null;
   const sale = latestLink?.saleItem.sale ?? null;
 
