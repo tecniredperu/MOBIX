@@ -82,6 +82,10 @@ export function SaleDetailView({
   const documentNumber = sale.documentSeries && sale.documentNumber
     ? `${sale.documentSeries}-${sale.documentNumber}`
     : sale.saleNumber;
+  const canCancel = sale.status === "COMPLETED"
+    && !sale.returns?.length
+    && !sale.serviceOrders?.some((order: any) => order.status !== "CANCELLED");
+
   const ticket = {
     saleNumber: sale.saleNumber,
     documentType: sale.documentType,
@@ -130,7 +134,10 @@ export function SaleDetailView({
           <p>{limaDate(sale.createdAt)} · {sale.branch} / {sale.warehouse}</p>
         </div>
         <SaleDetailActions
+          saleId={sale.id}
           saleNumber={sale.saleNumber}
+          saleStatus={sale.status}
+          canCancel={canCancel}
           customerName={customerName}
           customerPhone={sale.customer?.phone}
           total={sale.total}
@@ -143,6 +150,16 @@ export function SaleDetailView({
       </section>
 
       {created && <div className="success-banner no-print"><BadgeCheck size={18} /><div><strong>Venta registrada correctamente</strong><span>El stock, IMEI, pagos, Kardex y auditoría fueron actualizados.</span></div></div>}
+
+      {sale.status === "CANCELLED" && (
+        <div className="sale-cancelled-banner no-print">
+          <RotateCcw size={18} />
+          <div>
+            <strong>Venta anulada</strong>
+            <span>El stock y los IMEI fueron revertidos. Esta operación ya no forma parte de la conciliación de ventas.</span>
+          </div>
+        </div>
+      )}
 
       {sale.returns?.length ? (
         <section className="panel sale-return-history-panel">
