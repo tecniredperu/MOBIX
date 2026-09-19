@@ -394,7 +394,7 @@ export function SaleDetailActions({
               <span>ANULACIÓN DE VENTA</span>
               <h2 id="sale-cancel-title">{saleNumber}</h2>
               <p>
-                La anulación revierte stock, IMEI, crédito y vale de cambio. Solo se permite mientras la caja original siga abierta.
+                La anulación revierte stock, IMEI, crédito y vale de cambio. Solo se permite mientras la caja original siga abierta. Si hubo pago en efectivo, devuelve ese dinero al cliente antes de confirmar.
               </p>
             </div>
 
