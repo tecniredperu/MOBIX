@@ -81,7 +81,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
 
   if (!session) throw new Error("La sesión de caja ya no existe.");
 
-  const [payments, saleAggregate, collections, directRefunds, exchangeRefunds] = await Promise.all([
+  const [payments, saleAggregate, collections, directRefunds, exchangeRefunds, cancelledSales] = await Promise.all([
     prisma.salePayment.findMany({
       where: {
         sale: {
@@ -162,6 +162,20 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
             sale: { select: { saleNumber: true } },
           },
         },
+      },
+    }),
+    prisma.sale.findMany({
+      where: {
+        companyId: company.id,
+        cashSessionId: session.id,
+        status: "CANCELLED",
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        saleNumber: true,
+        total: true,
+        updatedAt: true,
       },
     }),
   ]);
@@ -303,6 +317,16 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     };
   });
 
+  const cancellationActivity: CashActivityItem[] = cancelledSales.map((sale) => ({
+    id: `cancel-${sale.id}`,
+    source: "CANCEL",
+    direction: "NEUTRAL",
+    label: `Venta anulada ${sale.saleNumber}`,
+    detail: "Stock y cobro revertidos dentro del turno",
+    amount: Number(sale.total),
+    createdAt: sale.updatedAt.toISOString(),
+  }));
+
   const manualActivity: CashActivityItem[] = manualMovements.map((movement) => {
     const incoming = movement.type === "INCOME" || movement.type === "ADJUSTMENT_IN";
     return {
@@ -322,6 +346,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
     ...collectionActivity,
     ...directRefundActivity,
     ...exchangeRefundActivity,
+    ...cancellationActivity,
     ...manualActivity,
   ]
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
