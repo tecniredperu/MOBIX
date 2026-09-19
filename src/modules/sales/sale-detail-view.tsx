@@ -82,9 +82,11 @@ export function SaleDetailView({
   const documentNumber = sale.documentSeries && sale.documentNumber
     ? `${sale.documentSeries}-${sale.documentNumber}`
     : sale.saleNumber;
+  const cancellablePaymentMethods = new Set(["CASH", "CREDIT", "EXCHANGE_CREDIT"]);
   const canCancel = sale.status === "COMPLETED"
     && !sale.returns?.length
-    && !sale.serviceOrders?.some((order: any) => order.status !== "CANCELLED");
+    && !sale.serviceOrders?.some((order: any) => order.status !== "CANCELLED")
+    && sale.payments.every((payment: any) => cancellablePaymentMethods.has(payment.method));
 
   const ticket = {
     saleNumber: sale.saleNumber,
