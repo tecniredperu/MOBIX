@@ -62,6 +62,7 @@ function limaOnlyDate(value: string) {
 
 export function SaleDetailView({
   sale,
+  canCancelSale,
   created,
   change,
   exchangeCreditId,
@@ -70,6 +71,7 @@ export function SaleDetailView({
   ticketFooter,
 }: {
   sale: any;
+  canCancelSale: boolean;
   created: boolean;
   change: number;
   exchangeCreditId: string | null;
@@ -83,7 +85,8 @@ export function SaleDetailView({
     ? `${sale.documentSeries}-${sale.documentNumber}`
     : sale.saleNumber;
   const cancellablePaymentMethods = new Set(["CASH", "CREDIT", "EXCHANGE_CREDIT"]);
-  const canCancel = sale.status === "COMPLETED"
+  const canCancel = canCancelSale
+    && sale.status === "COMPLETED"
     && !sale.returns?.length
     && !sale.serviceOrders?.some((order: any) => order.status !== "CANCELLED")
     && sale.payments.every((payment: any) => cancellablePaymentMethods.has(payment.method));
