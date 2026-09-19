@@ -128,6 +128,7 @@ export function PosPaymentCard({
             className={mixed ? "active mixed" : "mixed"}
             type="button"
             onClick={onEnableMixed}
+            disabled={amountDue <= 0.01}
           >
             <WalletCards size={14} />
             <span>Pago mixto</span>
