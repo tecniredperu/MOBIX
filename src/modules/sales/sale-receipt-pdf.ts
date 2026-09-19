@@ -239,6 +239,18 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   drawWrapped(ctx, documentLabel, docX + docW / 2, docY + 78, docW - 30, 34);
   ctx.font = "700 25px Arial";
   ctx.fillText(documentNumber, docX + docW / 2, docY + 151);
+
+  if (ticket.status === "CANCELLED") {
+    ctx.save();
+    ctx.strokeStyle = "#b91c1c";
+    ctx.fillStyle = "#b91c1c";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(docX + 42, docY + 118, docW - 84, 48);
+    ctx.font = "800 27px Arial";
+    ctx.fillText("ANULADO", docX + docW / 2, docY + 127);
+    ctx.restore();
+  }
+
   ctx.textAlign = "left";
 
   let y = 286;
