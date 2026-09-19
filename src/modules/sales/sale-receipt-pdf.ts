@@ -378,10 +378,14 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   ctx.stroke();
   y += 28;
   ctx.textAlign = "center";
-  ctx.fillStyle = "#374151";
+  ctx.fillStyle = ticket.status === "CANCELLED" ? "#b91c1c" : "#374151";
   ctx.font = "700 20px Arial";
-  ctx.fillText("¡Gracias por su compra!", canvas.width / 2, y);
-  if (ticket.ticketFooter) {
+  ctx.fillText(
+    ticket.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por su compra!",
+    canvas.width / 2,
+    y,
+  );
+  if (ticket.status !== "CANCELLED" && ticket.ticketFooter) {
     ctx.font = "400 16px Arial";
     drawWrapped(ctx, ticket.ticketFooter, canvas.width / 2, y + 34, 920, 22);
   }
