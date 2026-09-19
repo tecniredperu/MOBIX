@@ -27,6 +27,18 @@ type ReceivableLockRow = {
 
 type CashSessionRow = { id: string };
 
+type ExistingCollectionReferenceRow = {
+  source: string;
+  label: string;
+};
+
+function normalizePaymentReference(value?: string | null) {
+  return (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 function cleanDocument(value?: string) {
   return value?.replace(/\D/g, "") ?? "";
 }
@@ -232,6 +244,11 @@ export async function registerReceivablePaymentAction(input: {
   if (!COLLECTION_METHODS.has(input.method)) throw new Error("Selecciona un medio de cobro válido.");
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("El abono debe ser mayor a cero.");
 
+  const reference = input.reference?.trim() || "";
+  if (["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.method) && !reference) {
+    throw new Error("Ingresa el número de operación o referencia del cobro.");
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const sessions = await tx.$queryRaw<CashSessionRow[]>`
       SELECT "id"
@@ -246,6 +263,46 @@ export async function registerReceivablePaymentAction(input: {
     const openSession = sessions[0];
     if (!openSession) {
       throw new Error("Abre Caja antes de registrar un cobro. Todo abono debe quedar asociado al turno activo.");
+    }
+
+    if (["YAPE", "PLIN", "TRANSFER"].includes(input.method)) {
+      const normalizedReference = normalizePaymentReference(reference);
+      const lockKey = company.id + ":" + input.method + ":" + normalizedReference;
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const duplicateRows = await tx.$queryRaw<ExistingCollectionReferenceRow[]>`
+        SELECT "source", "label"
+        FROM (
+          SELECT 'VENTA'::text AS "source", s."saleNumber"::text AS "label"
+          FROM "sale_payments" sp
+          INNER JOIN "sales" s ON s."id" = sp."saleId"
+          WHERE s."companyId" = ${company.id}
+            AND sp."paymentMethod"::text = ${input.method}
+            AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+
+          UNION ALL
+
+          SELECT 'ABONO'::text AS "source", s."saleNumber"::text AS "label"
+          FROM "receivable_payments" rp
+          INNER JOIN "accounts_receivable" ar ON ar."id" = rp."receivableId"
+          INNER JOIN "sales" s ON s."id" = ar."saleId"
+          WHERE rp."companyId" = ${company.id}
+            AND rp."paymentMethod"::text = ${input.method}
+            AND regexp_replace(upper(COALESCE(rp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        ) references_used
+        LIMIT 1
+      `;
+
+      const duplicate = duplicateRows[0];
+      if (duplicate) {
+        throw new Error(
+          "La referencia " + reference + " ya fue utilizada en "
+          + (duplicate.source === "VENTA" ? "la venta " : "un abono de la venta ")
+          + duplicate.label + ".",
+        );
+      }
     }
 
     const rows = await tx.$queryRaw<ReceivableLockRow[]>`
@@ -278,7 +335,7 @@ export async function registerReceivablePaymentAction(input: {
         cashSessionId: openSession.id,
         amount,
         paymentMethod: input.method,
-        reference: input.reference?.trim() || null,
+        reference: reference || null,
         notes: input.notes?.trim() || null,
         createdById: membership.userId,
       },
@@ -307,6 +364,7 @@ export async function registerReceivablePaymentAction(input: {
           customerId: receivable.customerId,
           amount,
           method: input.method,
+          reference: reference || null,
           previousBalance: balance,
           newBalance,
           cashSessionId: openSession.id,
