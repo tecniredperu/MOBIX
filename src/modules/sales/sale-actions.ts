@@ -743,6 +743,13 @@ export async function cancelSaleAction(input: {
             amount: true,
           },
         },
+        payments: {
+          select: {
+            paymentMethod: true,
+            amount: true,
+            reference: true,
+          },
+        },
         items: {
           include: {
             product: { select: { name: true, type: true } },
@@ -781,6 +788,15 @@ export async function cancelSaleAction(input: {
     } else if (settings.requireCashSession) {
       throw new Error(
         "Esta venta no tiene una sesión de caja abierta asociada. Registra una devolución para mantener la conciliación.",
+      );
+    }
+
+    const digitalPayments = sale.payments.filter((payment) =>
+      ["YAPE", "PLIN", "CARD", "TRANSFER", "OTHER"].includes(payment.paymentMethod),
+    );
+    if (digitalPayments.length) {
+      throw new Error(
+        "Esta venta tiene un cobro digital registrado. Para mantener la conciliación y la referencia del reembolso, procesa una Devolución en lugar de anular.",
       );
     }
 
@@ -958,6 +974,7 @@ export async function cancelSaleAction(input: {
             (sum, item) => sum + (item.product.type === "ACCESSORY" ? item.quantity : 0),
             0,
           ),
+          paymentMethods: sale.payments.map((payment) => payment.paymentMethod),
           restoredExchangeCredits: sale.exchangeCreditUsages.map((usage) => ({
             exchangeCreditId: usage.exchangeCreditId,
             amount: Number(usage.amount),
