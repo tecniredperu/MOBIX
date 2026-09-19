@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/business-context";
 import { isValidMoney, roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
-import { calculateExpectedCash } from "./cash-calculations";
+import { calculateExpectedCash, requiresCashDifferenceNote } from "./cash-calculations";
 import { getCashSessionSummary } from "./cash.repository";
 import type { CashCloseReportData, CashMovementKind } from "./cash-types";
 
@@ -239,6 +239,10 @@ export async function closeCashSessionAction(input: {
       manualOut,
     });
     const difference = roundMoney(actualAmount - expectedAmount);
+    const closingNotes = input.notes?.trim() || null;
+    if (requiresCashDifferenceNote(difference) && !closingNotes) {
+      throw new Error("Explica el motivo del sobrante o faltante antes de cerrar la caja.");
+    }
     const closedAt = new Date();
 
     const updated = await tx.cashSession.updateMany({
@@ -248,7 +252,7 @@ export async function closeCashSessionAction(input: {
         expectedAmount,
         closingAmount: actualAmount,
         difference,
-        closingNotes: input.notes?.trim() || null,
+        closingNotes,
         closedAt,
       },
     });
@@ -272,6 +276,7 @@ export async function closeCashSessionAction(input: {
           exchangeRefundCash,
           manualIn: roundMoney(manualIn),
           manualOut: roundMoney(manualOut),
+          closingNotes,
         },
       },
     });
