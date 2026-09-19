@@ -87,15 +87,24 @@ export function SaleDetailActions({
     ? ticket.documentSeries + "-" + ticket.documentNumber
     : saleNumber;
   const greetingName = customerName?.trim() || "cliente";
-  const plainMessage = [
-    "Hola " + greetingName + " 👋",
-    "",
-    "Muchas gracias por tu compra en " + companyName + ".",
-    "Tu comprobante N.° " + documentNumber + " corresponde a un total de S/ " + total.toFixed(2) + ".",
-    "",
-    "Adjuntamos tu comprobante en PDF para que puedas conservarlo.",
-    "¡Gracias por tu preferencia! Esperamos atenderte nuevamente.",
-  ].join("\n");
+  const plainMessage = ticket.status === "CANCELLED"
+    ? [
+        "Hola " + greetingName + " 👋",
+        "",
+        "Te enviamos la copia del comprobante ANULADO N.° " + documentNumber + " de " + companyName + ".",
+        "La operación por S/ " + total.toFixed(2) + " fue anulada en MOBIX.",
+        "",
+        "Adjuntamos el documento en PDF marcado como ANULADO para tu constancia.",
+      ].join("\n")
+    : [
+        "Hola " + greetingName + " 👋",
+        "",
+        "Muchas gracias por tu compra en " + companyName + ".",
+        "Tu comprobante N.° " + documentNumber + " corresponde a un total de S/ " + total.toFixed(2) + ".",
+        "",
+        "Adjuntamos tu comprobante en PDF para que puedas conservarlo.",
+        "¡Gracias por tu preferencia! Esperamos atenderte nuevamente.",
+      ].join("\n");
   const message = encodeURIComponent(plainMessage);
 
   useEffect(() => {
