@@ -71,3 +71,26 @@ export type CashSessionHistoryItem = {
   closingAmount: number;
   difference: number;
 };
+
+
+export type CashCloseReportData = {
+  sessionId: string;
+  companyName: string;
+  branchName: string;
+  userName: string;
+  openedAt: string;
+  closedAt: string;
+  openingAmount: number;
+  salesCount: number;
+  salesTotal: number;
+  paymentTotals: CashPaymentTotals;
+  refundTotals: CashPaymentTotals;
+  netPaymentTotals: CashPaymentTotals;
+  refundTotal: number;
+  manualIncome: number;
+  manualOut: number;
+  expectedAmount: number;
+  actualAmount: number;
+  difference: number;
+  closingNotes?: string;
+};
