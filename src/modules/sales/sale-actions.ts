@@ -695,7 +695,7 @@ export async function cancelSaleAction(input: {
   saleId: string;
   reason: string;
 }) {
-  const { company, membership, settings } = await requirePermission("sales.create");
+  const { company, membership, settings } = await requirePermission("sales.cancel");
   const saleId = input.saleId?.trim();
   const reason = input.reason?.trim();
 
