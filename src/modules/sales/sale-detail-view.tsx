@@ -88,6 +88,7 @@ export function SaleDetailView({
 
   const ticket = {
     saleNumber: sale.saleNumber,
+    status: sale.status,
     documentType: sale.documentType,
     documentSeries: sale.documentSeries,
     documentNumber: sale.documentNumber,
@@ -156,7 +157,11 @@ export function SaleDetailView({
           <RotateCcw size={18} />
           <div>
             <strong>Venta anulada</strong>
-            <span>El stock y los IMEI fueron revertidos. Esta operación ya no forma parte de la conciliación de ventas.</span>
+            <span>
+              {sale.cancellation
+                ? sale.cancellation.reason + " · " + sale.cancellation.userName + " · " + limaDate(sale.cancellation.createdAt)
+                : "El stock y los IMEI fueron revertidos. Esta operación ya no forma parte de la conciliación de ventas."}
+            </span>
           </div>
         </div>
       )}
@@ -336,6 +341,7 @@ export function SaleDetailView({
             <span>RUC {company.ruc || "—"}</span>
             <h1>{PRINT_DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</h1>
             <strong>{documentNumber}</strong>
+            {sale.status === "CANCELLED" && <b className="receipt-cancelled-stamp">ANULADO</b>}
           </div>
         </header>
 
