@@ -19,6 +19,7 @@ import {
   Smartphone,
   WalletCards,
 } from "lucide-react";
+import { requiresCashDifferenceNote } from "./cash-calculations";
 import {
   addCashMovementAction,
   closeCashSessionAction,
@@ -170,6 +171,10 @@ export function CashView({
 
   function closeCash() {
     if (!openSession) return;
+    if (closeDifference !== null && requiresCashDifferenceNote(closeDifference) && !closingNotes.trim()) {
+      setError("Explica el motivo del sobrante o faltante antes de cerrar la caja.");
+      return;
+    }
     const sessionSnapshot = openSession;
     const notesSnapshot = closingNotes;
 
@@ -360,8 +365,37 @@ export function CashView({
                       <span>Diferencia</span><strong>{closeDifference > 0 ? "+" : ""}{money(closeDifference)}</strong><small>{Math.abs(closeDifference) <= .01 ? "Caja cuadrada" : closeDifference > 0 ? "Sobrante" : "Faltante"}</small>
                     </div>
                   )}
-                  <label><span>Observación de cierre</span><textarea value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} placeholder="Opcional" /></label>
-                  <button className="cash-close-button" type="button" disabled={isPending || actualCash.trim() === ""} onClick={closeCash}>{isPending ? "Procesando..." : "Confirmar cierre de caja"}</button>
+                  <label>
+                    <span>
+                      Observación de cierre
+                      {closeDifference !== null && requiresCashDifferenceNote(closeDifference) ? " · obligatoria" : ""}
+                    </span>
+                    <textarea
+                      value={closingNotes}
+                      onChange={(event) => setClosingNotes(event.target.value)}
+                      placeholder={
+                        closeDifference !== null && requiresCashDifferenceNote(closeDifference)
+                          ? "Explica el motivo del sobrante o faltante..."
+                          : "Opcional"
+                      }
+                    />
+                  </label>
+                  <button
+                    className="cash-close-button"
+                    type="button"
+                    disabled={
+                      isPending
+                      || actualCash.trim() === ""
+                      || (
+                        closeDifference !== null
+                        && requiresCashDifferenceNote(closeDifference)
+                        && !closingNotes.trim()
+                      )
+                    }
+                    onClick={closeCash}
+                  >
+                    {isPending ? "Procesando..." : "Confirmar cierre de caja"}
+                  </button>
                 </div>
               </article>
             </aside>
