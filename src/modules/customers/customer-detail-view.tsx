@@ -132,6 +132,13 @@ export function CustomerDetailView({ customer }: { customer: {
       setError("Selecciona una cuenta por cobrar.");
       return;
     }
+    if (
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod)
+      && !paymentReference.trim()
+    ) {
+      setError("Ingresa el número de operación o referencia del cobro.");
+      return;
+    }
     run(
       () => registerReceivablePaymentAction({
         receivableId: selectedReceivable,
@@ -270,8 +277,8 @@ export function CustomerDetailView({ customer }: { customer: {
           {openReceivables.length ? <div className="customer-form-grid">
             <label className="span-two"><span>Cuenta por cobrar</span><select value={selectedReceivable} onChange={(event) => { const id = event.target.value; setSelectedReceivable(id); const item = openReceivables.find((row) => row.id === id); setPaymentAmount(item?.balance ?? 0); }}><option value="">Seleccionar...</option>{openReceivables.map((item) => <option value={item.id} key={item.id}>{item.saleNumber} · saldo {money(item.balance)}{item.overdue ? " · VENCIDO" : ""}</option>)}</select></label>
             <label><span>Importe</span><div className="money-input"><span>S/</span><input type="number" min="0.01" max={selectedDebt?.balance ?? undefined} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(Number(event.target.value))} /></div></label>
-            <label><span>Medio de cobro</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as CollectionMethod)}>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            <label><span>Referencia</span><input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder={paymentMethod === "CASH" ? "Opcional" : "N.º operación"} /></label>
+            <label><span>Medio de cobro</span><select value={paymentMethod} onChange={(event) => { setPaymentMethod(event.target.value as CollectionMethod); setPaymentReference(""); }}>{Object.entries(COLLECTION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <label><span>Referencia{["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod) ? " *" : ""}</span><input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder={["YAPE", "PLIN", "CARD", "TRANSFER"].includes(paymentMethod) ? "N.º operación obligatorio" : "Opcional"} /></label>
             <label><span>Nota</span><input value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Opcional" /></label>
             <div className="span-two"><button className="primary-button wide" type="button" onClick={registerPayment} disabled={isPending || !selectedReceivable}>{isPending ? "Registrando..." : `Registrar abono ${money(paymentAmount)}`}</button></div>
           </div> : <div className="collection-empty"><strong>Cliente sin saldo pendiente</strong><span>No hay cuentas por cobrar abiertas.</span></div>}
