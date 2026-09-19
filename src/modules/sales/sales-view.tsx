@@ -22,6 +22,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -54,7 +55,15 @@ export function SalesView({ sales, summary, pagination, filters }: {
     seller: string;
     createdAt: string;
   }>;
-  summary: { todayTotal: number; todayCount: number; averageTicket: number; listed: number };
+  summary: {
+    todayTotal: number;
+    todayGross: number;
+    todayReturns: number;
+    todayReturnCount: number;
+    todayCount: number;
+    averageTicket: number;
+    listed: number;
+  };
   pagination: { page: number; pageSize: number; total: number };
   filters: { q?: string; status?: string; documentType?: string };
 }) {
@@ -70,8 +79,8 @@ export function SalesView({ sales, summary, pagination, filters }: {
       </section>
 
       <section className="mobix-summary-grid four">
-        <article><span className="summary-symbol">S/</span><span>Ventas de hoy</span><strong>{money(summary.todayTotal)}</strong></article>
-        <article><ShoppingBag size={18} /><span>Operaciones hoy</span><strong>{summary.todayCount}</strong></article>
+        <article><span className="summary-symbol">S/</span><span>Ventas netas de hoy</span><strong>{money(summary.todayTotal)}</strong><small>Bruto {money(summary.todayGross)} · retornado {money(summary.todayReturns)}</small></article>
+        <article><ShoppingBag size={18} /><span>Operaciones hoy</span><strong>{summary.todayCount}</strong><small>{summary.todayReturnCount} devolución{summary.todayReturnCount === 1 ? "" : "es"} / cambio{summary.todayReturnCount === 1 ? "" : "s"}</small></article>
         <article><WalletCards size={18} /><span>Ticket promedio</span><strong>{money(summary.averageTicket)}</strong></article>
         <article><ReceiptText size={18} /><span>Resultados encontrados</span><strong>{summary.listed}</strong></article>
       </section>
