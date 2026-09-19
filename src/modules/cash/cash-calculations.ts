@@ -62,3 +62,8 @@ export function sumPaymentTotals(totals: CashPaymentTotals) {
     ),
   );
 }
+
+
+export function requiresCashDifferenceNote(difference: number) {
+  return Math.abs(roundMoney(Number(difference || 0))) > 0.01;
+}
