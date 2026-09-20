@@ -148,12 +148,21 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
 
   await clearLoginLimits(rateKeys);
 
+  let sessionVersion = user.sessionVersion;
   if (legacy) {
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(password) } });
+    const upgraded = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: hashPassword(password),
+        sessionVersion: { increment: 1 },
+      },
+      select: { sessionVersion: true },
+    });
+    sessionVersion = upgraded.sessionVersion;
   }
 
   const membership = user.memberships[0];
-  await createSession(user.id, membership.companyId);
+  await createSession(user.id, membership.companyId, sessionVersion);
   await prisma.auditLog.create({
     data: {
       companyId: membership.companyId,
@@ -199,13 +208,20 @@ export async function changePasswordAction(_previous: AuthState, formData: FormD
   if (currentPassword === newPassword) return { error: "La nueva contraseña debe ser diferente a la actual." };
 
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!user || user.status !== "ACTIVE") redirect("/login");
+  if (!user || user.status !== "ACTIVE" || user.sessionVersion !== session.sessionVersion) redirect("/login");
   const legacy = user.passwordHash === "LOGIN_NOT_ENABLED_YET";
   const validCurrent = legacy ? currentPassword === bootstrapPassword() : verifyPassword(currentPassword, user.passwordHash);
   if (!validCurrent) return { error: "La contraseña actual no es correcta." };
 
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(newPassword) } });
+  const updated = await prisma.$transaction(async (tx) => {
+    const nextUser = await tx.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: hashPassword(newPassword),
+        sessionVersion: { increment: 1 },
+      },
+      select: { sessionVersion: true },
+    });
     await tx.auditLog.create({
       data: {
         companyId: session.companyId,
@@ -213,10 +229,11 @@ export async function changePasswordAction(_previous: AuthState, formData: FormD
         action: "UPDATE",
         entity: "USER_PASSWORD",
         entityId: user.id,
-        newValues: { changed: true },
+        newValues: { changed: true, sessionsRevoked: true },
       },
     });
+    return nextUser;
   });
-  await createSession(session.userId, session.companyId);
-  return { success: "Contraseña actualizada correctamente." };
+  await createSession(session.userId, session.companyId, updated.sessionVersion);
+  return { success: "Contraseña actualizada correctamente. Las demás sesiones fueron cerradas." };
 }

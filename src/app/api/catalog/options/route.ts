@@ -1,6 +1,6 @@
+import { getAuthContext } from "@/lib/auth-context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { readSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -27,41 +27,21 @@ function json(body: unknown, status = 200) {
 }
 
 async function getAuthorizedMembership() {
-  const session = await readSession();
-  if (!session) return null;
-
-  const membership = await prisma.companyUser.findFirst({
-    where: {
-      companyId: session.companyId,
-      userId: session.userId,
-      status: "ACTIVE",
-      company: { status: "ACTIVE" },
-      user: { status: "ACTIVE" },
-      role: { status: "ACTIVE" },
-    },
-    select: {
-      companyId: true,
-      userId: true,
-      role: {
-        select: {
-          isSystem: true,
-          permissions: {
-            select: { permission: { select: { code: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  if (!membership) return null;
+  const auth = await getAuthContext({ redirectToLogin: false });
+  if (!auth) return null;
 
   const canManage =
-    membership.role.isSystem ||
-    membership.role.permissions.some((item) => item.permission.code === "inventory.manage");
+    auth.role.isSystem ||
+    auth.permissions.has("inventory.manage");
 
-  return { membership, canManage };
+  return {
+    membership: {
+      companyId: auth.company.id,
+      userId: auth.user.id,
+    },
+    canManage,
+  };
 }
-
 function validateKind(value: unknown): value is CatalogOptionKind {
   return value === "brand" || value === "category";
 }

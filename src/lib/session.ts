@@ -5,9 +5,10 @@ export const SESSION_COOKIE = "mobix_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 
 type SessionPayload = {
-  v: 1;
+  v: 2;
   userId: string;
   companyId: string;
+  sessionVersion: number;
   exp: number;
 };
 
@@ -37,7 +38,14 @@ function decode(token: string): SessionPayload | null {
   if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as SessionPayload;
-    if (payload.v !== 1 || !payload.userId || !payload.companyId || !Number.isFinite(payload.exp)) return null;
+    if (
+      payload.v !== 2 ||
+      !payload.userId ||
+      !payload.companyId ||
+      !Number.isInteger(payload.sessionVersion) ||
+      payload.sessionVersion < 1 ||
+      !Number.isFinite(payload.exp)
+    ) return null;
     if (payload.exp <= Date.now()) return null;
     return payload;
   } catch {
@@ -45,11 +53,12 @@ function decode(token: string): SessionPayload | null {
   }
 }
 
-export async function createSession(userId: string, companyId: string) {
+export async function createSession(userId: string, companyId: string, sessionVersion: number) {
   const payload: SessionPayload = {
-    v: 1,
+    v: 2,
     userId,
     companyId,
+    sessionVersion,
     exp: Date.now() + SESSION_TTL_SECONDS * 1000,
   };
   const store = await cookies();

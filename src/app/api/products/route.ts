@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { getAuthContext } from "@/lib/auth-context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { readSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -67,43 +67,18 @@ function getProductRules(type: "PHONE" | "SERIALIZED" | "ACCESSORY" | "SERVICE")
 }
 
 export async function POST(request: Request) {
-  const session = await readSession();
-  if (!session) return json({ error: "Tu sesión ha expirado. Vuelve a iniciar sesión." }, 401);
+  const auth = await getAuthContext({ redirectToLogin: false });
+  if (!auth) return json({ error: "Tu sesión ha expirado o fue revocada. Vuelve a iniciar sesión." }, 401);
 
-  const membership = await prisma.companyUser.findFirst({
-    where: {
-      companyId: session.companyId,
-      userId: session.userId,
-      status: "ACTIVE",
-      company: { status: "ACTIVE" },
-      user: { status: "ACTIVE" },
-      role: { status: "ACTIVE" },
-    },
-    select: {
-      companyId: true,
-      userId: true,
-      role: {
-        select: {
-          isSystem: true,
-          permissions: {
-            select: { permission: { select: { code: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  if (!membership) {
-    return json({ error: "Tu sesión ya no tiene acceso a esta empresa." }, 401);
-  }
-
-  const canManage =
-    membership.role.isSystem ||
-    membership.role.permissions.some((item) => item.permission.code === "inventory.manage");
-
+  const canManage = auth.role.isSystem || auth.permissions.has("inventory.manage");
   if (!canManage) {
     return json({ error: "No tienes permisos para administrar productos." }, 403);
   }
+
+  const membership = {
+    companyId: auth.company.id,
+    userId: auth.user.id,
+  };
 
   let input: unknown;
   try {

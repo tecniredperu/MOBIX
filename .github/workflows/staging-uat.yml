@@ -4,12 +4,28 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 11 * * *"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - ".github/workflows/staging-uat.yml"
   push:
     branches: [main]
     paths:
-      - ".github/workflows/staging-uat.yml"
-      - "scripts/uat-staging.ts"
+      - "src/**"
+      - "prisma/**"
+      - "scripts/**"
       - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - ".github/workflows/staging-uat.yml"
 
 jobs:
   staging-uat:
