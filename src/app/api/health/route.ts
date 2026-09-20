@@ -1,3 +1,4 @@
+import { BUILD_COMMIT } from "@/lib/build-info";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
@@ -93,7 +94,7 @@ export async function GET() {
         databaseLatencyMs,
         uptimeSeconds: Math.round(process.uptime()),
         environment: process.env.NODE_ENV ?? "unknown",
-        commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? null,
+        commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? BUILD_COMMIT,
         timestamp: new Date().toISOString(),
       },
       { headers: noStoreHeaders },
