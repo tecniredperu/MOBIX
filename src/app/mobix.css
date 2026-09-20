@@ -32,3 +32,6 @@
 @import "./mobix-login-premium.css";
 @import "./mobix-responsive.css";
 @import "./mobix-login-no-scroll.css";
+
+/* POS final: debe permanecer como último override visual. */
+@import "./mobix-pos-final.css";

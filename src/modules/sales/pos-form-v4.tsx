@@ -849,32 +849,29 @@ export function PosFormV4({
         />
 
         <aside className="pos-checkout">
-          <div className="pos-checkout-scroll">
-            <PosCartCard
-              cart={cart}
-              onQuantityChange={updateQuantity}
-              onPriceChange={updatePrice}
-              onRemove={removeLine}
-              onClear={clearSale}
-            />
+          <PosCartCard
+            cart={cart}
+            onQuantityChange={updateQuantity}
+            onPriceChange={updatePrice}
+            onRemove={removeLine}
+            onClear={clearSale}
+          />
 
-            <PosCustomerCard
-              customers={customerMatches}
-              customerId={customerId}
-              customerQuery={customerQuery}
-              isSearchingCustomers={isSearchingCustomers}
-              selectedCustomer={selectedCustomer}
-              documentType={documentType}
-              taxCondition={taxCondition}
-              customerLocked={Boolean(initialExchangeCredit?.customer)}
-              onCustomerQueryChange={setCustomerQuery}
-              onExistingCustomerChange={selectExistingCustomer}
-              onAddCustomer={() => setCustomerModalOpen(true)}
-              onDocumentTypeChange={setDocumentType}
-              onTaxConditionChange={setTaxCondition}
-            />
-
-          </div>
+          <PosCustomerCard
+            customers={customerMatches}
+            customerId={customerId}
+            customerQuery={customerQuery}
+            isSearchingCustomers={isSearchingCustomers}
+            selectedCustomer={selectedCustomer}
+            documentType={documentType}
+            taxCondition={taxCondition}
+            customerLocked={Boolean(initialExchangeCredit?.customer)}
+            onCustomerQueryChange={setCustomerQuery}
+            onExistingCustomerChange={selectExistingCustomer}
+            onAddCustomer={() => setCustomerModalOpen(true)}
+            onDocumentTypeChange={setDocumentType}
+            onTaxConditionChange={setTaxCondition}
+          />
 
           <PosPaymentCard
             payments={payments}
