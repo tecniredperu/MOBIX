@@ -56,6 +56,7 @@ export function PurchaseForm({ catalog, warehouses, suppliers, taxRate }: { cata
     ? lines.reduce((sum, line) => sum + Math.round((line.quantity * line.unitCost * (normalizedTaxRate / 100) + Number.EPSILON) * 100) / 100, 0)
     : 0;
   const total = subtotal + tax;
+  const taxLabels = { ...PURCHASE_TAX_LABELS, TAXED: `Gravado (IGV ${normalizedTaxRate}%)` };
 
   function selectSupplier(id: string) {
     setSelectedSupplierId(id);
@@ -166,7 +167,7 @@ export function PurchaseForm({ catalog, warehouses, suppliers, taxRate }: { cata
               <label><span>Serie</span><input value={documentSeries} onChange={(e) => setDocumentSeries(e.target.value.toUpperCase())} placeholder="F001" /></label>
               <label><span>Número</span><input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} placeholder="00001234" /></label>
               <label><span>Fecha emisión</span><input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} /></label>
-              <label className="span-two"><span>Condición tributaria</span><select value={taxCondition} onChange={(e) => setTaxCondition(e.target.value as PurchaseTaxCondition)}>{Object.entries(PURCHASE_TAX_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label className="span-two"><span>Condición tributaria</span><select value={taxCondition} onChange={(e) => setTaxCondition(e.target.value as PurchaseTaxCondition)}>{Object.entries(taxLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <label className="span-two"><span>Observaciones</span><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></label>
             </div>
           </section>
@@ -211,7 +212,7 @@ export function PurchaseForm({ catalog, warehouses, suppliers, taxRate }: { cata
           <div className="summary-row"><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
           <div className="summary-row"><span>{taxCondition === "TAXED" ? `IGV ${normalizedTaxRate}%` : "IGV"}</span><strong>{money(tax)}</strong></div>
           <div className="summary-row total"><span>Total</span><strong>{money(total)}</strong></div>
-          <div className="tax-note">{taxCondition === "TAXED" ? `Gravado (IGV ${normalizedTaxRate}%)` : PURCHASE_TAX_LABELS[taxCondition]} · Moneda PEN (S/)</div>
+          <div className="tax-note">{taxLabels[taxCondition]} · Moneda PEN (S/)</div>
           <button className="primary-button wide" type="button" onClick={submit} disabled={pending || !lines.length}>{pending ? "Registrando..." : <><Save size={18} /> Confirmar compra</>}</button>
           <p className="form-footnote">Al confirmar se crean los equipos/IMEI, el saldo de accesorios y los movimientos de Kardex en una sola transacción.</p>
         </aside>
