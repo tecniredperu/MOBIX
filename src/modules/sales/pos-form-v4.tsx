@@ -874,29 +874,30 @@ export function PosFormV4({
               onTaxConditionChange={setTaxCondition}
             />
 
-            <PosPaymentCard
-              payments={payments}
-              total={totals.total}
-              change={coverage.change}
-              pendingAmount={coverage.pendingAmount}
-              selectedCustomer={selectedCustomer}
-              creditAmount={coverage.creditAmount}
-              creditReady={coverage.creditReady}
-              exchangeCredit={initialExchangeCredit}
-              exchangeApplied={exchangeApplied}
-              exchangeRemaining={exchangeRemaining}
-              amountDue={amountDue}
-              onSetSingleMethod={setSinglePaymentMethod}
-              onEnableMixed={enableMixedPayment}
-              onAdd={addPayment}
-              onMethodChange={updatePaymentMethod}
-              onAmountChange={setPaymentAmount}
-              onReferenceChange={updatePaymentReference}
-              onCompleteBalance={completePaymentBalance}
-              onRemove={(id) =>
-                setPayments((current) => current.filter((item) => item.id !== id))}
-            />
           </div>
+
+          <PosPaymentCard
+            payments={payments}
+            total={totals.total}
+            change={coverage.change}
+            pendingAmount={coverage.pendingAmount}
+            selectedCustomer={selectedCustomer}
+            creditAmount={coverage.creditAmount}
+            creditReady={coverage.creditReady}
+            exchangeCredit={initialExchangeCredit}
+            exchangeApplied={exchangeApplied}
+            exchangeRemaining={exchangeRemaining}
+            amountDue={amountDue}
+            onSetSingleMethod={setSinglePaymentMethod}
+            onEnableMixed={enableMixedPayment}
+            onAdd={addPayment}
+            onMethodChange={updatePaymentMethod}
+            onAmountChange={setPaymentAmount}
+            onReferenceChange={updatePaymentReference}
+            onCompleteBalance={completePaymentBalance}
+            onRemove={(id) =>
+              setPayments((current) => current.filter((item) => item.id !== id))}
+          />
 
           <PosTotalCard
             taxCondition={taxCondition}
