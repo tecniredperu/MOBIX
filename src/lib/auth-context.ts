@@ -34,6 +34,7 @@ const loadAuthContext = cache(async () => {
   });
 
   if (!membership) return null;
+  if (membership.user.sessionVersion !== session.sessionVersion) return null;
 
   return {
     session,
