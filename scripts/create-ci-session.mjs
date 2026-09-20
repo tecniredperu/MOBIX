@@ -8,7 +8,7 @@ if (!connectionString || !secret) throw new Error("DATABASE_URL y AUTH_SECRET so
 const client = new pg.Client({ connectionString });
 await client.connect();
 const { rows } = await client.query(`
-  SELECT cu."userId", cu."companyId"
+  SELECT cu."userId", cu."companyId", u."sessionVersion"
   FROM "company_users" cu
   JOIN "users" u ON u."id" = cu."userId"
   JOIN "companies" c ON c."id" = cu."companyId"
@@ -20,9 +20,10 @@ await client.end();
 if (!rows[0]) throw new Error("No existe un usuario activo para el smoke test.");
 
 const payload = {
-  v: 1,
+  v: 2,
   userId: rows[0].userId,
   companyId: rows[0].companyId,
+  sessionVersion: Number(rows[0].sessionVersion),
   exp: Date.now() + 60 * 60 * 1000,
 };
 const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
