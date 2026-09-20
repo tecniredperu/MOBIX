@@ -113,7 +113,7 @@ export async function GET() {
         to_regclass('public.inventory_balances') IS NOT NULL AS "inventoryBalancesTable",
         to_regclass('public.inventory_movements') IS NOT NULL AS "inventoryMovementsTable",
         to_regclass('public.cash_sessions') IS NOT NULL AS "cashSessionsTable",
-        to_regclass('public.account_receivables') IS NOT NULL AS "receivablesTable",
+        to_regclass('public.accounts_receivable') IS NOT NULL AS "receivablesTable",
         to_regclass('public.return_orders') IS NOT NULL AS "returnOrdersTable",
         to_regclass('public.exchange_credits') IS NOT NULL AS "exchangeCreditsTable",
         to_regclass('public.service_orders') IS NOT NULL AS "serviceOrdersTable",
