@@ -1,0 +1,444 @@
+/* MOBIX POS FINAL LAYOUT
+ * Cargado al final de la cascada para evitar conflictos con estilos históricos.
+ * Regla principal: en escritorio no existe scroll general en el checkout.
+ * Solo la lista de artículos del carrito puede desplazarse.
+ */
+
+@media (min-width: 900px) {
+  .page-content:has(.pos-v5) {
+    padding-top: 18px;
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-bottom: 18px;
+  }
+
+  .pos-v5 .pos-heading {
+    margin-bottom: 8px;
+  }
+
+  .pos-v5 .pos-layout {
+    align-items: start;
+    gap: 10px;
+  }
+
+  .pos-v5 .pos-checkout {
+    height: calc(100dvh - 150px) !important;
+    max-height: calc(100dvh - 150px) !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-rows: minmax(84px, 1fr) auto auto auto !important;
+    gap: 6px !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* 1. VENTA ACTUAL: único bloque flexible y desplazable. */
+  .pos-v5 .pos-v5-cart-card {
+    min-height: 0 !important;
+    height: 100%;
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden !important;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-card-title {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 4px 8px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-card-title strong {
+    font-size: 10.5px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-clear-cart {
+    min-height: 27px;
+    padding-inline: 7px;
+    font-size: 8.5px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: thin;
+    scrollbar-color: #dbe3ed transparent;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #dbe3ed;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-empty-cart {
+    min-height: 0 !important;
+    height: 100%;
+    padding: 10px 8px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-line {
+    padding: 7px 8px;
+  }
+
+  /* 2. CLIENTE: siempre visible. Los resultados flotan y no cambian alturas. */
+  .pos-v5 .pos-v5-customer-card {
+    position: relative;
+    flex: 0 0 auto;
+    overflow: visible !important;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-section-title {
+    min-height: 34px;
+    padding: 4px 8px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-section-title strong {
+    font-size: 10.5px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body {
+    position: relative;
+    padding: 5px 7px 6px;
+  }
+
+  .pos-v5 .pos-selected-customer {
+    min-height: 40px;
+    grid-template-columns: 30px minmax(0, 1fr) 28px;
+    gap: 6px;
+    padding: 4px 6px;
+  }
+
+  .pos-v5 .pos-selected-customer-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .pos-v5 .pos-selected-customer-copy strong {
+    font-size: 9.8px;
+  }
+
+  .pos-v5 .pos-selected-customer-copy span {
+    font-size: 8px;
+  }
+
+  .pos-v5 .pos-customer-search {
+    min-height: 34px;
+    height: 34px;
+  }
+
+  .pos-v5 .pos-customer-search input {
+    height: 32px;
+    font-size: 9px;
+  }
+
+  .pos-v5 .pos-customer-results {
+    position: absolute;
+    z-index: 50;
+    left: 7px;
+    right: 7px;
+    top: 43px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 0;
+  }
+
+  .pos-v5 .pos-v5-document-row {
+    margin-top: 5px;
+    gap: 5px;
+  }
+
+  .pos-v5 .pos-document-buttons {
+    gap: 4px;
+  }
+
+  .pos-v5 .pos-document-buttons button {
+    min-height: 27px;
+    padding-inline: 4px;
+  }
+
+  .pos-v5 .pos-document-buttons button span {
+    font-size: 8px;
+  }
+
+  .pos-v5 .pos-tax-row {
+    margin-top: 4px;
+  }
+
+  .pos-v5 .pos-tax-row select {
+    height: 27px;
+    min-width: 104px;
+  }
+
+  .pos-v5 .pos-v5-consumer-final,
+  .pos-v5 .pos-v5-new-customer {
+    min-height: 27px;
+    padding-inline: 7px;
+    font-size: 8px;
+  }
+
+  /* 3. PAGO: fijo. En pago mixto solo su contenido interno puede crecer. */
+  .pos-v5 .pos-v5-payment-card {
+    position: relative !important;
+    inset: auto !important;
+    flex: 0 0 auto;
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 8;
+    border-color: #dbe5f2;
+    scrollbar-width: thin;
+    scrollbar-color: #dbe3ed transparent;
+  }
+
+  .pos-v5 .pos-v5-payment-card::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .pos-v5 .pos-v5-payment-card::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #dbe3ed;
+  }
+
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    min-height: 32px;
+    padding: 3px 7px;
+  }
+
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title strong {
+    font-size: 10px;
+  }
+
+  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body {
+    padding: 5px 7px 6px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons button {
+    min-height: 27px;
+    padding: 0 3px;
+    gap: 3px;
+    font-size: 7.7px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons button svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .pos-v5 .pos-single-payment {
+    margin-top: 5px;
+    grid-template-columns: minmax(0, 1fr) minmax(105px, .7fr);
+    gap: 5px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > span,
+  .pos-v5 .pos-single-reference > span {
+    margin-bottom: 2px;
+    font-size: 8px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > div,
+  .pos-v5 .pos-single-change {
+    min-height: 33px;
+    height: 33px;
+  }
+
+  .pos-v5 .pos-single-payment-amount input,
+  .pos-v5 .pos-single-reference input {
+    height: 31px;
+    font-size: 10.5px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > div {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.06);
+  }
+
+  .pos-v5 .pos-single-payment-amount > span {
+    color: #1d4ed8;
+    font-weight: 800;
+  }
+
+  /* 4. RESUMEN Y COBRAR: siempre visible, sin sticky ni scroll heredado. */
+  .pos-v5 .pos-v5-total-card {
+    position: relative !important;
+    inset: auto !important;
+    flex: 0 0 auto;
+    z-index: 9;
+    padding: 5px 7px 6px;
+    box-shadow: 0 -4px 14px rgba(15,23,42,.06);
+  }
+
+  .pos-v5 .pos-v5-discount-row {
+    min-height: 28px;
+    padding-bottom: 4px;
+  }
+
+  .pos-v5 .pos-v5-discount-row > div {
+    height: 28px;
+  }
+
+  .pos-v5 .pos-v5-discount-row input {
+    height: 26px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines {
+    padding: 3px 1px 2px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines > div {
+    padding: 1px 0;
+    font-size: 8.2px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines strong {
+    font-size: 8.7px;
+  }
+
+  .pos-v5 .pos-v5-grand-total {
+    min-height: 39px;
+    padding: 4px 7px;
+  }
+
+  .pos-v5 .pos-v5-grand-total span {
+    font-size: 13px;
+  }
+
+  .pos-v5 .pos-v5-grand-total strong {
+    font-size: 20px;
+  }
+
+  .pos-v5 .pos-v5-payment-status {
+    margin-top: 4px;
+    padding: 4px 6px;
+  }
+
+  .pos-v5 .pos-v5-payment-status span {
+    font-size: 8px;
+  }
+
+  .pos-v5 .pos-v5-payment-status small {
+    margin-top: 1px;
+    font-size: 7px;
+  }
+
+  .pos-v5 .pos-v5-total-card .pos-v5-confirm {
+    min-height: 42px;
+    height: 42px;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+}
+
+/* Laptop 1366x768 y alturas similares: compactación adicional. */
+@media (min-width: 900px) and (max-height: 820px) {
+  .pos-v5 .pos-checkout {
+    height: calc(100dvh - 148px) !important;
+    max-height: calc(100dvh - 148px) !important;
+    grid-template-rows: minmax(72px, 1fr) auto auto auto !important;
+    gap: 5px !important;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-card-title {
+    min-height: 31px;
+    padding-block: 3px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-section-title {
+    min-height: 31px;
+    padding-block: 3px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .pos-v5 .pos-selected-customer {
+    min-height: 36px;
+    padding-block: 3px;
+  }
+
+  .pos-v5 .pos-customer-search {
+    min-height: 31px;
+    height: 31px;
+  }
+
+  .pos-v5 .pos-customer-search input {
+    height: 29px;
+  }
+
+  .pos-v5 .pos-document-buttons button {
+    min-height: 25px;
+  }
+
+  .pos-v5 .pos-tax-row select {
+    height: 25px;
+  }
+
+  .pos-v5 .pos-v5-payment-card {
+    max-height: 190px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons button {
+    min-height: 25px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > div,
+  .pos-v5 .pos-single-change {
+    min-height: 31px;
+    height: 31px;
+  }
+
+  .pos-v5 .pos-single-payment-amount input,
+  .pos-v5 .pos-single-reference input {
+    height: 29px;
+  }
+
+  .pos-v5 .pos-v5-grand-total {
+    min-height: 36px;
+  }
+
+  .pos-v5 .pos-v5-total-card .pos-v5-confirm {
+    min-height: 39px;
+    height: 39px;
+  }
+}
+
+/* En tablet/móvil vuelve al flujo vertical natural. */
+@media (max-width: 899px) {
+  .pos-v5 .pos-checkout {
+    height: auto !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column;
+    overflow: visible !important;
+  }
+
+  .pos-v5 .pos-v5-cart-card,
+  .pos-v5 .pos-v5-payment-card,
+  .pos-v5 .pos-v5-total-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines {
+    max-height: 260px !important;
+    overflow-y: auto !important;
+  }
+}
