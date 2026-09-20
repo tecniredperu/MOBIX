@@ -155,17 +155,18 @@ export function PosCatalogPanel({
 
           return (
             <article className="pos-product pos-v5-product-card" key={item.variantId}>
+              <button
+                className={favorite ? "pos-favorite active" : "pos-favorite"}
+                type="button"
+                onClick={() => onToggleFavorite(item.variantId)}
+                aria-label={favorite ? `Quitar ${item.name} de favoritos` : `Agregar ${item.name} a favoritos`}
+                title={favorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+              >
+                <Star size={17} fill={favorite ? "currentColor" : "none"} />
+              </button>
+
               <div className="pos-product-visual">
                 {serialized ? <Smartphone size={38} /> : item.type === "SERVICE" ? <CreditCard size={36} /> : <Package size={36} />}
-                <button
-                  className={favorite ? "pos-favorite active" : "pos-favorite"}
-                  type="button"
-                  onClick={() => onToggleFavorite(item.variantId)}
-                  aria-label={favorite ? `Quitar ${item.name} de favoritos` : `Agregar ${item.name} a favoritos`}
-                  title={favorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-                >
-                  <Star size={17} fill={favorite ? "currentColor" : "none"} />
-                </button>
               </div>
 
               <div className="pos-product-copy">
