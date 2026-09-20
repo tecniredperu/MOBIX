@@ -1519,3 +1519,152 @@
     font-size: 8.4px;
   }
 }
+
+
+/* POS payment visibility hotfix ------------------------------------------ */
+@media (min-width: 1241px) {
+  .pos-v5 .pos-checkout {
+    height: calc(100dvh - 142px);
+    max-height: calc(100dvh - 142px);
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  .pos-v5 .pos-checkout-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 3px;
+  }
+
+  .pos-v5 .pos-v5-payment-card,
+  .pos-v5 .pos-v5-total-card {
+    flex: 0 0 auto;
+    position: relative;
+    inset: auto;
+    z-index: 7;
+  }
+
+  .pos-v5 .pos-v5-payment-card {
+    border-color: #dbe5f2;
+    box-shadow: 0 -4px 14px rgba(15, 23, 42, .05);
+  }
+
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title {
+    min-height: 36px;
+    padding: 4px 9px;
+  }
+
+  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body {
+    padding: 6px 8px 7px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons button {
+    min-height: 30px;
+    padding-inline: 4px;
+    font-size: 8.2px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons button svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .pos-v5 .pos-single-payment {
+    margin-top: 6px;
+    gap: 5px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > span,
+  .pos-v5 .pos-single-reference > span {
+    margin-bottom: 3px;
+    font-size: 8.4px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > div,
+  .pos-v5 .pos-single-change {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .pos-v5 .pos-single-payment-amount input,
+  .pos-v5 .pos-single-reference input {
+    height: 34px;
+    font-size: 11px;
+  }
+
+  .pos-v5 .pos-single-payment-amount > div {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, .05);
+  }
+
+  .pos-v5 .pos-single-payment-amount > span {
+    color: #1d4ed8;
+    font-weight: 800;
+  }
+
+  .pos-v5 .pos-v5-total-card {
+    box-shadow: 0 -5px 16px rgba(15, 23, 42, .07);
+  }
+}
+
+@media (min-width: 1241px) and (max-height: 760px) {
+  .pos-v5 .pos-checkout {
+    height: calc(100dvh - 132px);
+    max-height: calc(100dvh - 132px);
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines {
+    min-height: 90px;
+    max-height: 150px;
+  }
+
+  .pos-v5 .pos-v5-cart-card .pos-empty-cart {
+    min-height: 88px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body {
+    padding: 5px 8px 6px;
+  }
+
+  .pos-v5 .pos-v5-total-card {
+    padding: 6px 8px 7px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines {
+    padding-block: 4px 3px;
+  }
+
+  .pos-v5 .pos-v5-grand-total {
+    min-height: 42px;
+    padding-block: 5px;
+  }
+
+  .pos-v5 .pos-v5-payment-status {
+    margin-top: 5px;
+    padding: 5px 7px;
+  }
+
+  .pos-v5 .pos-v5-total-card .pos-v5-confirm {
+    min-height: 44px;
+    height: 44px;
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 1240px) {
+  .pos-checkout-scroll {
+    display: contents;
+  }
+
+  .pos-v5 .pos-v5-payment-card {
+    display: block !important;
+  }
+}
