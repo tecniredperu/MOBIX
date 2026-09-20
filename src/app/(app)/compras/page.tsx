@@ -9,7 +9,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 const single = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("purchases.view");
+  const context = await requirePermission("purchases.view");
   const params = await searchParams;
   const filters = { q: single(params.q), status: single(params.status) };
   const { items, summary } = await getPurchases(filters);
@@ -22,6 +22,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         filters={filters}
         created={single(params.created) === "1"}
         createdNumber={single(params.number)}
+        canCreate={context.membership.role.isSystem || context.permissions.has("purchases.create")}
       />
     </AppShell>
   );
