@@ -849,52 +849,54 @@ export function PosFormV4({
         />
 
         <aside className="pos-checkout">
-          <PosCartCard
-            cart={cart}
-            onQuantityChange={updateQuantity}
-            onPriceChange={updatePrice}
-            onRemove={removeLine}
-            onClear={clearSale}
-          />
+          <div className="pos-checkout-scroll">
+            <PosCartCard
+              cart={cart}
+              onQuantityChange={updateQuantity}
+              onPriceChange={updatePrice}
+              onRemove={removeLine}
+              onClear={clearSale}
+            />
 
-          <PosCustomerCard
-            customers={customerMatches}
-            customerId={customerId}
-            customerQuery={customerQuery}
-            isSearchingCustomers={isSearchingCustomers}
-            selectedCustomer={selectedCustomer}
-            documentType={documentType}
-            taxCondition={taxCondition}
-            customerLocked={Boolean(initialExchangeCredit?.customer)}
-            onCustomerQueryChange={setCustomerQuery}
-            onExistingCustomerChange={selectExistingCustomer}
-            onAddCustomer={() => setCustomerModalOpen(true)}
-            onDocumentTypeChange={setDocumentType}
-            onTaxConditionChange={setTaxCondition}
-          />
+            <PosCustomerCard
+              customers={customerMatches}
+              customerId={customerId}
+              customerQuery={customerQuery}
+              isSearchingCustomers={isSearchingCustomers}
+              selectedCustomer={selectedCustomer}
+              documentType={documentType}
+              taxCondition={taxCondition}
+              customerLocked={Boolean(initialExchangeCredit?.customer)}
+              onCustomerQueryChange={setCustomerQuery}
+              onExistingCustomerChange={selectExistingCustomer}
+              onAddCustomer={() => setCustomerModalOpen(true)}
+              onDocumentTypeChange={setDocumentType}
+              onTaxConditionChange={setTaxCondition}
+            />
 
-          <PosPaymentCard
-            payments={payments}
-            total={totals.total}
-            change={coverage.change}
-            pendingAmount={coverage.pendingAmount}
-            selectedCustomer={selectedCustomer}
-            creditAmount={coverage.creditAmount}
-            creditReady={coverage.creditReady}
-            exchangeCredit={initialExchangeCredit}
-            exchangeApplied={exchangeApplied}
-            exchangeRemaining={exchangeRemaining}
-            amountDue={amountDue}
-            onSetSingleMethod={setSinglePaymentMethod}
-            onEnableMixed={enableMixedPayment}
-            onAdd={addPayment}
-            onMethodChange={updatePaymentMethod}
-            onAmountChange={setPaymentAmount}
-            onReferenceChange={updatePaymentReference}
-            onCompleteBalance={completePaymentBalance}
-            onRemove={(id) =>
-              setPayments((current) => current.filter((item) => item.id !== id))}
-          />
+            <PosPaymentCard
+              payments={payments}
+              total={totals.total}
+              change={coverage.change}
+              pendingAmount={coverage.pendingAmount}
+              selectedCustomer={selectedCustomer}
+              creditAmount={coverage.creditAmount}
+              creditReady={coverage.creditReady}
+              exchangeCredit={initialExchangeCredit}
+              exchangeApplied={exchangeApplied}
+              exchangeRemaining={exchangeRemaining}
+              amountDue={amountDue}
+              onSetSingleMethod={setSinglePaymentMethod}
+              onEnableMixed={enableMixedPayment}
+              onAdd={addPayment}
+              onMethodChange={updatePaymentMethod}
+              onAmountChange={setPaymentAmount}
+              onReferenceChange={updatePaymentReference}
+              onCompleteBalance={completePaymentBalance}
+              onRemove={(id) =>
+                setPayments((current) => current.filter((item) => item.id !== id))}
+            />
+          </div>
 
           <PosTotalCard
             taxCondition={taxCondition}
