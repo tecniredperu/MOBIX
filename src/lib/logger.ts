@@ -1,3 +1,5 @@
+import { BUILD_COMMIT } from "@/lib/build-info";
+
 type LogLevel = "info" | "warn" | "error";
 
 type LogContext = Record<string, unknown>;
@@ -36,7 +38,7 @@ function emit(level: LogLevel, event: string, context: LogContext = {}) {
     service: "mobix",
     environment: process.env.NODE_ENV ?? "unknown",
     version: process.env.npm_package_version ?? "unknown",
-    commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? null,
+    commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? BUILD_COMMIT,
     event,
     ...sanitize(context) as Record<string, unknown>,
   };
