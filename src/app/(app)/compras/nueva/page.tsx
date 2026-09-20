@@ -6,12 +6,12 @@ import { getPurchaseContext } from "@/modules/purchases/purchases.repository";
 export const dynamic = "force-dynamic";
 
 export default async function NewPurchasePage() {
-  await requirePermission("purchases.create");
+  const { settings } = await requirePermission("purchases.create");
   const { catalog, warehouses, suppliers } = await getPurchaseContext();
 
   return (
     <AppShell>
-      <PurchaseForm catalog={catalog} warehouses={warehouses} suppliers={suppliers} />
+      <PurchaseForm catalog={catalog} warehouses={warehouses} suppliers={suppliers} taxRate={settings.taxRate} />
     </AppShell>
   );
 }

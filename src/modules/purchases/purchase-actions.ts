@@ -14,23 +14,39 @@ function normalizeIdentifier(value?: string) {
   return value?.trim().toUpperCase() ?? "";
 }
 
+function normalizeSupplierDocument(documentType: string, value: string) {
+  const normalized = value.trim().toUpperCase();
+  if (documentType === "RUC" || documentType === "DNI") {
+    return normalized.replace(/\D/g, "");
+  }
+  return normalized;
+}
+
 function validateSupplier(documentType: string, documentNumber: string) {
   const clean = documentNumber.replace(/\D/g, "");
   if (documentType === "RUC" && clean.length !== 11) throw new Error("El RUC del proveedor debe tener 11 dígitos.");
   if (documentType === "DNI" && clean.length !== 8) throw new Error("El DNI del proveedor debe tener 8 dígitos.");
+  if ((documentType === "CE" || documentType === "OTHER") && documentNumber.length < 3) {
+    throw new Error("El documento del proveedor no es válido.");
+  }
 }
 
 export async function createPurchaseAction(input: CreatePurchaseInput) {
   const { company, membership, settings } = await requirePermission("purchases.create");
   const TAX_RATE = Math.max(0, Number(settings.taxRate || 0)) / 100;
   const businessName = input.supplier.businessName.trim();
-  const documentNumber = input.supplier.documentNumber.trim();
+  const documentNumber = normalizeSupplierDocument(input.supplier.documentType, input.supplier.documentNumber);
+  const purchaseDocumentSeries = input.documentSeries?.trim().toUpperCase() || null;
+  const purchaseDocumentNumber = input.documentNumber?.trim().toUpperCase() || null;
 
   if (!businessName) throw new Error("Ingresa el nombre o razón social del proveedor.");
   if (!documentNumber) throw new Error("Ingresa el documento del proveedor.");
   validateSupplier(input.supplier.documentType, documentNumber);
   if (!input.warehouseId) throw new Error("Selecciona el almacén de destino.");
   if (!input.lines.length) throw new Error("Agrega al menos un producto a la compra.");
+  if ((input.documentType === "FACTURA" || input.documentType === "BOLETA") && (!purchaseDocumentSeries || !purchaseDocumentNumber)) {
+    throw new Error("Ingresa la serie y número del comprobante de compra.");
+  }
 
   const issueDate = new Date(`${input.issueDate}T12:00:00`);
   if (Number.isNaN(issueDate.getTime())) throw new Error("La fecha de emisión no es válida.");
@@ -42,6 +58,9 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
   if (!warehouse) throw new Error("El almacén seleccionado no pertenece a la empresa activa.");
 
   const variantIds = [...new Set(input.lines.map((line) => line.variantId))];
+  if (variantIds.length !== input.lines.length) {
+    throw new Error("Cada producto debe aparecer una sola vez en la compra.");
+  }
   const variants = await prisma.productVariant.findMany({
     where: { id: { in: variantIds }, companyId: company.id, status: "ACTIVE" },
     include: { product: true },
@@ -68,6 +87,7 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
           if (imei2 && !/^\d{15}$/.test(imei2)) throw new Error(`El IMEI 2 de ${variant.product.name} debe tener 15 dígitos.`);
         }
         if (variant.product.requiresSerial && !serial) throw new Error(`Registra el número de serie de ${variant.product.name}.`);
+        if (!imei1 && !imei2 && !serial) throw new Error(`Registra al menos un IMEI o número de serie para ${variant.product.name}.`);
         if (imei1) allIdentifiers.push(imei1);
         if (imei2) allIdentifiers.push(imei2);
         if (serial) allIdentifiers.push(serial);
@@ -85,8 +105,13 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
     if (duplicate) throw new Error(`El IMEI/serie ${duplicate.value} ya está registrado en MOBIX.`);
   }
 
-  const subtotal = money(input.lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0));
-  const tax = input.taxCondition === "TAXED" ? money(subtotal * TAX_RATE) : 0;
+  const lineAmounts = input.lines.map((line) => {
+    const lineSubtotal = money(line.quantity * line.unitCost);
+    const lineTax = input.taxCondition === "TAXED" ? money(lineSubtotal * TAX_RATE) : 0;
+    return { subtotal: lineSubtotal, tax: lineTax, total: money(lineSubtotal + lineTax) };
+  });
+  const subtotal = money(lineAmounts.reduce((sum, line) => sum + line.subtotal, 0));
+  const tax = money(lineAmounts.reduce((sum, line) => sum + line.tax, 0));
   const total = money(subtotal + tax);
   const taxLabel = input.taxCondition === "TAXED" ? "Gravado" : input.taxCondition === "EXEMPT" ? "Exonerado" : "Inafecto";
   const documentTypeLabel = input.documentType === "FACTURA" ? "01 - Factura" : input.documentType === "BOLETA" ? "03 - Boleta de venta" : input.documentType === "GUIA" ? "Guía / documento de ingreso" : "Otro";
@@ -97,6 +122,28 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
       supplier = await tx.supplier.update({ where: { id: supplier.id }, data: { documentType: input.supplier.documentType, businessName, phone: input.supplier.phone?.trim() || null } });
     } else {
       supplier = await tx.supplier.create({ data: { companyId: company.id, documentType: input.supplier.documentType, documentNumber, businessName, phone: input.supplier.phone?.trim() || null } });
+    }
+
+    if (purchaseDocumentNumber) {
+      const documentLockKey = `${company.id}:purchase-document:${supplier.id}:${purchaseDocumentSeries ?? ""}:${purchaseDocumentNumber}`;
+      await tx.$queryRaw<Array<{ locked: number }>>`
+        WITH l AS (SELECT pg_advisory_xact_lock(hashtext(${documentLockKey})))
+        SELECT 1::int AS "locked" FROM l
+      `;
+
+      const existingDocument = await tx.purchase.findFirst({
+        where: {
+          companyId: company.id,
+          supplierId: supplier.id,
+          documentSeries: purchaseDocumentSeries,
+          documentNumber: purchaseDocumentNumber,
+          status: { not: "CANCELLED" },
+        },
+        select: { number: true },
+      });
+      if (existingDocument) {
+        throw new Error(`El comprobante ya fue registrado en la compra ${existingDocument.number}.`);
+      }
     }
 
     await tx.$queryRaw<Array<{ locked: number }>>`WITH l AS (SELECT pg_advisory_xact_lock(hashtext(${`${company.id}:purchase-number`}))) SELECT 1::int AS "locked" FROM l`;
@@ -114,8 +161,8 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
         warehouseId: input.warehouseId,
         number,
         documentType: documentTypeLabel,
-        documentSeries: input.documentSeries?.trim().toUpperCase() || null,
-        documentNumber: input.documentNumber?.trim() || null,
+        documentSeries: purchaseDocumentSeries,
+        documentNumber: purchaseDocumentNumber,
         issueDate,
         currency: company.currency,
         subtotal,
@@ -127,12 +174,20 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
       },
     });
 
-    for (const line of input.lines) {
+    for (const [index, line] of input.lines.entries()) {
       const variant = variantMap.get(line.variantId)!;
-      const lineSubtotal = money(line.quantity * line.unitCost);
-      const lineTax = input.taxCondition === "TAXED" ? money(lineSubtotal * TAX_RATE) : 0;
+      const lineAmount = lineAmounts[index];
       const purchaseItem = await tx.purchaseItem.create({
-        data: { purchaseId: purchase.id, productId: variant.productId, variantId: variant.id, quantity: line.quantity, unitCost: line.unitCost, subtotal: lineSubtotal, tax: lineTax, total: money(lineSubtotal + lineTax) },
+        data: {
+          purchaseId: purchase.id,
+          productId: variant.productId,
+          variantId: variant.id,
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+          subtotal: lineAmount.subtotal,
+          tax: lineAmount.tax,
+          total: lineAmount.total,
+        },
       });
 
       const serialized = variant.product.type === "PHONE" || variant.product.type === "SERIALIZED";

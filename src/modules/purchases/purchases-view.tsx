@@ -19,6 +19,7 @@ export function PurchasesView({
   filters,
   created,
   createdNumber,
+  canCreate,
 }: {
   purchases: Array<{
     id: string;
@@ -42,6 +43,7 @@ export function PurchasesView({
   filters: { q?: string; status?: string };
   created: boolean;
   createdNumber?: string;
+  canCreate: boolean;
 }) {
   return (
     <div className="page-stack">
@@ -51,7 +53,7 @@ export function PurchasesView({
           <h1>Compras</h1>
           <p>Registra ingresos de mercadería, costos, comprobantes e IMEI de equipos.</p>
         </div>
-        <Link href="/compras/nueva" className="primary-button"><Plus size={18} /> Nueva compra</Link>
+        {canCreate && <Link href="/compras/nueva" className="primary-button"><Plus size={18} /> Nueva compra</Link>}
       </section>
 
       {created && (

@@ -48,7 +48,7 @@ export type PurchaseCatalogItem = {
 };
 
 export const PURCHASE_TAX_LABELS: Record<PurchaseTaxCondition, string> = {
-  TAXED: "Gravado (IGV 18%)",
+  TAXED: "Gravado (IGV)",
   EXEMPT: "Exonerado",
   UNAFFECTED: "Inafecto",
 };
