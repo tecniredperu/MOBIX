@@ -5,11 +5,6 @@ import { PrismaClient } from "../generated/prisma/client";
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL no está configurada.");
 
-const bootstrapPassword = process.env.MOBIX_BOOTSTRAP_PASSWORD?.trim();
-if (!bootstrapPassword || bootstrapPassword.length < 10) {
-  throw new Error("MOBIX_BOOTSTRAP_PASSWORD debe tener al menos 10 caracteres.");
-}
-
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
@@ -17,6 +12,11 @@ async function main() {
   if (existingMembership) {
     console.log("✓ MOBIX bootstrap omitido: la base ya tiene usuarios configurados.");
     return;
+  }
+
+  const bootstrapPassword = process.env.MOBIX_BOOTSTRAP_PASSWORD?.trim();
+  if (!bootstrapPassword || bootstrapPassword.length < 10) {
+    throw new Error("MOBIX_BOOTSTRAP_PASSWORD debe tener al menos 10 caracteres para crear el primer usuario.");
   }
 
   let company = await prisma.company.findFirst({ orderBy: { createdAt: "asc" } });
