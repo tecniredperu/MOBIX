@@ -346,75 +346,182 @@
 /* Laptop 1366x768 y alturas similares: compactación adicional. */
 @media (min-width: 900px) and (max-height: 820px) {
   .pos-v5 .pos-checkout {
-    height: calc(100dvh - 148px) !important;
-    max-height: calc(100dvh - 148px) !important;
-    grid-template-rows: minmax(72px, 1fr) auto auto auto !important;
-    gap: 5px !important;
+    height: calc(100dvh - 162px) !important;
+    max-height: calc(100dvh - 162px) !important;
+    grid-template-rows: minmax(56px, .8fr) auto auto auto !important;
+    gap: 4px !important;
   }
 
   .pos-v5 .pos-v5-cart-card .pos-card-title {
-    min-height: 31px;
-    padding-block: 3px;
+    min-height: 29px;
+    padding: 3px 7px;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-v5-section-title {
-    min-height: 31px;
-    padding-block: 3px;
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines {
+    min-height: 0 !important;
+    max-height: none !important;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body {
-    padding-top: 4px;
-    padding-bottom: 4px;
+  .pos-v5 .pos-v5-cart-card .pos-empty-cart {
+    padding: 7px 6px;
+    font-size: 8.5px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-section-title,
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title {
+    min-height: 29px;
+    padding: 3px 7px;
+  }
+
+  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body,
+  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body {
+    padding: 4px 6px 5px;
   }
 
   .pos-v5 .pos-selected-customer {
-    min-height: 36px;
-    padding-block: 3px;
+    min-height: 34px;
+    padding: 3px 5px;
   }
 
   .pos-v5 .pos-customer-search {
-    min-height: 31px;
-    height: 31px;
-  }
-
-  .pos-v5 .pos-customer-search input {
+    min-height: 29px;
     height: 29px;
   }
 
+  .pos-v5 .pos-customer-search input {
+    height: 27px;
+    font-size: 8.7px;
+  }
+
   .pos-v5 .pos-document-buttons button {
-    min-height: 25px;
+    min-height: 24px;
+  }
+
+  .pos-v5 .pos-tax-row {
+    margin-top: 3px;
   }
 
   .pos-v5 .pos-tax-row select {
-    height: 25px;
+    height: 24px;
+    min-width: 98px;
   }
 
   .pos-v5 .pos-v5-payment-card {
-    max-height: 190px;
+    max-height: 150px;
+  }
+
+  .pos-v5 .pos-payment-method-buttons {
+    gap: 3px;
   }
 
   .pos-v5 .pos-payment-method-buttons button {
-    min-height: 25px;
+    min-height: 23px;
+    font-size: 7.4px;
+  }
+
+  .pos-v5 .pos-single-payment {
+    margin-top: 4px;
+    gap: 4px;
   }
 
   .pos-v5 .pos-single-payment-amount > div,
   .pos-v5 .pos-single-change {
-    min-height: 31px;
-    height: 31px;
+    min-height: 29px;
+    height: 29px;
   }
 
   .pos-v5 .pos-single-payment-amount input,
   .pos-v5 .pos-single-reference input {
-    height: 29px;
+    height: 27px;
+    font-size: 10px;
+  }
+
+  .pos-v5 .pos-v5-total-card {
+    padding: 4px 6px 5px;
+  }
+
+  .pos-v5 .pos-v5-discount-row {
+    min-height: 25px;
+    padding-bottom: 3px;
+  }
+
+  .pos-v5 .pos-v5-discount-row > div {
+    height: 25px;
+  }
+
+  .pos-v5 .pos-v5-discount-row input {
+    height: 23px;
+    width: 70px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines {
+    padding: 2px 1px 1px;
+  }
+
+  .pos-v5 .pos-v5-summary-lines > div {
+    font-size: 7.8px;
+    padding: 1px 0;
+  }
+
+  .pos-v5 .pos-v5-summary-lines strong {
+    font-size: 8.2px;
   }
 
   .pos-v5 .pos-v5-grand-total {
-    min-height: 36px;
+    min-height: 34px;
+    padding: 3px 6px;
+  }
+
+  .pos-v5 .pos-v5-grand-total span {
+    font-size: 12px;
+  }
+
+  .pos-v5 .pos-v5-grand-total strong {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .pos-v5 .pos-v5-payment-status {
+    margin-top: 3px;
+    padding: 3px 5px;
+  }
+
+  .pos-v5 .pos-v5-payment-status span {
+    font-size: 7.7px;
+  }
+
+  .pos-v5 .pos-v5-payment-status small {
+    font-size: 6.8px;
   }
 
   .pos-v5 .pos-v5-total-card .pos-v5-confirm {
-    min-height: 39px;
-    height: 39px;
+    min-height: 36px;
+    height: 36px;
+    margin-top: 3px;
+    font-size: 11px;
+  }
+
+  .pos-v5 .pos-v5-confirm kbd {
+    right: 8px;
+    min-width: 22px;
+    font-size: 7px;
+  }
+}
+
+/* Si el carrito está vacío, no desperdicia altura útil del checkout. */
+@media (min-width: 900px) {
+  .pos-v5 .pos-v5-cart-card:has(.pos-empty-cart) {
+    height: auto;
+    min-height: 0 !important;
+  }
+
+  .pos-v5 .pos-v5-cart-card:has(.pos-empty-cart) .pos-cart-lines {
+    flex: 0 0 auto;
+  }
+
+  .pos-v5 .pos-v5-cart-card:has(.pos-empty-cart) .pos-empty-cart {
+    height: auto;
+    min-height: 58px !important;
   }
 }
 
