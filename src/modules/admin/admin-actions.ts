@@ -44,22 +44,23 @@ export async function createUserAction(input: {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    let user = await tx.user.findUnique({
+    const existingUser = await tx.user.findUnique({
       where: { email: mail },
       include: { memberships: { select: { companyId: true } } },
     });
 
-    if (user) {
-      if (user.memberships.some((item) => item.companyId === company.id)) {
+    let userId: string;
+    if (existingUser) {
+      if (existingUser.memberships.some((item) => item.companyId === company.id)) {
         throw new Error("Ese correo ya pertenece a un usuario de esta empresa.");
       }
-      if (user.memberships.length > 0) {
+      if (existingUser.memberships.length > 0) {
         throw new Error(
           "Ese correo ya está registrado en otra empresa. Por seguridad, usa un correo diferente para este usuario.",
         );
       }
-      user = await tx.user.update({
-        where: { id: user.id },
+      const updatedUser = await tx.user.update({
+        where: { id: existingUser.id },
         data: {
           name: input.name.trim(),
           phone: input.phone?.trim() || null,
@@ -67,9 +68,11 @@ export async function createUserAction(input: {
           status: "ACTIVE",
           sessionVersion: { increment: 1 },
         },
+        select: { id: true },
       });
+      userId = updatedUser.id;
     } else {
-      user = await tx.user.create({
+      const createdUser = await tx.user.create({
         data: {
           name: input.name.trim(),
           email: mail,
@@ -77,13 +80,15 @@ export async function createUserAction(input: {
           passwordHash: hashPassword(input.password),
           status: "ACTIVE",
         },
+        select: { id: true },
       });
+      userId = createdUser.id;
     }
 
     const member = await tx.companyUser.create({
       data: {
         companyId: company.id,
-        userId: user.id,
+        userId,
         roleId: role.id,
         defaultBranchId: input.branchId || null,
         status: "ACTIVE",
@@ -96,7 +101,7 @@ export async function createUserAction(input: {
         userId: membership.userId,
         action: "CREATE",
         entity: "USER",
-        entityId: user.id,
+        entityId: userId,
         newValues: {
           email: mail,
           roleId: role.id,
