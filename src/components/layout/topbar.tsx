@@ -71,40 +71,49 @@ export function Topbar({ userName, roleName }: TopbarProps) {
   return (
     <header className="topbar">
       {isPos ? (
-        <div
-          className={
-            posCashStatus?.requireCashSession
-              ? posCashStatus.open
-                ? "topbar-pos-cash open"
-                : "topbar-pos-cash closed"
-              : "topbar-pos-cash optional"
-          }
-          aria-live="polite"
-        >
-          <span className="topbar-pos-cash-dot" />
-          <div>
-            <strong>
-              {!posCashStatus
-                ? "Consultando caja"
-                : !posCashStatus.requireCashSession
-                  ? "Control de caja opcional"
-                  : posCashStatus.open
-                    ? "Caja abierta"
-                    : "Caja cerrada"}
-            </strong>
-            <small>
-              {!posCashStatus
-                ? "Verificando turno..."
-                : posCashStatus.open && posCashStatus.branchName
-                  ? `Turno activo en ${posCashStatus.branchName}`
-                  : posCashStatus.requireCashSession
-                    ? "Debes abrir caja antes de vender"
-                    : "Venta habilitada"}
-            </small>
+        <div className="topbar-pos-workspace">
+          <div className="topbar-pos-title">
+            <strong>Punto de venta</strong>
+            <small>Busca, agrega y cobra sin salir de esta pantalla.</small>
           </div>
-          <Link href="/caja">
-            {posCashStatus?.open ? "Ver caja" : "Ir a caja"}
-          </Link>
+
+          <div
+            className={
+              posCashStatus?.requireCashSession
+                ? posCashStatus.open
+                  ? "topbar-pos-cash open"
+                  : "topbar-pos-cash closed"
+                : "topbar-pos-cash optional"
+            }
+            aria-live="polite"
+          >
+            <span className="topbar-pos-cash-dot" />
+            <div>
+              <strong>
+                {!posCashStatus
+                  ? "Consultando caja"
+                  : !posCashStatus.requireCashSession
+                    ? "Control de caja opcional"
+                    : posCashStatus.open
+                      ? "Caja abierta"
+                      : "Caja cerrada"}
+              </strong>
+              <small>
+                {!posCashStatus
+                  ? "Verificando turno..."
+                  : posCashStatus.open && posCashStatus.branchName
+                    ? `Turno activo en ${posCashStatus.branchName}`
+                    : posCashStatus.requireCashSession
+                      ? "Debes abrir caja antes de vender"
+                      : "Venta habilitada"}
+              </small>
+            </div>
+            <Link href="/caja">
+              {posCashStatus?.open ? "Ver caja" : "Ir a caja"}
+            </Link>
+          </div>
+
+          <div id="pos-warehouse-slot" className="topbar-pos-warehouse-slot" />
         </div>
       ) : (
         <form className="global-search" action="/buscar" method="get">
