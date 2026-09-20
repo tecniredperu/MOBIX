@@ -76,10 +76,22 @@ export function PosCustomerCard({
         {customerLocked ? (
           <span className="pos-customer-locked">Cliente del vale</span>
         ) : (
-          <button className="pos-v5-new-customer" type="button" onClick={onAddCustomer}>
-            <Plus size={14} />
-            Nuevo cliente
-          </button>
+          <div className="pos-v5-customer-actions">
+            <button
+              className={!selectedCustomer ? "pos-v5-consumer-final active" : "pos-v5-consumer-final"}
+              type="button"
+              onClick={() => {
+                onExistingCustomerChange("");
+                onCustomerQueryChange("");
+              }}
+            >
+              Consumidor final
+            </button>
+            <button className="pos-v5-new-customer" type="button" onClick={onAddCustomer}>
+              <Plus size={14} />
+              Nuevo cliente
+            </button>
+          </div>
         )}
       </div>
 
@@ -120,7 +132,6 @@ export function PosCustomerCard({
                 autoComplete="off"
                 spellCheck={false}
               />
-              <span className="pos-consumer-final-chip">Consumidor final</span>
             </div>
 
             {customerQuery.trim().length >= 2 && (
