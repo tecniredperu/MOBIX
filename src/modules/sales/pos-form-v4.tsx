@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { roundMoney } from "@/lib/money";
 import { createSaleWithChangeAction } from "./sale-payment-action";
@@ -72,6 +73,7 @@ export function PosFormV4({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [warehouseTopbarSlot, setWarehouseTopbarSlot] = useState<HTMLElement | null>(null);
   const previousTotalRef = useRef(0);
   const productSearchCacheRef = useRef(new Map<string, PosCatalogItem[]>());
   const customerSearchCacheRef = useRef(new Map<string, PosCustomer[]>());
@@ -112,6 +114,10 @@ export function PosFormV4({
     { id: "payment-1", method: "CASH", amount: 0, reference: "" },
   ]);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setWarehouseTopbarSlot(document.getElementById("pos-warehouse-slot"));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -790,13 +796,8 @@ export function PosFormV4({
 
   return (
     <div className="pos-page pos-v5 page-stack">
-      <section className="page-heading pos-heading">
-        <div>
-          <span className="eyebrow">VENTAS</span>
-          <h1>Punto de venta</h1>
-          <p>Busca, agrega y cobra sin salir de esta pantalla.</p>
-        </div>
-        <label className="pos-warehouse">
+      {warehouseTopbarSlot && createPortal(
+        <label className="pos-warehouse pos-warehouse-topbar">
           <span>Sucursal / almacén</span>
           <select
             value={warehouseId}
@@ -815,8 +816,9 @@ export function PosFormV4({
               </option>
             ))}
           </select>
-        </label>
-      </section>
+        </label>,
+        warehouseTopbarSlot,
+      )}
 
       {error && (
         <div className="error-banner">
