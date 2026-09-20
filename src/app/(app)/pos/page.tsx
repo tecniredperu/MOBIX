@@ -38,7 +38,7 @@ export default async function PosPage({
               <span className="cash-live-dot" />
               <div>
                 <strong>Caja abierta</strong>
-                <span>Turno activo en {cashStatus.branchName}. Las ventas quedarán incluidas en este arqueo.</span>
+                <span>Turno activo en {cashStatus.branchName}</span>
               </div>
               <Link href="/caja">Ver caja</Link>
             </div>
@@ -46,7 +46,7 @@ export default async function PosPage({
             <div className="pos-cash-gate closed">
               <div>
                 <strong>Debes abrir caja antes de vender</strong>
-                <span>MOBIX no confirmará ventas fuera de un turno de caja para evitar descuadres.</span>
+                <span>Abre un turno para registrar ventas.</span>
               </div>
               <Link href="/caja">Abrir caja</Link>
             </div>
@@ -56,7 +56,7 @@ export default async function PosPage({
             <span className="cash-live-dot" />
             <div>
               <strong>Control de caja opcional</strong>
-              <span>La configuración empresarial permite registrar ventas sin un turno de caja abierto.</span>
+              <span>Puedes vender sin un turno de caja abierto.</span>
             </div>
             <Link href="/configuracion">Configuración</Link>
           </div>
