@@ -1,8 +1,8 @@
-import { getOperationalContext } from "@/lib/business-context";
+import { requireAuthContext } from "@/lib/auth-context";
 import { prisma } from "@/lib/prisma";
 
 export async function getPosCashStatus() {
-  const { company, user } = await getOperationalContext();
+  const { company, user } = await requireAuthContext();
 
   const session = await prisma.cashSession.findFirst({
     where: {
