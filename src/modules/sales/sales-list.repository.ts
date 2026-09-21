@@ -63,10 +63,29 @@ export async function getSalesPage(filters: {
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: {
-        customer: true,
-        warehouse: { include: { branch: true } },
-        seller: true,
+      select: {
+        id: true,
+        saleNumber: true,
+        documentType: true,
+        documentSeries: true,
+        documentNumber: true,
+        total: true,
+        status: true,
+        createdAt: true,
+        customer: {
+          select: {
+            businessName: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        warehouse: {
+          select: {
+            name: true,
+            branch: { select: { name: true } },
+          },
+        },
+        seller: { select: { name: true } },
         items: { select: { quantity: true } },
         payments: { select: { paymentMethod: true } },
       },
