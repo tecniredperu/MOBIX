@@ -77,7 +77,8 @@ test("verificador Go-Live comprueba HTTPS health commit y rutas protegidas", asy
   assert.ok(checker.includes('Go-Live requiere HTTPS'));
   assert.ok(checker.includes('x-mobix-health-token'));
   assert.ok(checker.includes('Commit desplegado'));
-  assert.ok(checker.includes('Cabecera x-frame-options'));
+  assert.ok(checker.includes('"x-frame-options": "DENY"'));
+  assert.ok(checker.includes('record(`Cabecera ${header}`'));
   assert.ok(checker.includes('Ruta protegida sin sesión'));
   assert.ok(checker.includes('go-live-report.json'));
 });
