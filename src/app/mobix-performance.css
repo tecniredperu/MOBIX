@@ -1,5 +1,16 @@
 
 
+
+
+
+
+
+
+
+
+
+
+
 .mobix-error-state{
   min-height: 100vh;
   display: grid;
@@ -30,7 +41,7 @@ body{ font-size: 14.5px; }
 .data-table th{ font-size: 10px; }
 .data-table td{ font-size: 12px; }
 .product-cell strong{ font-size: 12.5px; }
-.product-cell span,.table-footer,.status-badge,.user-copy span,.company-copy span,.panel-heading p{ font-size: 10.5px; }
+.product-cell span, .table-footer, .status-badge, .user-copy span, .company-copy span, .panel-heading p{ font-size: 10.5px; }
 .nav-section > p{ font-size: 10px; }
 
 .mobix-pagination{
@@ -42,7 +53,7 @@ body{ font-size: 14.5px; }
   border-top: 1px solid #e8edf4;
 }
 
-.mobix-page-button,.mobix-page-number{
+.mobix-page-button, .mobix-page-number{
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,7 +71,7 @@ body{ font-size: 14.5px; }
 
 .mobix-page-button{ padding: 0 12px; }
 .mobix-page-number{ min-width: 36px; padding: 0 9px; }
-.mobix-page-button:hover,.mobix-page-number:hover{ border-color: #94a3b8; background: #f8fafc; }
+.mobix-page-button:hover, .mobix-page-number:hover{ border-color: #94a3b8; background: #f8fafc; }
 .mobix-page-number.active{ background: #0f172a; border-color: #0f172a; color: #fff; }
 .mobix-page-button.disabled{ pointer-events: none; opacity: .42; }
 .mobix-page-numbers{ display: flex; align-items: center; gap: 6px; }
@@ -70,8 +81,7 @@ body{ font-size: 14.5px; }
 @keyframes mobix-shimmer{ to { background-position: -200% 0; } }
 @keyframes mobix-spin{ to { transform: rotate(360deg); } }
 
-@media (max-width: 900px){
-}
+
 
 @media (max-width: 640px){
   .mobix-pagination{ align-items: stretch; flex-wrap: wrap; }
@@ -79,5 +89,4 @@ body{ font-size: 14.5px; }
   .mobix-page-button{ flex: 1; }
 }
 
-@media (max-width: 560px){
-}
+
