@@ -164,3 +164,59 @@ export async function getProducts(filters: ProductFilters = {}) {
     pagination: { page, pageSize, total },
   };
 }
+
+
+export async function getProductForEdit(productId: string) {
+  const company = await getActiveCompany();
+  const product = await prisma.product.findFirst({
+    where: { id: productId, companyId: company.id, deletedAt: null },
+    include: {
+      image: { select: { id: true } },
+      variants: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          sku: true,
+          barcode: true,
+          color: true,
+          ram: true,
+          storage: true,
+          purchasePrice: true,
+          salePrice: true,
+          minimumSalePrice: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!product) return null;
+
+  return {
+    id: product.id,
+    type: product.type as ProductTypeValue,
+    name: product.name,
+    model: product.model,
+    categoryId: product.categoryId,
+    brandId: product.brandId,
+    sku: product.sku,
+    barcode: product.barcode,
+    description: product.description,
+    warrantyDays: product.warrantyDays,
+    minimumStock: product.minimumStock,
+    status: product.status,
+    imageUrl: product.image ? `/api/products/${product.id}/image` : null,
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      sku: variant.sku,
+      barcode: variant.barcode,
+      color: variant.color,
+      ram: variant.ram,
+      storage: variant.storage,
+      purchasePrice: decimalToNumber(variant.purchasePrice),
+      salePrice: decimalToNumber(variant.salePrice),
+      minimumSalePrice: decimalToNumber(variant.minimumSalePrice),
+      status: variant.status,
+    })),
+  };
+}
