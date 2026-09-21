@@ -58,3 +58,35 @@ test("auditoría administrativa está aislada por empresa y redacta campos sensi
   assert.ok(page.includes('requirePermission("roles.manage")'));
   assert.ok(page.includes("getAuditLogData(200)"));
 });
+
+
+test("compose de producción no publica PostgreSQL y exige secretos", async () => {
+  const compose = await source("docker-compose.production.yml");
+
+  const postgresBlock = compose.split("  app:")[0];
+  assert.equal(postgresBlock.includes('ports:'), false);
+  assert.ok(compose.includes('DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL}'));
+  assert.ok(compose.includes('AUTH_SECRET: ${AUTH_SECRET:?Define AUTH_SECRET}'));
+  assert.ok(compose.includes('HEALTH_DETAILS_TOKEN: ${HEALTH_DETAILS_TOKEN:?Define HEALTH_DETAILS_TOKEN}'));
+  assert.ok(compose.includes('127.0.0.1:${MOBIX_PORT:-3000}:3000'));
+});
+
+test("verificador Go-Live comprueba HTTPS health commit y rutas protegidas", async () => {
+  const checker = await source("scripts/go-live-check.mjs");
+
+  assert.ok(checker.includes('Go-Live requiere HTTPS'));
+  assert.ok(checker.includes('x-mobix-health-token'));
+  assert.ok(checker.includes('Commit desplegado'));
+  assert.ok(checker.includes('Cabecera x-frame-options'));
+  assert.ok(checker.includes('Ruta protegida sin sesión'));
+  assert.ok(checker.includes('go-live-report.json'));
+});
+
+test("runbook incluye backup rollback y criterio NO-GO", async () => {
+  const runbook = await source("docs/PRODUCTION-RUNBOOK.md");
+
+  assert.ok(runbook.includes("Backups automáticos"));
+  assert.ok(runbook.includes("Rollback"));
+  assert.ok(runbook.includes("Criterios NO-GO"));
+  assert.ok(runbook.includes("MOBIX Production Go-Live Check"));
+});
