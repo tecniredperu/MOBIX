@@ -200,19 +200,15 @@ kbd{padding:3px 6px;border-color:#dfe3e8;border-radius:5px;background:#fff;color
 input,select,textarea{color:#1d2939}
 .mobix-form-section{padding:18px}
 .mobix-form-grid{gap:12px}
-.mobix-form-grid label>span,.line-fields label>span,.pos-form-grid label>span,.payment-field>span,.pos-warehouse span{
+.mobix-form-grid label>span,.line-fields label>span,.payment-field>span,.pos-warehouse span{
   color:#475467;font-size:10px;font-weight:650;letter-spacing:.005em
 }
-.mobix-form-grid input,.mobix-form-grid select,.purchase-add-row select,.line-fields input,.imei-row input,
-.pos-unit-select,.pos-warehouse select,.pos-form-grid select,.pos-form-grid input,.payment-line select,.payment-line input,.discount-row input,
-.filter-select select{
+.mobix-form-grid input,.mobix-form-grid select,.purchase-add-row select,.line-fields input,.imei-row input,.pos-unit-select,.pos-warehouse select,.payment-line select,.payment-line input,.filter-select select{
   height:40px;border:1px solid #d8dde5;background:#fff;border-radius:9px;padding:0 10px;
   color:#1d2939;font-size:11.5px;outline:0
 }
-.mobix-form-grid input::placeholder,.line-fields input::placeholder,.imei-row input::placeholder,.pos-form-grid input::placeholder,.payment-line input::placeholder{color:#a6afbd}
-.mobix-form-grid input:focus,.mobix-form-grid select:focus,.purchase-add-row select:focus,.line-fields input:focus,.imei-row input:focus,
-.pos-unit-select:focus,.pos-warehouse select:focus,.pos-form-grid select:focus,.pos-form-grid input:focus,.payment-line select:focus,.payment-line input:focus,.discount-row input:focus,
-.filter-select select:focus{
+.mobix-form-grid input::placeholder,.line-fields input::placeholder,.imei-row input::placeholder,.payment-line input::placeholder{color:#a6afbd}
+.mobix-form-grid input:focus,.mobix-form-grid select:focus,.purchase-add-row select:focus,.line-fields input:focus,.imei-row input:focus,.pos-unit-select:focus,.pos-warehouse select:focus,.payment-line select:focus,.payment-line input:focus,.filter-select select:focus{
   border-color:#9db4ff;box-shadow:0 0 0 3px rgba(49,94,251,.075);background:#fff
 }
 .form-footnote,.tax-note{color:#667085;font-size:10px;line-height:1.55}
@@ -266,12 +262,10 @@ input,select,textarea{color:#1d2939}
 .pos-page{min-width:0;max-width:100%}
 .pos-layout{max-width:100%;min-width:0;gap:14px}
 .pos-catalog-panel,.pos-checkout,.pos-cart-card,.pos-customer-card,.pos-payment-card,.pos-total-card{min-width:0}
-.pos-heading{margin-bottom:18px}
 .pos-search{height:52px;border-bottom-color:#eaecf0;color:#98a2b3}
 .pos-search input{font-size:11.5px;color:#344054}
 .pos-product{border-bottom-color:#eef1f4;background:#fff}
 .pos-product:hover{background:#fafcff}
-.pos-product-icon{background:#eef3ff;color:#315efb;border-radius:10px}
 .pos-product-copy strong{font-size:11.5px;color:#1d2939;font-weight:650;line-height:1.35}
 .pos-product-copy span{font-size:9.5px;color:#667085;line-height:1.35}
 .pos-product-copy small{font-size:9px;color:#067647;font-weight:540}
@@ -279,20 +273,11 @@ input,select,textarea{color:#1d2939}
 .pos-card-title{min-height:47px;padding:0 14px;border-bottom-color:#eef1f4;background:#fff}
 .pos-card-title strong{font-size:11.5px;color:#1d2939;font-weight:670}.pos-card-title>span{font-size:9.5px;color:#98a2b3}
 .pos-cart-line{padding:11px 13px;border-bottom-color:#eef1f4}
-.pos-cart-line-head strong{font-size:11px;color:#1d2939;font-weight:650}.pos-cart-line-head span{font-size:9.5px;color:#667085}
-.pos-cart-line-head code{font-size:9px;background:#f7f9fc;color:#475467}
-.pos-cart-controls>strong{font-size:11.5px;color:#1d2939}
-.qty-control,.price-control{border-color:#d8dde5;border-radius:8px}
+.qty-control{border-color:#d8dde5;border-radius:8px}
 .payment-line{background:#fbfcfe;border-color:#e3e7ec;border-radius:11px;padding:11px}
 .payment-field>span{text-transform:none;letter-spacing:0;font-size:9.5px;color:#667085}
 .payment-actions .ghost-button{border-color:#d8e1f3;background:#fff;color:#315efb;font-size:10px;font-weight:650;white-space:nowrap}
 .payment-actions .ghost-button:hover{background:#f4f7ff;border-color:#bdcbef}
-.cash-change-box>div{background:#f8fafc;border-color:#e6e9ee;border-radius:9px}
-.cash-change-box span{font-size:9px;color:#667085}.cash-change-box strong{font-size:13.5px;font-weight:690;color:#101828}
-.cash-change-box .change-value{background:#eef4ff;border-color:#cad8ff}.cash-change-box .change-value strong{color:#315efb}
-.payment-balance{border-radius:9px;font-size:10px}
-.payment-balance.ok{background:#ecfdf3;color:#067647}.payment-balance.pending{background:#fffaeb;color:#b54708}.payment-balance.change{background:#eef4ff;color:#315efb;border-color:#cad8ff}
-.pos-confirm{height:44px;font-size:12px;font-weight:680}
 
 /* SALES / DETAIL ---------------------------------------------------------- */
 .sale-info-card{padding:14px;border-radius:13px}
