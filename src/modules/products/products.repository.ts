@@ -23,6 +23,12 @@ function decimalToNumber(value: { toString(): string } | number) {
   return Number(value.toString());
 }
 
+function productImageUrl(productId: string, updatedAt?: Date | null) {
+  return updatedAt
+    ? `/api/products/${productId}/image?v=${updatedAt.getTime()}`
+    : null;
+}
+
 export async function getProductCatalogContext() {
   const company = await getActiveCompany();
 
@@ -76,7 +82,7 @@ export async function getProducts(filters: ProductFilters = {}) {
       include: {
         brand: { select: { name: true } },
         category: { select: { name: true } },
-        image: { select: { id: true } },
+        image: { select: { id: true, updatedAt: true } },
         variants: {
           where: { status: "ACTIVE" },
           orderBy: { createdAt: "asc" },
@@ -147,7 +153,7 @@ export async function getProducts(filters: ProductFilters = {}) {
       minimumStock: product.minimumStock,
       status: product.status,
       variantSummary: variantParts.join(" · ") || (product.variants.length > 1 ? `${product.variants.length} variantes` : "Variante base"),
-      imageUrl: product.image ? `/api/products/${product.id}/image` : null,
+      imageUrl: productImageUrl(product.id, product.image?.updatedAt),
     };
   });
 
@@ -171,7 +177,7 @@ export async function getProductForEdit(productId: string) {
   const product = await prisma.product.findFirst({
     where: { id: productId, companyId: company.id, deletedAt: null },
     include: {
-      image: { select: { id: true } },
+      image: { select: { id: true, updatedAt: true } },
       variants: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -205,7 +211,7 @@ export async function getProductForEdit(productId: string) {
     warrantyDays: product.warrantyDays,
     minimumStock: product.minimumStock,
     status: product.status,
-    imageUrl: product.image ? `/api/products/${product.id}/image` : null,
+    imageUrl: productImageUrl(product.id, product.image?.updatedAt),
     variants: product.variants.map((variant) => ({
       id: variant.id,
       sku: variant.sku,
