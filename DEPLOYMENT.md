@@ -56,18 +56,60 @@ Publica MOBIX detrás de HTTPS (Nginx, Cloudflare, proxy del hosting o balancead
 - No expongas PostgreSQL públicamente salvo que el proveedor lo requiera; limita el acceso por red/firewall.
 - Antes de una actualización importante, crea un backup y luego ejecuta `prisma migrate deploy`.
 
+## Backup y recuperación
+
+MOBIX incluye utilidades operativas para PostgreSQL. Instala **PostgreSQL Client de la misma versión mayor que el servidor** para disponer de `pg_dump` y `pg_restore`.
+
+Crear un respaldo en formato custom, con manifiesto SHA-256:
+
+```bash
+npm run db:backup
+```
+
+Por defecto se guarda en `backups/` y se conservan 30 días. Puede configurarse:
+
+```env
+MOBIX_BACKUP_DIR="/ruta/segura/fuera-del-webroot"
+MOBIX_BACKUP_RETENTION_DAYS="30"
+```
+
+Verificar un respaldo sin restaurarlo:
+
+```bash
+BACKUP_FILE="/ruta/mobix-AAAAMMDDTHHMMSSZ.dump" npm run db:backup:verify
+```
+
+La restauración es **destructiva** sobre la base indicada por `DATABASE_URL`. Antes de ejecutarla, detén la aplicación y conserva una copia adicional de la base actual.
+
+```bash
+BACKUP_FILE="/ruta/mobix-AAAAMMDDTHHMMSSZ.dump" \
+MOBIX_RESTORE_CONFIRM="RESTORE_MOBIX" \
+npm run db:restore
+```
+
+Después de restaurar:
+
+1. Ejecuta `npx prisma migrate deploy`.
+2. Inicia MOBIX.
+3. Comprueba `/api/health` y `/api/health/details`.
+4. Verifica usuarios, productos, ventas, caja, créditos, IMEI y auditoría.
+5. Realiza una operación controlada en staging antes de reabrir producción.
+
+El workflow **MOBIX Backup Restore Drill** realiza semanalmente un simulacro de backup/restore en una base aislada y compara conteos críticos para detectar respaldos no recuperables antes de una emergencia.
+
 ## Verificación posterior al despliegue
 
-1. `GET /api/health` debe responder HTTP 200.
-2. Abrir `/productos` sin sesión debe redirigir a `/login`.
-3. Iniciar sesión con un usuario real.
-4. Verificar Dashboard, Productos, Equipos/IMEI, Compras, POS, Ventas, Caja, Clientes, Postventa, Reportes, Devoluciones y Transferencias.
-5. Realizar una venta de prueba en un entorno de staging antes de operar con datos reales.
-6. Verificar impresión de ticket, A4 y cierre de caja desde el navegador/impresora del cliente.
+1. `GET /api/health` debe responder HTTP 200 y únicamente exponer estado básico.
+2. Con una sesión administrativa, `GET /api/health/details` debe responder el diagnóstico de esquema, módulos, migraciones y commit.
+3. Abrir `/productos` sin sesión debe redirigir a `/login`.
+4. Iniciar sesión con un usuario real.
+5. Verificar Dashboard, Productos, Equipos/IMEI, Compras, POS, Ventas, Caja, Clientes, Postventa, Reportes, Devoluciones, Transferencias y Auditoría.
+6. Realizar una venta de prueba en un entorno de staging antes de operar con datos reales.
+7. Verificar impresión de ticket, A4 y cierre de caja desde el navegador/impresora del cliente.
 
 ## Recomendaciones de repositorio
 
-El código comercial debería mantenerse en un repositorio privado y la rama `main` debería exigir el check `validate` antes de aceptar cambios. No publiques archivos `.env`, backups de PostgreSQL ni credenciales.
+El código comercial debe mantenerse en un repositorio privado. Protege la rama `main` y exige, como mínimo, los checks **MOBIX CI**, **MOBIX Staging UAT** y **MOBIX Backup Restore Drill** antes de integrar cambios que afecten sus rutas. No publiques archivos `.env`, backups de PostgreSQL ni credenciales.
 
 ## SUNAT
 
