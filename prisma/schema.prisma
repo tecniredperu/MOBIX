@@ -168,6 +168,7 @@ model Company {
   categories          Category[]
   brands              Brand[]
   products            Product[]
+  productImages       ProductImage[]
   productUnits        ProductUnit[]
   unitIdentifiers     ProductUnitIdentifier[]
   suppliers           Supplier[]
@@ -399,6 +400,7 @@ model Product {
   category           Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   brand              Brand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
   variants           ProductVariant[]
+  image              ProductImage?
   units              ProductUnit[]
   purchaseItems      PurchaseItem[]
   saleItems          SaleItem[]
@@ -412,6 +414,22 @@ model Product {
   @@index([companyId, type, status])
   @@index([companyId, brandId, categoryId])
   @@map("products")
+}
+
+model ProductImage {
+  id         String   @id @default(cuid())
+  companyId  String
+  productId  String   @unique
+  mimeType   String
+  dataBase64 String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, productId])
+  @@map("product_images")
 }
 
 model ProductVariant {
