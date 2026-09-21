@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { getExchangeCreditForPos } from "@/modules/sales/exchange-credit.repository";
 import { getOptimizedPosContext } from "@/modules/sales/pos-context.repository";
@@ -27,7 +26,7 @@ export default async function PosPage({
   ]);
 
   return (
-    <AppShell>
+    <>
       <div className="pos-page-shell">
         <PosFormV4
           warehouses={warehouses}
@@ -36,6 +35,6 @@ export default async function PosPage({
           initialExchangeCredit={exchangeCredit}
         />
       </div>
-    </AppShell>
+    </>
   );
 }
