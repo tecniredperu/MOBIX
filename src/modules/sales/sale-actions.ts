@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -117,7 +117,7 @@ function documentSeriesFor(
 }
 
 export async function createSaleAction(input: CreateSaleInput) {
-  const { company, membership, settings } = await requirePermission("sales.create");
+  const { company, membership, settings } = await requirePermissionWithSettings("sales.create");
   const taxRate = Math.max(0, Number(settings.taxRate || 0)) / 100;
 
   if (!DOCUMENT_TYPES.has(input.documentType)) throw new Error("El tipo de comprobante no es válido.");
@@ -737,7 +737,7 @@ export async function cancelSaleAction(input: {
   saleId: string;
   reason: string;
 }) {
-  const { company, membership, settings } = await requirePermission("sales.cancel");
+  const { company, membership, settings } = await requirePermissionWithSettings("sales.cancel");
   const saleId = input.saleId?.trim();
   const reason = input.reason?.trim();
 
