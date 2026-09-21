@@ -27,10 +27,13 @@ function safeRateKey(prefix: string, value: string) {
   return `${prefix}:${value.trim().toLowerCase().slice(0, 180)}`;
 }
 async function clientIp() {
+  if (process.env.TRUST_PROXY_HEADERS !== "true") return null;
+
   const requestHeaders = await headers();
   const forwarded = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
   const real = requestHeaders.get("x-real-ip")?.trim();
-  return (forwarded || real || "unknown").slice(0, 120);
+  const value = forwarded || real;
+  return value ? value.slice(0, 120) : null;
 }
 async function loginKeyLocked(key: string) {
   const row = await prisma.authLoginLimit.findUnique({
@@ -103,10 +106,10 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
   const nextPath = safeNext(text(formData.get("next")) || "/");
   const ip = await clientIp();
   const emailKey = safeRateKey("email", email || "invalid");
-  const ipKey = safeRateKey("ip", ip);
-  const rateKeys = [emailKey, ipKey];
+  const ipKey = ip ? safeRateKey("ip", ip) : null;
+  const rateKeys = [emailKey, ...(ipKey ? [ipKey] : [])];
 
-  if (await loginKeyLocked(emailKey) || await loginKeyLocked(ipKey)) {
+  if (await loginKeyLocked(emailKey) || (ipKey ? await loginKeyLocked(ipKey) : false)) {
     return { error: "Demasiados intentos fallidos. Espera 15 minutos antes de volver a intentar." };
   }
 
@@ -170,7 +173,7 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
       action: "LOGIN",
       entity: "AUTH_SESSION",
       entityId: user.id,
-      ipAddress: ip === "unknown" ? null : ip,
+      ipAddress: ip,
       newValues: { email: user.email, roleId: membership.roleId },
     },
   }).catch(() => undefined);
