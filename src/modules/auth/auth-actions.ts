@@ -102,6 +102,7 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
   const password = text(formData.get("password"));
   const nextPath = safeNext(text(formData.get("next")) || "/");
   const ip = await clientIp();
+  const userAgent = (await headers()).get("user-agent")?.slice(0, 500) || null;
   const emailKey = safeRateKey("email", email || "invalid");
   const ipKey = safeRateKey("ip", ip);
   const rateKeys = [emailKey, ipKey];
@@ -171,6 +172,7 @@ export async function loginAction(_previous: AuthState, formData: FormData): Pro
       entity: "AUTH_SESSION",
       entityId: user.id,
       ipAddress: ip === "unknown" ? null : ip,
+      userAgent,
       newValues: { email: user.email, roleId: membership.roleId },
     },
   }).catch(() => undefined);
