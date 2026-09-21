@@ -1,7 +1,15 @@
 /* MOBIX POS V5 -----------------------------------------------------------
- * Catálogo centrado en búsqueda: menos navegación{
-  margin-bottom: 10px;
-}
+ * Catálogo centrado en búsqueda: menos navegación, respuesta inmediata y
+ * tarjetas compactas para vender desde escritorio sin perder el contexto.
+ */
+
+
+
+
+
+
+
+
 
 .pos-v5 .pos-layout{
   grid-template-columns: minmax(0, 1fr) minmax(390px, 420px);
@@ -217,7 +225,7 @@
   cursor: pointer;
 }
 
-.pos-favorite:hover,.pos-favorite.active{
+.pos-favorite:hover, .pos-favorite.active{
   color: #2563eb;
   background: #eff6ff;
 }
@@ -240,7 +248,7 @@
   -webkit-box-orient: vertical;
 }
 
-.pos-v5 .pos-product-copy span,.pos-v5 .pos-product-copy small{
+.pos-v5 .pos-product-copy span, .pos-v5 .pos-product-copy small{
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
@@ -334,6 +342,8 @@
   max-height: 225px;
 }
 
+
+
 @media (min-width: 1500px){
   .pos-v5 .pos-layout{
     grid-template-columns: minmax(0, 1fr) 420px;
@@ -387,7 +397,7 @@
     max-height: 520px;
   }
 
-  .pos-v5 .pos-search kbd,.pos-v5 .pos-search-state{
+  .pos-v5 .pos-search kbd, .pos-v5 .pos-search-state{
     display: none;
   }
 }
@@ -477,7 +487,7 @@
   background: #eff6ff;
 }
 
-.pos-v5-customer-body,.pos-v5-payment-body{
+.pos-v5-customer-body, .pos-v5-payment-body{
   padding: 9px 10px 10px;
 }
 
@@ -493,7 +503,7 @@
   background: #f8fbff;
 }
 
-.pos-selected-customer-icon,.pos-customer-result-icon{
+.pos-selected-customer-icon, .pos-customer-result-icon{
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -510,7 +520,7 @@
   min-width: 0;
 }
 
-.pos-selected-customer-copy strong,.pos-selected-customer-copy span{
+.pos-selected-customer-copy strong, .pos-selected-customer-copy span{
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -577,6 +587,8 @@
   font-size: 9.8px;
 }
 
+
+
 .pos-customer-results{
   margin-top: 5px;
   overflow: hidden;
@@ -618,7 +630,7 @@
   min-width: 0;
 }
 
-.pos-customer-results strong,.pos-customer-results small{
+.pos-customer-results strong, .pos-customer-results small{
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -798,11 +810,11 @@
   align-items: end;
 }
 
-.pos-single-payment-amount,.pos-single-reference{
+.pos-single-payment-amount, .pos-single-reference{
   min-width: 0;
 }
 
-.pos-single-payment-amount > span,.pos-single-reference > span{
+.pos-single-payment-amount > span, .pos-single-reference > span{
   display: block;
   margin-bottom: 4px;
   color: #64748b;
@@ -827,7 +839,7 @@
   font-weight: 700;
 }
 
-.pos-single-payment-amount input,.pos-single-reference input{
+.pos-single-payment-amount input, .pos-single-reference input{
   width: 100%;
   min-width: 0;
   height: 37px;
@@ -915,7 +927,7 @@
   font-size: 7.8px;
 }
 
-.pos-v5-payment-card .payment-line select,.pos-v5-payment-card .payment-line input{
+.pos-v5-payment-card .payment-line select, .pos-v5-payment-card .payment-line input{
   min-height: 32px;
   height: 32px;
   font-size: 8.8px;
@@ -1050,7 +1062,7 @@
   border-radius: 8px;
 }
 
-.pos-v5-payment-status span,.pos-v5-payment-status small{
+.pos-v5-payment-status span, .pos-v5-payment-status small{
   display: block;
 }
 
@@ -1113,7 +1125,7 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .pos-v5-payment-card .payment-field.reference,.pos-v5-payment-card .payment-actions{
+  .pos-v5-payment-card .payment-field.reference, .pos-v5-payment-card .payment-actions{
     grid-column: 1 / -1;
   }
 }
@@ -1134,6 +1146,8 @@
   .pos-single-payment{
     grid-template-columns: 1fr 1fr;
   }
+
+  
 
   .pos-v5-grand-total strong{
     font-size: 21px;
@@ -1209,7 +1223,7 @@
   min-width: 0;
 }
 
-.pos-exchange-credit-card span,.pos-exchange-credit-card strong,.pos-exchange-credit-card small{
+.pos-exchange-credit-card span, .pos-exchange-credit-card strong, .pos-exchange-credit-card small{
   display: block;
 }
 
@@ -1283,7 +1297,7 @@
 
 
 /* POS checkout refinement -------------------------------------------------
- * Mantiene el CTA de cobro siempre visible,da más espacio al carrito y
+ * Mantiene el CTA de cobro siempre visible, da más espacio al carrito y
  * reorganiza las acciones de cliente para evitar controles cortados.
  */
 .pos-v5-customer-actions{
@@ -1367,6 +1381,8 @@
   box-shadow: 0 8px 20px rgba(37, 99, 235, .20);
 }
 
+
+
 @media (min-width: 1241px){
   .pos-v5 .pos-checkout{
     height: calc(100dvh - 142px);
@@ -1377,6 +1393,12 @@
     overflow: hidden;
     padding-right: 0;
   }
+
+  
+
+  
+
+  
 
   .pos-v5 .pos-v5-total-card{
     position: relative;
@@ -1413,6 +1435,7 @@
 }
 
 @media (max-width: 1240px){
+  
 
   .pos-v5 .pos-v5-cart-card .pos-cart-lines{
     min-height: 150px;
@@ -1433,7 +1456,7 @@
     flex-wrap: wrap;
   }
 
-  .pos-v5-consumer-final,.pos-v5-new-customer{
+  .pos-v5-consumer-final, .pos-v5-new-customer{
     min-height: 28px;
     padding-inline: 7px;
     font-size: 8.4px;
@@ -1443,7 +1466,7 @@
 
 /* POS payment visibility hotfix ------------------------------------------ */
 @media (min-width: 1241px){
-  .pos-v5 .pos-checkout {
+  .pos-v5 .pos-checkout{
     height: calc(100dvh - 142px);
     max-height: calc(100dvh - 142px);
     display: grid;
@@ -1452,85 +1475,76 @@
     overflow: hidden;
   }
 
-  .pos-v5 .pos-checkout-scroll {
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 3px;
-  }
+  
 
-  .pos-v5 .pos-v5-payment-card,
-  .pos-v5 .pos-v5-total-card {
+  .pos-v5 .pos-v5-payment-card, .pos-v5 .pos-v5-total-card{
     flex: 0 0 auto;
     position: relative;
     inset: auto;
     z-index: 7;
   }
 
-  .pos-v5 .pos-v5-payment-card {
+  .pos-v5 .pos-v5-payment-card{
     border-color: #dbe5f2;
     box-shadow: 0 -4px 14px rgba(15, 23, 42, .05);
   }
 
-  .pos-v5 .pos-v5-payment-card .pos-v5-section-title {
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title{
     min-height: 36px;
     padding: 4px 9px;
   }
 
-  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body {
+  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body{
     padding: 6px 8px 7px;
   }
 
-  .pos-v5 .pos-payment-method-buttons {
+  .pos-v5 .pos-payment-method-buttons{
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
   }
 
-  .pos-v5 .pos-payment-method-buttons button {
+  .pos-v5 .pos-payment-method-buttons button{
     min-height: 30px;
     padding-inline: 4px;
     font-size: 8.2px;
   }
 
-  .pos-v5 .pos-payment-method-buttons button svg {
+  .pos-v5 .pos-payment-method-buttons button svg{
     width: 12px;
     height: 12px;
   }
 
-  .pos-v5 .pos-single-payment {
+  .pos-v5 .pos-single-payment{
     margin-top: 6px;
     gap: 5px;
   }
 
-  .pos-v5 .pos-single-payment-amount > span,
-  .pos-v5 .pos-single-reference > span {
+  .pos-v5 .pos-single-payment-amount > span, .pos-v5 .pos-single-reference > span{
     margin-bottom: 3px;
     font-size: 8.4px;
   }
 
-  .pos-v5 .pos-single-payment-amount > div,
-  .pos-v5 .pos-single-change {
+  .pos-v5 .pos-single-payment-amount > div, .pos-v5 .pos-single-change{
     height: 36px;
     min-height: 36px;
   }
 
-  .pos-v5 .pos-single-payment-amount input,
-  .pos-v5 .pos-single-reference input {
+  .pos-v5 .pos-single-payment-amount input, .pos-v5 .pos-single-reference input{
     height: 34px;
     font-size: 11px;
   }
 
-  .pos-v5 .pos-single-payment-amount > div {
+  .pos-v5 .pos-single-payment-amount > div{
     border-color: #93c5fd;
     box-shadow: 0 0 0 2px rgba(37, 99, 235, .05);
   }
 
-  .pos-v5 .pos-single-payment-amount > span {
+  .pos-v5 .pos-single-payment-amount > span{
     color: #1d4ed8;
     font-weight: 800;
   }
 
-  .pos-v5 .pos-v5-total-card {
+  .pos-v5 .pos-v5-total-card{
     box-shadow: 0 -5px 16px rgba(15, 23, 42, .07);
   }
 }
@@ -1580,6 +1594,7 @@
 }
 
 @media (max-width: 1240px){
+  
 
   .pos-v5 .pos-v5-payment-card{
     display: block !important;
@@ -1592,32 +1607,28 @@
  * medianos. El POS solo se apila cuando el viewport es realmente pequeño.
  */
 @media (min-width: 900px) and (max-width: 1240px){
-  .page-content:has(.pos-v5) {
+  .page-content:has(.pos-v5){
     padding-left: 16px;
     padding-right: 16px;
     padding-top: 18px;
   }
 
-  .pos-v5 {
+  .pos-v5{
     max-width: none;
   }
 
-  .pos-v5 .pos-heading {
-    margin-bottom: 8px;
-  }
+  
 
-  .pos-v5 .pos-heading h1 {
-    font-size: 19px;
-  }
+  
 
-  .pos-v5 .pos-layout {
+  .pos-v5 .pos-layout{
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(340px, 370px);
     gap: 10px;
     align-items: start;
   }
 
-  .pos-v5 .pos-catalog-list.pos-v5-product-grid {
+  .pos-v5 .pos-catalog-list.pos-v5-product-grid{
     min-height: 430px;
     max-height: calc(100dvh - 245px);
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1625,37 +1636,36 @@
     padding: 8px;
   }
 
-  .pos-v5 .pos-product.pos-v5-product-card {
+  .pos-v5 .pos-product.pos-v5-product-card{
     min-height: 238px;
     padding: 9px;
   }
 
-  .pos-v5-search-zone {
+  .pos-v5-search-zone{
     gap: 6px;
     padding: 8px 8px 7px;
   }
 
-  .pos-v5 .pos-search,
-  .pos-scan-button {
+  .pos-v5 .pos-search, .pos-scan-button{
     height: 44px;
   }
 
-  .pos-scan-button {
+  .pos-scan-button{
     padding-inline: 10px;
   }
 
-  .pos-v5-catalog-toolbar {
+  .pos-v5-catalog-toolbar{
     min-height: 42px;
     padding: 5px 8px;
   }
 
-  .pos-quick-filters button {
+  .pos-quick-filters button{
     height: 29px;
     padding-inline: 8px;
     font-size: 9.2px;
   }
 
-  .pos-v5 .pos-checkout {
+  .pos-v5 .pos-checkout{
     height: calc(100dvh - 138px);
     max-height: calc(100dvh - 138px);
     display: grid;
@@ -1665,139 +1675,121 @@
     padding-right: 0;
   }
 
-  .pos-v5 .pos-checkout-scroll {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 2px;
-    scrollbar-width: thin;
-    scrollbar-color: #dbe3ed transparent;
-  }
+  
 
-  .pos-v5 .pos-checkout-scroll::-webkit-scrollbar {
-    width: 4px;
-  }
+  
 
-  .pos-v5 .pos-checkout-scroll::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: #dbe3ed;
-  }
+  
 
-  .pos-v5 .pos-v5-cart-card .pos-cart-lines {
+  .pos-v5 .pos-v5-cart-card .pos-cart-lines{
     min-height: 105px;
     max-height: 185px;
   }
 
-  .pos-v5 .pos-v5-cart-card .pos-empty-cart {
+  .pos-v5 .pos-v5-cart-card .pos-empty-cart{
     min-height: 103px;
   }
 
-  .pos-v5 .pos-v5-section-title {
+  .pos-v5 .pos-v5-section-title{
     min-height: 36px;
     padding: 4px 8px;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body {
+  .pos-v5 .pos-v5-customer-card .pos-v5-customer-body{
     padding: 5px 7px 6px;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-selected-customer {
+  .pos-v5 .pos-v5-customer-card .pos-selected-customer{
     min-height: 44px;
     padding-block: 5px;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-customer-search {
+  .pos-v5 .pos-v5-customer-card .pos-customer-search{
     min-height: 35px;
   }
 
-  .pos-v5 .pos-v5-customer-card .pos-document-buttons button {
+  .pos-v5 .pos-v5-customer-card .pos-document-buttons button{
     min-height: 29px;
   }
 
-  .pos-v5 .pos-v5-payment-card,
-  .pos-v5 .pos-v5-total-card {
+  .pos-v5 .pos-v5-payment-card, .pos-v5 .pos-v5-total-card{
     display: block !important;
     position: relative;
     inset: auto;
     z-index: 7;
   }
 
-  .pos-v5 .pos-v5-payment-card .pos-v5-section-title {
+  .pos-v5 .pos-v5-payment-card .pos-v5-section-title{
     min-height: 34px;
   }
 
-  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body {
+  .pos-v5 .pos-v5-payment-card .pos-v5-payment-body{
     padding: 5px 7px 6px;
   }
 
-  .pos-v5 .pos-payment-method-buttons {
+  .pos-v5 .pos-payment-method-buttons{
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
   }
 
-  .pos-v5 .pos-payment-method-buttons button {
+  .pos-v5 .pos-payment-method-buttons button{
     min-height: 28px;
     padding-inline: 3px;
     font-size: 7.9px;
   }
 
-  .pos-v5 .pos-payment-method-buttons button svg {
+  .pos-v5 .pos-payment-method-buttons button svg{
     width: 11px;
     height: 11px;
   }
 
-  .pos-v5 .pos-single-payment {
+  .pos-v5 .pos-single-payment{
     margin-top: 5px;
     gap: 5px;
   }
 
-  .pos-v5 .pos-single-payment-amount > div,
-  .pos-v5 .pos-single-change {
+  .pos-v5 .pos-single-payment-amount > div, .pos-v5 .pos-single-change{
     min-height: 34px;
     height: 34px;
   }
 
-  .pos-v5 .pos-single-payment-amount input,
-  .pos-v5 .pos-single-reference input {
+  .pos-v5 .pos-single-payment-amount input, .pos-v5 .pos-single-reference input{
     height: 32px;
   }
 
-  .pos-v5 .pos-v5-total-card {
+  .pos-v5 .pos-v5-total-card{
     padding: 6px 7px 7px;
     box-shadow: 0 -5px 16px rgba(15, 23, 42, .07);
   }
 
-  .pos-v5 .pos-v5-discount-row {
+  .pos-v5 .pos-v5-discount-row{
     min-height: 30px;
     padding-bottom: 5px;
   }
 
-  .pos-v5 .pos-v5-summary-lines {
+  .pos-v5 .pos-v5-summary-lines{
     padding: 4px 1px 3px;
   }
 
-  .pos-v5 .pos-v5-grand-total {
+  .pos-v5 .pos-v5-grand-total{
     min-height: 42px;
     padding-block: 5px;
   }
 
-  .pos-v5 .pos-v5-grand-total span {
+  .pos-v5 .pos-v5-grand-total span{
     font-size: 14px;
   }
 
-  .pos-v5 .pos-v5-grand-total strong {
+  .pos-v5 .pos-v5-grand-total strong{
     font-size: 21px;
   }
 
-  .pos-v5 .pos-v5-payment-status {
+  .pos-v5 .pos-v5-payment-status{
     margin-top: 5px;
     padding: 5px 7px;
   }
 
-  .pos-v5 .pos-v5-total-card .pos-v5-confirm {
+  .pos-v5 .pos-v5-total-card .pos-v5-confirm{
     min-height: 44px;
     height: 44px;
     margin-top: 5px;
