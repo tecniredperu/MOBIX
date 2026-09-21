@@ -90,3 +90,74 @@ test("consultas críticas conservan las optimizaciones de payload", () => {
   assert.ok(pos.includes("missingIdentifierProductIds"));
   assert.ok(pos.includes("const catalog = await mapCatalog"));
 });
+
+
+test("todos los CSS globales conservan llaves balanceadas", () => {
+  const files = readdirSync("src/app").filter((name) => name.endsWith(".css"));
+
+  for (const name of files) {
+    const css = source(join("src/app", name));
+    let depth = 0;
+    let minDepth = 0;
+    let quote: string | null = null;
+    let comment = false;
+
+    for (let index = 0; index < css.length; index += 1) {
+      const char = css[index];
+      const next = css[index + 1];
+
+      if (comment) {
+        if (char === "*" && next === "/") {
+          comment = false;
+          index += 1;
+        }
+        continue;
+      }
+
+      if (quote) {
+        if (char === "\\") {
+          index += 1;
+          continue;
+        }
+        if (char === quote) quote = null;
+        continue;
+      }
+
+      if (char === "/" && next === "*") {
+        comment = true;
+        index += 1;
+        continue;
+      }
+      if (char === "'" || char === '"') {
+        quote = char;
+        continue;
+      }
+      if (char === "{") depth += 1;
+      if (char === "}") {
+        depth -= 1;
+        minDepth = Math.min(minDepth, depth);
+      }
+    }
+
+    assert.equal(minDepth, 0, `${name} tiene una llave de cierre sobrante`);
+    assert.equal(depth, 0, `${name} tiene llaves sin cerrar`);
+  }
+});
+
+test("autorización simple no carga settings empresariales", () => {
+  const context = source("src/lib/business-context.ts");
+
+  const permissionBlock = context.slice(
+    context.indexOf("export async function requirePermission(code: string)"),
+    context.indexOf("export async function requirePermissionWithSettings(code: string)"),
+  );
+  assert.equal(permissionBlock.includes("loadCompanySettings"), false);
+  assert.ok(context.includes("export async function requirePermissionWithSettings"));
+  assert.ok(context.includes("loadCompanySettings(context.company.id)"));
+});
+
+test("build no ejecuta migraciones y start sí conserva migrate deploy", () => {
+  const pkg = JSON.parse(source("package.json"));
+  assert.equal(pkg.scripts.build.includes("migrate deploy"), false);
+  assert.ok(pkg.scripts.start.includes("prisma migrate deploy"));
+});
