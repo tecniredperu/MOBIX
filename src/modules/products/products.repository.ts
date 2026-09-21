@@ -76,6 +76,7 @@ export async function getProducts(filters: ProductFilters = {}) {
       include: {
         brand: { select: { name: true } },
         category: { select: { name: true } },
+        image: { select: { id: true } },
         variants: {
           where: { status: "ACTIVE" },
           orderBy: { createdAt: "asc" },
@@ -146,6 +147,7 @@ export async function getProducts(filters: ProductFilters = {}) {
       minimumStock: product.minimumStock,
       status: product.status,
       variantSummary: variantParts.join(" · ") || (product.variants.length > 1 ? `${product.variants.length} variantes` : "Variante base"),
+      imageUrl: product.image ? `/api/products/${product.id}/image` : null,
     };
   });
 
