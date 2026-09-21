@@ -1,4 +1,4 @@
-import { getOperationalContext } from "@/lib/business-context";
+import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 
 function limaTodayStart() {
@@ -39,7 +39,7 @@ function customerName(customer: {
 }
 
 export async function getDashboardData() {
-  const { company, user } = await getOperationalContext();
+  const { company, user } = await requirePermission("dashboard.view");
   const todayStart = limaTodayStart();
   const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
   const sevenDayStart = new Date(todayStart.getTime() - 6 * 86_400_000);
