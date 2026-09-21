@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getOperationalContext } from "@/lib/business-context";
+import { requireAuthContext } from "@/lib/auth-context";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ function customerName(customer: {
 export default async function GlobalSearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const q = (single(params.q) ?? "").trim();
-  const { company, membership, permissions } = await getOperationalContext();
+  const { company, membership, permissions } = await requireAuthContext();
   const can = (code: string) => membership.role.isSystem || permissions.has(code);
   const searchable = q.length >= 2;
 
