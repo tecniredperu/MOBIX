@@ -105,6 +105,21 @@ function canvasToJpeg(canvas: HTMLCanvasElement) {
   });
 }
 
+function cropCanvasHeight(canvas: HTMLCanvasElement, usedHeight: number) {
+  const height = Math.min(canvas.height, Math.max(1754, Math.ceil(usedHeight)));
+  if (height === canvas.height) return canvas;
+
+  const cropped = document.createElement("canvas");
+  cropped.width = canvas.width;
+  cropped.height = height;
+  const context = cropped.getContext("2d");
+  if (!context) return canvas;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, cropped.width, cropped.height);
+  context.drawImage(canvas, 0, 0);
+  return cropped;
+}
+
 function concatBytes(parts: Uint8Array[]) {
   const length = parts.reduce((sum, part) => sum + part.length, 0);
   const output = new Uint8Array(length);
@@ -256,7 +271,7 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   let y = 286;
   ctx.strokeStyle = "#d1d5db";
   ctx.lineWidth = 2;
-  ctx.strokeRect(margin, y, right - margin, 178);
+  ctx.strokeRect(margin, y, right - margin, 214);
   ctx.font = "700 18px Arial";
   ctx.fillStyle = "#4b5563";
   ctx.fillText("CLIENTE", margin + 22, y + 20);
@@ -271,10 +286,24 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
     : "Sin documento";
   ctx.fillText(customerDocument, margin + 22, y + 92);
   ctx.fillText(`Sucursal: ${ticket.branch}`, 785, y + 92);
-  ctx.fillText(`Condición: ${TAX_LABELS[ticket.taxCondition] ?? ticket.taxCondition}`, margin + 22, y + 127);
-  ctx.fillText(`Venta: ${ticket.saleNumber}`, 785, y + 127);
 
-  y += 212;
+  const customerContact = [ticket.customer?.phone, ticket.customer?.email].filter(Boolean).join(" · ");
+  if (customerContact) {
+    ctx.font = "400 16px Arial";
+    drawWrapped(ctx, customerContact, margin + 22, y + 124, 650, 22);
+  }
+  if (ticket.customer?.address) {
+    ctx.font = "400 15px Arial";
+    ctx.fillStyle = "#4b5563";
+    drawWrapped(ctx, ticket.customer.address, margin + 22, y + 151, 650, 20);
+  }
+
+  ctx.font = "400 18px Arial";
+  ctx.fillStyle = "#111827";
+  ctx.fillText(`Condición: ${TAX_LABELS[ticket.taxCondition] ?? ticket.taxCondition}`, 785, y + 127);
+  ctx.fillText(`Venta: ${ticket.saleNumber}`, 785, y + 162);
+
+  y += 248;
   const tableX = margin;
   const tableW = right - margin;
   ctx.fillStyle = "#111827";
@@ -391,9 +420,10 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
   }
   ctx.textAlign = "left";
 
-  const jpegBlob = await canvasToJpeg(canvas);
+  const renderedCanvas = cropCanvasHeight(canvas, y + 100);
+  const jpegBlob = await canvasToJpeg(renderedCanvas);
   const jpeg = new Uint8Array(await jpegBlob.arrayBuffer());
-  const pdf = jpegToPdf(jpeg, canvas.width, canvas.height);
+  const pdf = jpegToPdf(jpeg, renderedCanvas.width, renderedCanvas.height);
   const filename = `comprobante-${safeFileName(documentNumber)}.pdf`;
   return new File([pdf], filename, { type: "application/pdf" });
 }
