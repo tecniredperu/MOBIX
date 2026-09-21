@@ -163,7 +163,16 @@ export async function createSaleAction(input: CreateSaleInput) {
 
   const variantIds = [...new Set(input.lines.map((line) => line.variantId))];
   const variants = await prisma.productVariant.findMany({
-    where: { id: { in: variantIds }, companyId: company.id, status: "ACTIVE" },
+    where: {
+      id: { in: variantIds },
+      companyId: company.id,
+      status: "ACTIVE",
+      product: {
+        companyId: company.id,
+        status: "ACTIVE",
+        deletedAt: null,
+      },
+    },
     include: { product: true },
   });
   if (variants.length !== variantIds.length) {
