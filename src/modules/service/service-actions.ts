@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
 import { roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { revalidatePaths } from "@/lib/revalidation";
@@ -50,7 +50,7 @@ export async function createServiceOrderAction(input: {
   estimatedCost?: number;
   expectedAt?: string;
 }) {
-  const { company, membership, settings } = await requirePermission("service.manage");
+  const { company, membership, settings } = await requirePermissionWithSettings("service.manage");
   if (!SERVICE_TYPES.has(input.serviceType)) {
     throw new Error("Selecciona un tipo de atención válido.");
   }
