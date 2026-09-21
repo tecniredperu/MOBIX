@@ -71,6 +71,16 @@ async function loadServiceCustomers(companyId: string, q = "", take = 20): Promi
     },
     orderBy: { updatedAt: "desc" },
     take,
+    select: {
+      id: true,
+      businessName: true,
+      firstName: true,
+      lastName: true,
+      documentType: true,
+      documentNumber: true,
+      whatsapp: true,
+      phone: true,
+    },
   });
   return rows.map((customer) => ({
     id: customer.id,
@@ -98,13 +108,46 @@ async function loadSoldUnits(companyId: string, q = "", take = 20): Promise<Sold
     },
     orderBy: { updatedAt: "desc" },
     take,
-    include: {
-      product: { include: { brand: true } },
-      variant: true,
-      identifiers: true,
+    select: {
+      id: true,
+      product: {
+        select: {
+          name: true,
+          model: true,
+          warrantyDays: true,
+          brand: { select: { name: true } },
+        },
+      },
+      variant: {
+        select: { ram: true, storage: true, color: true },
+      },
+      identifiers: { select: { type: true, value: true } },
       saleLinks: {
-        include: {
-          saleItem: { include: { sale: { include: { customer: true } } } },
+        select: {
+          warrantyDays: true,
+          warrantyStartsAt: true,
+          warrantyExpiresAt: true,
+          saleItem: {
+            select: {
+              sale: {
+                select: {
+                  id: true,
+                  saleNumber: true,
+                  createdAt: true,
+                  customerId: true,
+                  customer: {
+                    select: {
+                      businessName: true,
+                      firstName: true,
+                      lastName: true,
+                      whatsapp: true,
+                      phone: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -204,7 +247,29 @@ export async function getServiceOrders(filters: {
   const [rows, total, grouped] = await Promise.all([
     prisma.serviceOrder.findMany({
       where,
-      include: { customer: true, technician: { select: { name: true } } },
+      select: {
+        id: true,
+        serviceNumber: true,
+        serviceType: true,
+        status: true,
+        deviceName: true,
+        identifier: true,
+        warrantyCovered: true,
+        estimatedCost: true,
+        finalCost: true,
+        receivedAt: true,
+        expectedAt: true,
+        customer: {
+          select: {
+            businessName: true,
+            firstName: true,
+            lastName: true,
+            whatsapp: true,
+            phone: true,
+          },
+        },
+        technician: { select: { name: true } },
+      },
       orderBy: { receivedAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
