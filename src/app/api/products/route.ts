@@ -188,7 +188,7 @@ export async function POST(request: Request) {
             })),
           },
         },
-        select: { id: true, name: true },
+        select: { id: true, name: true, variants: { select: { id: true } } },
       });
 
       await tx.auditLog.create({
