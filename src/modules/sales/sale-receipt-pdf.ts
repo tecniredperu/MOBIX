@@ -358,7 +358,6 @@ export async function buildSaleReceiptPdf(ticket: SaleTicketData) {
 
   y += 34;
   const summaryX = 765;
-  const summaryW = right - summaryX;
   const summaryRows: Array<[string, string, boolean?]> = [
     ["Valor de venta", money(ticket.subtotal)],
     ["IGV", money(ticket.tax)],

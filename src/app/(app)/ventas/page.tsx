@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { getSalesPage } from "@/modules/sales/sales-list.repository";
 import { SalesView } from "@/modules/sales/sales-view";
@@ -27,8 +26,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const { items, summary, pagination } = await getSalesPage(filters);
 
   return (
-    <AppShell>
+    <>
       <SalesView sales={items} summary={summary} pagination={pagination} filters={filters} />
-    </AppShell>
+    </>
   );
 }

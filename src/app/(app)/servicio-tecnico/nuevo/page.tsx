@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ServiceForm } from "@/modules/service/service-form";
 import {
@@ -34,13 +33,13 @@ export default async function NewServicePage({
   const initialUnit = matchedUnits[0] ?? null;
 
   return (
-    <AppShell>
+    <>
       <ServiceForm
         customers={customers}
         soldUnits={units}
         initialUnitId={initialUnit?.id ?? ""}
         initialUnitQuery={unitQuery}
       />
-    </AppShell>
+    </>
   );
 }

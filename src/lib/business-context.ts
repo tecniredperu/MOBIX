@@ -24,17 +24,12 @@ const DEFAULT_SETTINGS: CompanySettings = {
   requireCashSession: true,
 };
 
-/**
- * El contexto operativo se comparte entre todas las capas de una misma petición.
- * Así permisos, configuración y módulos no repiten consultas idénticas a Supabase.
- */
-const loadOperationalContext = cache(async () => {
-  const auth = await requireAuthContext();
+const loadCompanySettings = cache(async (companyId: string): Promise<CompanySettings> => {
   const row = await prisma.companySettings.findUnique({
-    where: { companyId: auth.company.id },
+    where: { companyId },
   });
 
-  const settings: CompanySettings = row
+  return row
     ? {
         taxRate: Number(row.taxRate),
         defaultTaxCondition: row.defaultTaxCondition,
@@ -46,6 +41,15 @@ const loadOperationalContext = cache(async () => {
         requireCashSession: row.requireCashSession,
       }
     : DEFAULT_SETTINGS;
+});
+
+/**
+ * Contexto operativo completo. Carga settings solo cuando el módulo realmente
+ * los necesita. La autorización básica no debe pagar esta consulta.
+ */
+const loadOperationalContext = cache(async () => {
+  const auth = await requireAuthContext();
+  const settings = await loadCompanySettings(auth.company.id);
 
   return {
     company: auth.company,
@@ -61,9 +65,22 @@ export async function getOperationalContext() {
 }
 
 export async function requirePermission(code: string) {
-  const context = await getOperationalContext();
-  if (!context.membership.role.isSystem && !context.permissions.has(code)) {
+  const auth = await requireAuthContext();
+
+  if (!auth.role.isSystem && !auth.permissions.has(code)) {
     throw new Error("No tienes permisos para realizar esta operación.");
   }
-  return context;
+
+  return {
+    company: auth.company,
+    membership: auth.membership,
+    user: auth.user,
+    permissions: auth.permissions,
+  };
+}
+
+export async function requirePermissionWithSettings(code: string) {
+  const context = await requirePermission(code);
+  const settings = await loadCompanySettings(context.company.id);
+  return { ...context, settings };
 }

@@ -5,9 +5,26 @@ export async function getTransfers() {
   const company = await getActiveCompany();
   const rows = await prisma.stockTransfer.findMany({
     where: { companyId: company.id },
-    include: {
-      fromWarehouse: { include: { branch: { select: { name: true } } } },
-      toWarehouse: { include: { branch: { select: { name: true } } } },
+    select: {
+      id: true,
+      transferNumber: true,
+      status: true,
+      notes: true,
+      createdAt: true,
+      sentAt: true,
+      receivedAt: true,
+      fromWarehouse: {
+        select: {
+          name: true,
+          branch: { select: { name: true } },
+        },
+      },
+      toWarehouse: {
+        select: {
+          name: true,
+          branch: { select: { name: true } },
+        },
+      },
       createdBy: { select: { name: true } },
       receivedBy: { select: { name: true } },
       items: { select: { quantity: true } },
@@ -41,7 +58,7 @@ export async function getTransferOptions() {
   const [warehouses, variants] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE" },
-      include: { branch: { select: { name: true } } },
+      select: { id: true, name: true, branch: { select: { name: true } } },
       orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
     }),
     prisma.productVariant.findMany({
@@ -50,10 +67,33 @@ export async function getTransferOptions() {
         status: "ACTIVE",
         product: { status: "ACTIVE", type: { in: ["PHONE", "SERIALIZED", "ACCESSORY"] } },
       },
-      include: {
-        product: { include: { brand: true } },
-        units: { where: { status: "AVAILABLE" }, include: { identifiers: true } },
-        inventoryBalances: true,
+      select: {
+        id: true,
+        productId: true,
+        color: true,
+        ram: true,
+        storage: true,
+        sku: true,
+        purchasePrice: true,
+        product: {
+          select: {
+            name: true,
+            type: true,
+            brand: { select: { name: true } },
+          },
+        },
+        units: {
+          where: { status: "AVAILABLE" },
+          select: {
+            id: true,
+            warehouseId: true,
+            purchaseCost: true,
+            identifiers: { select: { type: true, value: true } },
+          },
+        },
+        inventoryBalances: {
+          select: { warehouseId: true, quantity: true, averageCost: true },
+        },
       },
       orderBy: { product: { name: "asc" } },
     }),

@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { PurchasesView } from "@/modules/purchases/purchases-view";
 import { getPurchases } from "@/modules/purchases/purchases.repository";
@@ -15,7 +14,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const { items, summary } = await getPurchases(filters);
 
   return (
-    <AppShell>
+    <>
       <PurchasesView
         purchases={items}
         summary={summary}
@@ -24,6 +23,6 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         createdNumber={single(params.number)}
         canCreate={context.membership.role.isSystem || context.permissions.has("purchases.create")}
       />
-    </AppShell>
+    </>
   );
 }

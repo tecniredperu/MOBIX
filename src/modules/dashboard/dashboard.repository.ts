@@ -1,4 +1,4 @@
-import { getOperationalContext } from "@/lib/business-context";
+import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 
 function limaTodayStart() {
@@ -39,20 +39,12 @@ function customerName(customer: {
 }
 
 export async function getDashboardData() {
-  const { company, user } = await getOperationalContext();
+  const { company, user } = await requirePermission("dashboard.view");
   const todayStart = limaTodayStart();
   const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
   const sevenDayStart = new Date(todayStart.getTime() - 6 * 86_400_000);
 
-  const [todaySales, availableUnits, activeProducts, stockProducts, weekSales, weekReturns, recentSales, openCash] = await Promise.all([
-    prisma.sale.findMany({
-      where: {
-        companyId: company.id,
-        status: { in: ["COMPLETED", "REFUNDED"] },
-        createdAt: { gte: todayStart, lt: tomorrowStart },
-      },
-      select: { total: true },
-    }),
+  const [availableUnits, activeProducts, stockProducts, weekSales, weekReturns, recentSales, openCash] = await Promise.all([
     prisma.productUnit.count({
       where: { companyId: company.id, status: "AVAILABLE", product: { status: "ACTIVE" } },
     }),
@@ -74,7 +66,7 @@ export async function getDashboardData() {
         variants: {
           where: { status: "ACTIVE" },
           select: {
-            units: { where: { status: "AVAILABLE" }, select: { id: true } },
+            _count: { select: { units: { where: { status: "AVAILABLE" } } } },
             inventoryBalances: { select: { quantity: true } },
           },
         },
@@ -103,7 +95,12 @@ export async function getDashboardData() {
       where: { companyId: company.id, status: { in: ["COMPLETED", "REFUNDED"] } },
       orderBy: { createdAt: "desc" },
       take: 5,
-      include: {
+      select: {
+        id: true,
+        saleNumber: true,
+        total: true,
+        status: true,
+        createdAt: true,
         customer: { select: { businessName: true, firstName: true, lastName: true } },
         payments: { select: { paymentMethod: true } },
       },
@@ -111,10 +108,13 @@ export async function getDashboardData() {
     prisma.cashSession.findFirst({
       where: { companyId: company.id, userId: user.id, status: "OPEN" },
       orderBy: { openedAt: "desc" },
-      include: { branch: { select: { name: true } } },
+      select: { openedAt: true, branch: { select: { name: true } } },
     }),
   ]);
 
+  const todaySales = weekSales.filter(
+    (sale) => sale.createdAt >= todayStart && sale.createdAt < tomorrowStart,
+  );
   const todayGross = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const todayReturnOrders = weekReturns.filter(
     (order) => order.createdAt >= todayStart && order.createdAt < tomorrowStart,
@@ -130,7 +130,7 @@ export async function getDashboardData() {
   for (const product of stockProducts) {
     const stock = product.variants.reduce((total, variant) => {
       if (product.type === "PHONE" || product.type === "SERIALIZED") {
-        return total + variant.units.length;
+        return total + variant._count.units;
       }
       return total + variant.inventoryBalances.reduce((sum, balance) => sum + Number(balance.quantity), 0);
     }, 0);

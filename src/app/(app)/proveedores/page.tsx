@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { SuppliersView } from "@/modules/suppliers/suppliers-view";
 import { getSuppliers } from "@/modules/suppliers/suppliers.repository";
@@ -18,8 +17,8 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const canEdit = context.membership.role.isSystem || context.permissions.has("purchases.create");
 
   return (
-    <AppShell>
+    <>
       <SuppliersView suppliers={items} summary={summary} filters={filters} canEdit={canEdit} />
-    </AppShell>
+    </>
   );
 }

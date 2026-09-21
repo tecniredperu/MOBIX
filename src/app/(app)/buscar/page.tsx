@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { AppShell } from "@/components/layout/app-shell";
-import { getOperationalContext } from "@/lib/business-context";
+import { requireAuthContext } from "@/lib/auth-context";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +29,7 @@ function customerName(customer: {
 export default async function GlobalSearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const q = (single(params.q) ?? "").trim();
-  const { company, membership, permissions } = await getOperationalContext();
+  const { company, membership, permissions } = await requireAuthContext();
   const can = (code: string) => membership.role.isSystem || permissions.has(code);
   const searchable = q.length >= 2;
 
@@ -47,7 +46,13 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               { barcode: { contains: q, mode: "insensitive" } },
             ],
           },
-          include: { brand: true },
+          select: {
+            id: true,
+            name: true,
+            model: true,
+            sku: true,
+            brand: { select: { name: true } },
+          },
           take: 10,
           orderBy: { name: "asc" },
         })
@@ -58,9 +63,16 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
             companyId: company.id,
             value: { contains: q, mode: "insensitive" },
           },
-          include: {
+          select: {
+            id: true,
+            type: true,
+            value: true,
             productUnit: {
-              include: { product: true, variant: true, warehouse: true },
+              select: {
+                product: { select: { name: true } },
+                variant: { select: { color: true } },
+                warehouse: { select: { name: true } },
+              },
             },
           },
           take: 10,
@@ -87,7 +99,20 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               },
             ],
           },
-          include: { customer: true },
+          select: {
+            id: true,
+            saleNumber: true,
+            documentSeries: true,
+            documentNumber: true,
+            total: true,
+            customer: {
+              select: {
+                businessName: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
           take: 10,
           orderBy: { createdAt: "desc" },
         })
@@ -106,6 +131,14 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               { whatsapp: { contains: q, mode: "insensitive" } },
             ],
           },
+          select: {
+            id: true,
+            businessName: true,
+            firstName: true,
+            lastName: true,
+            documentNumber: true,
+            phone: true,
+          },
           take: 10,
           orderBy: { createdAt: "desc" },
         })
@@ -115,7 +148,7 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
   const count = products.length + identifiers.length + sales.length + customers.length;
 
   return (
-    <AppShell>
+    <>
       <div className="page-stack global-search-page">
         <section className="page-heading">
           <div>
@@ -232,6 +265,6 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

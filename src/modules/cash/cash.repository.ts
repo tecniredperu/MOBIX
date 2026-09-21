@@ -1,4 +1,4 @@
-import { getOperationalContext } from "@/lib/business-context";
+import { requireAuthContext } from "@/lib/auth-context";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import {
@@ -14,7 +14,6 @@ import type {
   CashMovementKind,
   CashOpenSession,
   CashPaymentMethod,
-  CashPaymentTotals,
   CashSessionHistoryItem,
 } from "./cash-types";
 
@@ -386,7 +385,7 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
 }
 
 export async function getCashDeskContext() {
-  const { company, membership, user } = await getOperationalContext();
+  const { company, membership, user } = await requireAuthContext();
 
   const [branchesRaw, openSessionRaw, historyRaw] = await Promise.all([
     prisma.branch.findMany({

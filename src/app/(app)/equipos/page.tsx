@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { DevicesView } from "@/modules/devices/devices-view";
 import { getDevices } from "@/modules/devices/devices.repository";
@@ -27,8 +26,8 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   }
 
   return (
-    <AppShell>
+    <>
       <DevicesView items={items} warehouses={warehouses} summary={summary} filters={filters} />
-    </AppShell>
+    </>
   );
 }

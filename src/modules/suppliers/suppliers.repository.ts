@@ -70,21 +70,3 @@ export async function getSuppliers(filters: SupplierFilters = {}) {
     },
   };
 }
-
-export async function getActiveSupplierOptions() {
-  const company = await getActiveCompany();
-  return prisma.supplier.findMany({
-    where: { companyId: company.id, status: "ACTIVE" },
-    orderBy: { businessName: "asc" },
-    select: {
-      id: true,
-      documentType: true,
-      documentNumber: true,
-      businessName: true,
-      contactName: true,
-      phone: true,
-      email: true,
-      address: true,
-    },
-  });
-}

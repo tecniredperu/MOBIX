@@ -321,27 +321,36 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
     });
   }
 
-  const identifierProducts = identifierProductIds.size
-    ? await loadProducts(company.id, undefined, [...identifierProductIds])
+  const textProductIds = new Set(textProducts.map((product) => product.id));
+  const missingIdentifierProductIds = [...identifierProductIds].filter(
+    (productId) => !textProductIds.has(productId),
+  );
+  const identifierProducts = missingIdentifierProductIds.length
+    ? await loadProducts(company.id, undefined, missingIdentifierProductIds)
     : [];
 
-  const [identifierCatalogRaw, textCatalog] = await Promise.all([
-    identifierProducts.length
-      ? mapCatalog(company.id, warehouses, identifierProducts, matchedUnitsByVariant)
-      : Promise.resolve([] as PosCatalogItem[]),
-    mapCatalog(company.id, warehouses, textProducts),
-  ]);
-
-  const identifierCatalog = identifierCatalogRaw.filter((item) => matchedUnitsByVariant.has(item.variantId));
-  const merged = new Map<string, PosCatalogItem>();
-
-  for (const item of identifierCatalog) merged.set(item.variantId, item);
-  for (const item of textCatalog) {
-    const existing = merged.get(item.variantId);
-    merged.set(item.variantId, existing ? { ...item, units: existing.units } : item);
+  const combinedProducts = [...textProducts];
+  const combinedProductIds = new Set(textProductIds);
+  for (const product of identifierProducts) {
+    if (combinedProductIds.has(product.id)) continue;
+    combinedProductIds.add(product.id);
+    combinedProducts.push(product);
   }
 
-  return [...merged.values()]
+  const textVariantIds = new Set(
+    textProducts.flatMap((product) => product.variants.map((variant) => variant.id)),
+  );
+  const catalog = await mapCatalog(
+    company.id,
+    warehouses,
+    combinedProducts,
+    matchedUnitsByVariant,
+  );
+
+  return catalog
+    .filter(
+      (item) => textVariantIds.has(item.variantId) || matchedUnitsByVariant.has(item.variantId),
+    )
     .sort((a, b) => catalogSearchScore(b, query) - catalogSearchScore(a, query) || a.name.localeCompare(b.name, "es"))
     .slice(0, 80);
 }

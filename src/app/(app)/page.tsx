@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { getDashboardData } from "@/modules/dashboard/dashboard.repository";
 import { DashboardView } from "@/modules/dashboard/dashboard-view";
@@ -10,8 +9,8 @@ export default async function HomePage() {
   const data = await getDashboardData();
 
   return (
-    <AppShell>
+    <>
       <DashboardView data={data} isSystem={auth.membership.role.isSystem} permissions={[...auth.permissions]} />
-    </AppShell>
+    </>
   );
 }

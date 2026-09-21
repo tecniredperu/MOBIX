@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requireAuthContext } from "@/lib/auth-context";
 import { ChangePasswordForm } from "@/modules/auth/change-password-form";
 
@@ -7,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const auth = await requireAuthContext();
   return (
-    <AppShell>
+    <>
       <div className="page-stack account-page">
         <section className="page-heading"><div><span className="eyebrow">MI CUENTA</span><h1>Perfil y seguridad</h1><p>Información de la cuenta que está operando actualmente en MOBIX.</p></div></section>
         <section className="account-grid">
@@ -19,6 +18,6 @@ export default async function AccountPage() {
           <article className="panel"><ChangePasswordForm /></article>
         </section>
       </div>
-    </AppShell>
+    </>
   );
 }

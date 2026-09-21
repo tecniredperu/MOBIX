@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ProductForm } from "@/modules/products/product-form";
 import { getProductCatalogContext } from "@/modules/products/products.repository";
@@ -10,8 +9,8 @@ export default async function NewProductPage() {
   const { categories, brands } = await getProductCatalogContext();
 
   return (
-    <AppShell>
+    <>
       <ProductForm categories={categories} brands={brands} />
-    </AppShell>
+    </>
   );
 }

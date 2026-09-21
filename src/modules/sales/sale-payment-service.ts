@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 import { createSaleAction } from "./sale-actions";
 import type { CreateSaleInput } from "./sale-types";
@@ -8,7 +8,7 @@ function money(value: number) {
 }
 
 async function assertCashPolicyForSale(warehouseId: string) {
-  const { company, membership, settings } = await requirePermission("sales.create");
+  const { company, membership, settings } = await requirePermissionWithSettings("sales.create");
 
   const warehouse = await prisma.warehouse.findFirst({
     where: { id: warehouseId, companyId: company.id, status: "ACTIVE", isSaleable: true },

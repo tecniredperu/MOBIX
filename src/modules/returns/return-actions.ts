@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -89,7 +89,7 @@ async function returnedQuantityMap(
 }
 
 export async function createReturnAction(input: CreateReturnInput) {
-  const { company, membership, settings } = await requirePermission("returns.manage");
+  const { company, membership, settings } = await requirePermissionWithSettings("returns.manage");
   const reason = input.reason?.trim();
   const refundReference = input.refundReference?.trim() || null;
 
@@ -569,7 +569,7 @@ export async function refundExchangeCreditAction(input: {
   method: ExchangeRefundMethod;
   reference?: string;
 }) {
-  const { company, membership, settings } = await requirePermission("returns.manage");
+  const { company, membership, settings } = await requirePermissionWithSettings("returns.manage");
   const exchangeCreditId = input.exchangeCreditId?.trim();
   const reference = input.reference?.trim() || null;
 

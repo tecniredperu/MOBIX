@@ -13,7 +13,8 @@ function endOfDay(value: string | undefined, fallback: Date) {
 }
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 
-type ReceivableRow = { balance: unknown; dueDate: Date };
+type AmountSummaryRow = { total: unknown };
+type ReceivableSummaryRow = { total: unknown; overdue: unknown };
 type ReturnSummaryRow = {
   merchandiseTotal: unknown;
   cashRefundTotal: unknown;
@@ -49,11 +50,29 @@ export async function getReports(filters: { from?: string; to?: string }) {
       status: { in: ["COMPLETED", "REFUNDED"] },
       createdAt: { gte: from, lte: to },
     },
-    include: {
-      items: { include: { product: { include: { brand: true, category: true } }, variant: true } },
-      payments: true,
-      seller: { select: { id: true, name: true } },
-      branch: { select: { id: true, name: true } },
+    select: {
+      total: true,
+      discount: true,
+      createdAt: true,
+      sellerId: true,
+      branchId: true,
+      items: {
+        select: {
+          productId: true,
+          quantity: true,
+          unitCost: true,
+          total: true,
+          product: {
+            select: {
+              name: true,
+              brand: { select: { name: true } },
+            },
+          },
+        },
+      },
+      payments: { select: { paymentMethod: true, amount: true } },
+      seller: { select: { name: true } },
+      branch: { select: { name: true } },
     },
     orderBy: { createdAt: "asc" },
   }));
@@ -109,9 +128,23 @@ export async function getReports(filters: { from?: string; to?: string }) {
     }
   }
 
-  const [receivables, cashClosures, returnRows, cancelledCount] = await Promise.all([
-    safe<ReceivableRow[]>("Cuentas por cobrar", [], () => prisma.$queryRaw<ReceivableRow[]>`SELECT "balance", "dueDate" FROM "accounts_receivable" WHERE "companyId" = ${company.id} AND "status" IN ('OPEN', 'PARTIAL')`),
-    safe("Cierres de caja", [], () => prisma.cashSession.findMany({ where: { companyId: company.id, status: "CLOSED", closedAt: { gte: from, lte: to } }, select: { difference: true } })),
+  const [receivableRows, cashDifferenceRows, returnRows, cancelledCount] = await Promise.all([
+    safe<ReceivableSummaryRow[]>("Cuentas por cobrar", [{ total: 0, overdue: 0 }], () => prisma.$queryRaw<ReceivableSummaryRow[]>`
+      SELECT
+        COALESCE(SUM("balance"), 0) AS "total",
+        COALESCE(SUM("balance") FILTER (WHERE "dueDate" < NOW()), 0) AS "overdue"
+      FROM "accounts_receivable"
+      WHERE "companyId" = ${company.id}
+        AND "status" IN ('OPEN', 'PARTIAL')
+        AND "balance" > 0
+    `),
+    safe<AmountSummaryRow[]>("Cierres de caja", [{ total: 0 }], () => prisma.$queryRaw<AmountSummaryRow[]>`
+      SELECT COALESCE(SUM("difference"), 0) AS "total"
+      FROM "cash_sessions"
+      WHERE "companyId" = ${company.id}
+        AND "status" = 'CLOSED'
+        AND "closedAt" BETWEEN ${from} AND ${to}
+    `),
     safe<ReturnSummaryRow[]>("Devoluciones", [], () => prisma.$queryRaw<ReturnSummaryRow[]>`
       SELECT
         COALESCE((
@@ -157,23 +190,42 @@ export async function getReports(filters: { from?: string; to?: string }) {
   let purchasesTotal: number | null = null;
   let inventoryValue: number | null = null;
   if (canSeeCosts) {
-    purchasesTotal = await safe("Compras", 0, async () => {
-      const purchases = await prisma.purchase.aggregate({ where: { companyId: company.id, status: "RECEIVED", issueDate: { gte: from, lte: to } }, _sum: { total: true } });
-      return Number(purchases._sum.total ?? 0);
-    });
-    inventoryValue = await safe("Stock valorizado", 0, async () => {
-      const [accessoryBalances, availableUnits] = await Promise.all([
-        prisma.inventoryBalance.findMany({ where: { companyId: company.id }, select: { quantity: true, averageCost: true } }),
-        prisma.productUnit.findMany({ where: { companyId: company.id, status: "AVAILABLE" }, select: { purchaseCost: true } }),
-      ]);
-      return accessoryBalances.reduce((sum, item) => sum + Number(item.quantity) * Number(item.averageCost), 0)
-        + availableUnits.reduce((sum, item) => sum + Number(item.purchaseCost), 0);
-    });
+    [purchasesTotal, inventoryValue] = await Promise.all([
+      safe("Compras", 0, async () => {
+        const purchases = await prisma.purchase.aggregate({
+          where: {
+            companyId: company.id,
+            status: "RECEIVED",
+            issueDate: { gte: from, lte: to },
+          },
+          _sum: { total: true },
+        });
+        return Number(purchases._sum.total ?? 0);
+      }),
+      safe("Stock valorizado", 0, async () => {
+        const rows = await prisma.$queryRaw<AmountSummaryRow[]>`
+          SELECT
+            COALESCE((
+              SELECT SUM("quantity" * "averageCost")
+              FROM "inventory_balances"
+              WHERE "companyId" = ${company.id}
+            ), 0)
+            +
+            COALESCE((
+              SELECT SUM("purchaseCost")
+              FROM "product_units"
+              WHERE "companyId" = ${company.id}
+                AND "status" = 'AVAILABLE'
+            ), 0) AS "total"
+        `;
+        return Number(rows[0]?.total ?? 0);
+      }),
+    ]);
   }
 
-  const receivableTotal = receivables.reduce((sum, item) => sum + Number(item.balance), 0);
-  const overdueTotal = receivables.filter((item) => new Date(item.dueDate) < now).reduce((sum, item) => sum + Number(item.balance), 0);
-  const cashDifference = cashClosures.reduce((sum, item) => sum + Number(item.difference ?? 0), 0);
+  const receivableTotal = Number(receivableRows[0]?.total ?? 0);
+  const overdueTotal = Number(receivableRows[0]?.overdue ?? 0);
+  const cashDifference = Number(cashDifferenceRows[0]?.total ?? 0);
   const returnsTotal = Number(returnRows[0]?.merchandiseTotal ?? 0);
   const cashRefundTotal = Number(returnRows[0]?.cashRefundTotal ?? 0);
   const returnedCost = canSeeCosts ? Number(returnRows[0]?.cost ?? 0) : null;

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "build": "prisma generate && next build",
     "start": "npm run prod:check && prisma migrate deploy && npm run db:bootstrap && next start",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
@@ -29,23 +29,23 @@
     "go-live:check": "node scripts/go-live-check.mjs"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
-    "@types/node": "^22.15.0",
-    "@types/pg": "^8.15.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
     "dotenv": "^16.5.0",
     "lucide-react": "^0.468.0",
     "next": "16.3.4",
     "pg": "^8.16.0",
-    "prisma": "7.10.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "react-hook-form": "^7.62.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.8.0",
     "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prisma": "7.10.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.0"
   }
 }
