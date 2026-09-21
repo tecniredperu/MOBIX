@@ -1,4 +1,4 @@
-import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { PurchaseForm } from "@/modules/purchases/purchase-form";
 import { getPurchaseContext } from "@/modules/purchases/purchases.repository";
 
