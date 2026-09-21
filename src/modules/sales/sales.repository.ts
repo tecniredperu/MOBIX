@@ -54,6 +54,7 @@ export async function getPosContext() {
         type: true,
         name: true,
         sku: true,
+        image: { select: { id: true } },
         brand: { select: { name: true } },
         category: { select: { name: true } },
         variants: {
@@ -128,6 +129,7 @@ export async function getPosContext() {
         variant: variantLabel(variant),
         salePrice: Number(variant.salePrice),
         minimumSalePrice: Number(variant.minimumSalePrice),
+        imageUrl: product.image ? `/api/products/${product.id}/image` : null,
         units: [],
         balances,
       };
