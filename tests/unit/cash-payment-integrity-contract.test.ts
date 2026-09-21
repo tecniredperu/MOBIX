@@ -39,3 +39,25 @@ test("la base conserva una sola caja abierta por usuario", async () => {
   assert.ok(migration.includes('CREATE UNIQUE INDEX "cash_sessions_one_open_per_user_idx"'));
   assert.ok(migration.includes('WHERE "status" = \'OPEN\''));
 });
+
+
+test("anulación de accesorios recalcula costo promedio al restaurar stock", async () => {
+  const sale = await source("src/modules/sales/sale-actions.ts");
+
+  assert.ok(sale.includes("const currentBalance = await tx.inventoryBalance.findUnique"));
+  assert.ok(sale.includes("const newAverage = newQty > 0"));
+  assert.ok(sale.includes("oldQty * oldAverage + item.quantity * restoredCost"));
+  assert.ok(sale.includes("averageCost: newAverage"));
+});
+
+test("devoluciones digitales bloquean referencias de reembolso repetidas", async () => {
+  const returns = await source("src/modules/returns/return-actions.ts");
+  const migration = await source("prisma/migrations/20260921094500_refund_reference_indexes/migration.sql");
+
+  assert.ok(returns.includes('":REFUND:"'));
+  assert.ok(returns.includes('"return_orders" ro'));
+  assert.ok(returns.includes('"exchange_credits" ec'));
+  assert.ok(returns.includes("ya fue utilizada en"));
+  assert.ok(migration.includes("return_orders_refund_reference_normalized_idx"));
+  assert.ok(migration.includes("exchange_credits_refund_reference_normalized_idx"));
+});
