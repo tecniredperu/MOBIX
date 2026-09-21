@@ -234,8 +234,9 @@ jobs:
           echo "$EDIT_HTML" | grep -q "Editar producto"
           echo "$EDIT_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA"
 
+          IMAGE_DATA="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2n0AAAAASUVORK5CYII="
           UPDATE_PAYLOAD=$(cat <<JSON
-          {"action":"update","categoryId":"${CATEGORY_ID}","brandId":"${BRAND_ID}","name":"CI CASE IPHONE 17 PRO MAX SILICONA EDITADO","model":"CI-CASE-17PM-V2","sku":"CI-CASE-17PM","barcode":"CI170001","description":"Producto editado por CI","warrantyDays":45,"minimumStock":3,"removeImage":false,"variants":[{"id":"${VARIANT_ID}","sku":"CI-CASE-17PM-BLK","barcode":"CI170001-BLK","color":"Negro","ram":"","storage":"","purchasePrice":16.5,"salePrice":31.9,"minimumSalePrice":25.9}]}
+          {"action":"update","categoryId":"${CATEGORY_ID}","brandId":"${BRAND_ID}","name":"CI CASE IPHONE 17 PRO MAX SILICONA EDITADO","model":"CI-CASE-17PM-V2","sku":"CI-CASE-17PM","barcode":"CI170001","description":"Producto editado por CI","warrantyDays":45,"minimumStock":3,"imageData":"${IMAGE_DATA}","imageMimeType":"image/png","removeImage":false,"variants":[{"id":"${VARIANT_ID}","sku":"CI-CASE-17PM-BLK","barcode":"CI170001-BLK","color":"Negro","ram":"","storage":"","purchasePrice":16.5,"salePrice":31.9,"minimumSalePrice":25.9}]}
           JSON
           )
 
@@ -253,6 +254,20 @@ jobs:
           echo "$UPDATED_PRODUCTS_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA EDITADO"
           echo "$UPDATED_PRODUCTS_HTML" | grep -q "Producto actualizado"
 
+          echo "$UPDATED_PRODUCTS_HTML" | grep -q "/api/products/${PRODUCT_ID}/image?v="
+
+          IMAGE_STATUS=$(curl -s \
+            -o /tmp/mobix-product-image.bin \
+            -D /tmp/mobix-product-image.headers \
+            -w "%{http_code}" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/api/products/${PRODUCT_ID}/image")
+          if [ "$IMAGE_STATUS" != "200" ]; then
+            echo "Se esperaba HTTP 200 al leer la imagen y se recibió $IMAGE_STATUS"
+            exit 1
+          fi
+          grep -qi "content-type: image/png" /tmp/mobix-product-image.headers
+
           DISABLE_PRODUCT=$(curl -fsS \
             -X PATCH \
             -H "Content-Type: application/json" \
@@ -261,6 +276,39 @@ jobs:
             "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
           echo "$DISABLE_PRODUCT" | grep -q '"status":"INACTIVE"'
 
+          WAREHOUSE_ID=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(JSON.parse(x).warehouseId)')
+
+          INACTIVE_CATALOG=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/api/pos/catalog?q=CI-CASE-17PM-BLK&warehouseId=${WAREHOUSE_ID}")
+          node -e '
+            const body=JSON.parse(process.argv[1]);
+            const variantId=process.argv[2];
+            if ((body.items || []).some((item) => item.variantId === variantId)) {
+              console.error("El producto inactivo sigue apareciendo en el POS.");
+              process.exit(1);
+            }
+          ' "$INACTIVE_CATALOG" "$VARIANT_ID"
+
+          STALE_POS_PAYLOAD=$(cat <<JSON
+          {"warehouseId":"${WAREHOUSE_ID}","documentType":"RECEIPT","taxCondition":"TAXED","discount":0,"lines":[{"variantId":"${VARIANT_ID}","quantity":1,"unitPrice":31.9}],"payments":[{"method":"CASH","amount":31.9}]}
+          JSON
+          )
+          INACTIVE_SALE_STATUS=$(curl -s \
+            -o /tmp/mobix-inactive-product-sale.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$STALE_POS_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales)
+          if [ "$INACTIVE_SALE_STATUS" != "400" ]; then
+            echo "Un POS con datos antiguos pudo vender un producto inactivo. HTTP $INACTIVE_SALE_STATUS"
+            cat /tmp/mobix-inactive-product-sale.json || true
+            exit 1
+          fi
+          grep -q "ya no están disponibles" /tmp/mobix-inactive-product-sale.json
+
           ENABLE_PRODUCT=$(curl -fsS \
             -X PATCH \
             -H "Content-Type: application/json" \
@@ -268,6 +316,18 @@ jobs:
             --data '{"action":"status","status":"ACTIVE"}' \
             "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
           echo "$ENABLE_PRODUCT" | grep -q '"status":"ACTIVE"'
+
+          ACTIVE_CATALOG=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/api/pos/catalog?q=CI-CASE-17PM-BLK&warehouseId=${WAREHOUSE_ID}")
+          node -e '
+            const body=JSON.parse(process.argv[1]);
+            const variantId=process.argv[2];
+            if (!(body.items || []).some((item) => item.variantId === variantId)) {
+              console.error("El producto reactivado no volvió al POS.");
+              process.exit(1);
+            }
+          ' "$ACTIVE_CATALOG" "$VARIANT_ID"
 
           CATEGORY_PATCH=$(curl -fsS \
             -X PATCH \
@@ -344,6 +404,33 @@ jobs:
             echo "El producto eliminado lógicamente sigue apareciendo en la lista."
             exit 1
           fi
+
+          DELETED_CATALOG=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/api/pos/catalog?q=CI-CASE-17PM-BLK&warehouseId=${WAREHOUSE_ID}")
+          node -e '
+            const body=JSON.parse(process.argv[1]);
+            const variantId=process.argv[2];
+            if ((body.items || []).some((item) => item.variantId === variantId)) {
+              console.error("El producto eliminado sigue apareciendo en el POS.");
+              process.exit(1);
+            }
+          ' "$DELETED_CATALOG" "$VARIANT_ID"
+
+          DELETED_SALE_STATUS=$(curl -s \
+            -o /tmp/mobix-deleted-product-sale.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$STALE_POS_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales)
+          if [ "$DELETED_SALE_STATUS" != "400" ]; then
+            echo "Un POS con datos antiguos pudo vender un producto eliminado. HTTP $DELETED_SALE_STATUS"
+            cat /tmp/mobix-deleted-product-sale.json || true
+            exit 1
+          fi
+          grep -q "ya no están disponibles" /tmp/mobix-deleted-product-sale.json
 
       - name: Construir imagen Docker de producción
         run: docker build -t mobix-ci:${{ github.sha }} .
