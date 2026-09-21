@@ -1,11 +1,11 @@
-import { requirePermission } from "@/lib/business-context";
+import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
 import { PurchaseForm } from "@/modules/purchases/purchase-form";
 import { getPurchaseContext } from "@/modules/purchases/purchases.repository";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewPurchasePage() {
-  const { settings } = await requirePermission("purchases.create");
+  const { settings } = await requirePermissionWithSettings("purchases.create");
   const { catalog, warehouses, suppliers } = await getPurchaseContext();
 
   return (
