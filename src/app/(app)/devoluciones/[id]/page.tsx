@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ReturnDetailView } from "@/modules/returns/return-detail-view";
 import { getReturnDetail } from "@/modules/returns/returns.repository";
@@ -29,8 +28,8 @@ export default async function ReturnDetailPage({
   };
 
   return (
-    <AppShell>
+    <>
       <ReturnDetailView detail={detail} company={company} />
-    </AppShell>
+    </>
   );
 }
