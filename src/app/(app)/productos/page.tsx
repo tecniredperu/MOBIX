@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ProductsView } from "@/modules/products/products-view";
 import { getProductCatalogContext, getProducts } from "@/modules/products/products.repository";
@@ -40,7 +39,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   ]);
 
   return (
-    <AppShell>
+    <>
       <ProductsView
         products={items}
         summary={summary}
@@ -52,6 +51,6 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         updated={single(params.updated) === "1"}
         canManage={canManage}
       />
-    </AppShell>
+    </>
   );
 }
