@@ -935,6 +935,23 @@ export async function cancelSaleAction(input: {
       } else if (item.product.type === "ACCESSORY") {
         await lockInventoryBalance(tx, company.id, sale.warehouseId, item.variantId);
 
+        const currentBalance = await tx.inventoryBalance.findUnique({
+          where: {
+            companyId_warehouseId_variantId: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              variantId: item.variantId,
+            },
+          },
+        });
+        const oldQty = Number(currentBalance?.quantity ?? 0);
+        const oldAverage = Number(currentBalance?.averageCost ?? 0);
+        const restoredCost = Number(item.unitCost);
+        const newQty = oldQty + item.quantity;
+        const newAverage = newQty > 0
+          ? roundMoney((oldQty * oldAverage + item.quantity * restoredCost) / newQty)
+          : restoredCost;
+
         await tx.inventoryBalance.upsert({
           where: {
             companyId_warehouseId_variantId: {
@@ -949,10 +966,11 @@ export async function cancelSaleAction(input: {
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            averageCost: Number(item.unitCost),
+            averageCost: restoredCost,
           },
           update: {
-            quantity: { increment: item.quantity },
+            quantity: newQty,
+            averageCost: newAverage,
           },
         });
 
