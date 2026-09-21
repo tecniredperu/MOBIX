@@ -818,8 +818,6 @@
 
   .pos-v5 .pos-v5-cart-card {
     height: auto !important;
-    min-height: 292px !important;
-    max-height: 292px !important;
     display: flex !important;
     flex-direction: column;
     overflow: hidden !important;
@@ -845,72 +843,6 @@
     overflow-x: hidden !important;
     scrollbar-width: thin;
     scrollbar-color: #d6dee8 transparent;
-  }
-
-  .pos-v5 .pos-v5-cart-card .pos-cart-line {
-    min-height: 50px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(205px, auto);
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-  }
-
-  .pos-v5 .pos-cart-line-head {
-    min-width: 0;
-  }
-
-  .pos-v5 .pos-cart-line-head > div {
-    min-width: 0;
-  }
-
-  .pos-v5 .pos-cart-line-head strong {
-    display: block;
-    overflow: hidden;
-    color: #0f172a;
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 1.15;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .pos-v5 .pos-cart-line-head span,
-  .pos-v5 .pos-cart-line-head code {
-    color: #64748b;
-    font-size: 7.8px;
-    line-height: 1.1;
-  }
-
-  .pos-v5 .pos-cart-controls {
-    display: grid;
-    grid-template-columns: auto 88px 68px;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .pos-v5 .qty-control,
-  .pos-v5 .price-control,
-  .pos-v5 .fixed-qty {
-    min-height: 29px;
-    height: 29px;
-  }
-
-  .pos-v5 .pos-cart-controls > strong {
-    color: #0f172a;
-    font-size: 10px;
-    font-weight: 800;
-    text-align: right;
-  }
-
-  .pos-v5 .pos-v5-cart-card:has(.pos-empty-cart) {
-    min-height: 100px !important;
-    max-height: 100px !important;
-  }
-
-  .pos-v5 .pos-v5-cart-card:has(.pos-empty-cart) .pos-empty-cart {
-    min-height: 62px !important;
-    height: 62px !important;
   }
 
   .pos-v5 .pos-v5-section-title {
