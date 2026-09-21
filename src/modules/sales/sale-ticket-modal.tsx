@@ -104,8 +104,12 @@ export function SaleTicketModal({
     document.body.classList.add("print-ticket-modal");
     const cleanup = () => document.body.classList.remove("print-ticket-modal");
     window.addEventListener("afterprint", cleanup, { once: true });
-    window.print();
-    window.setTimeout(cleanup, 1200);
+    try {
+      window.print();
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
   }
 
   const customer = ticket.customer?.name ?? "Consumidor final";
