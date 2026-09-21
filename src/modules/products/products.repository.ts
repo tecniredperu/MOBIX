@@ -79,14 +79,25 @@ export async function getProducts(filters: ProductFilters = {}) {
       orderBy: [{ status: "asc" }, { name: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        model: true,
+        type: true,
+        minimumStock: true,
+        status: true,
         brand: { select: { name: true } },
         category: { select: { name: true } },
-        image: { select: { id: true, updatedAt: true } },
+        image: { select: { updatedAt: true } },
         variants: {
           where: { status: "ACTIVE" },
           orderBy: { createdAt: "asc" },
-          include: {
+          select: {
+            ram: true,
+            storage: true,
+            color: true,
+            salePrice: true,
+            purchasePrice: true,
             inventoryBalances: { select: { quantity: true } },
           },
         },
