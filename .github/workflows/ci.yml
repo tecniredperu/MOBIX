@@ -99,6 +99,46 @@ jobs:
           SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
           echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
 
+      - name: Probar venta POS real por API
+        run: |
+          set -euo pipefail
+
+          npx tsx scripts/ci-pos-sale-e2e.ts prepare /tmp/mobix-pos-sale-fixture.json >/tmp/mobix-pos-sale-fixture-stdout.json
+
+          WAREHOUSE_ID=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(JSON.parse(x).warehouseId)')
+          VARIANT_ID=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(JSON.parse(x).variantId)')
+          UNIT_PRICE=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(String(JSON.parse(x).unitPrice))')
+          TENDERED=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(String(JSON.parse(x).tendered))')
+
+          CASH_STATUS=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/api/pos/cash-status)
+          node -e 'const x=JSON.parse(process.argv[1]); if(!x.requireCashSession || !x.open) { console.error(x); process.exit(1); }' "$CASH_STATUS"
+
+          SALE_PAYLOAD=$(node -e '
+            const [warehouseId, variantId, unitPrice, tendered] = process.argv.slice(1);
+            process.stdout.write(JSON.stringify({
+              warehouseId,
+              documentType: "RECEIPT",
+              taxCondition: "TAXED",
+              discount: 0,
+              lines: [{ variantId, quantity: 1, unitPrice: Number(unitPrice) }],
+              payments: [{ method: "CASH", amount: Number(tendered) }]
+            }));
+          ' "$WAREHOUSE_ID" "$VARIANT_ID" "$UNIT_PRICE" "$TENDERED")
+
+          curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$SALE_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales \
+            > /tmp/mobix-pos-sale-response.json
+
+          npx tsx scripts/ci-pos-sale-e2e.ts verify \
+            /tmp/mobix-pos-sale-fixture.json \
+            /tmp/mobix-pos-sale-response.json
+
       - name: Verificar protección de acceso
         run: |
           curl -fsS http://127.0.0.1:3001/login >/dev/null
