@@ -5,3 +5,7 @@ node_modules
 generated/prisma
 *.log
 .DS_Store
+
+backups
+*.dump
+*.dump.json
