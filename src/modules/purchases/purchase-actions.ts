@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { prisma } from "@/lib/prisma";
 import type { CreatePurchaseInput } from "./purchase-types";
@@ -32,7 +32,7 @@ function validateSupplier(documentType: string, documentNumber: string) {
 }
 
 export async function createPurchaseAction(input: CreatePurchaseInput) {
-  const { company, membership, settings } = await requirePermission("purchases.create");
+  const { company, membership, settings } = await requirePermissionWithSettings("purchases.create");
   const TAX_RATE = Math.max(0, Number(settings.taxRate || 0)) / 100;
   const businessName = input.supplier.businessName.trim();
   const documentNumber = normalizeSupplierDocument(input.supplier.documentType, input.supplier.documentNumber);
