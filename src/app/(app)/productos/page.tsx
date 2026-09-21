@@ -49,6 +49,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         categories={categories}
         filters={filters}
         created={single(params.created) === "1"}
+        updated={single(params.updated) === "1"}
         canManage={canManage}
       />
     </AppShell>
