@@ -14,6 +14,27 @@ const optionalText = z
     return text === "" ? null : text;
   });
 
+const imageDataSchema = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    const text = typeof value === "string" ? value.trim() : "";
+    return text === "" ? null : text;
+  })
+  .superRefine((value, ctx) => {
+    if (!value) return;
+    if (value.length > 1_100_000) {
+      ctx.addIssue({ code: "custom", message: "La imagen es demasiado grande. Usa una imagen más liviana." });
+      return;
+    }
+    if (!/^[A-Za-z0-9+/=]+$/.test(value)) {
+      ctx.addIssue({ code: "custom", message: "La imagen enviada no es válida." });
+    }
+  });
+
+const imageMimeSchema = z
+  .union([z.enum(["image/jpeg", "image/png", "image/webp"]), z.literal(""), z.null(), z.undefined()])
+  .transform((value) => (typeof value === "string" && value ? value : null));
+
 const variantSchema = z
   .object({
     sku: optionalText,
@@ -44,9 +65,15 @@ const productSchema = z.object({
   sku: optionalText,
   barcode: optionalText,
   description: optionalText,
+  imageData: imageDataSchema,
+  imageMimeType: imageMimeSchema,
   warrantyDays: z.coerce.number().int().min(0).max(3650),
   minimumStock: z.coerce.number().int().min(0).max(1_000_000),
   variants: z.array(variantSchema).min(1, "Agrega al menos una variante."),
+}).superRefine((value, ctx) => {
+  if (value.imageData && !value.imageMimeType) {
+    ctx.addIssue({ code: "custom", path: ["imageMimeType"], message: "No se pudo identificar el formato de la imagen." });
+  }
 });
 
 function json(body: unknown, status = 200) {
@@ -140,6 +167,17 @@ export async function POST(request: Request) {
           requiresImei: rules.requiresImei,
           warrantyDays: data.warrantyDays,
           minimumStock: rules.controlsStock ? data.minimumStock : 0,
+          ...(data.imageData && data.imageMimeType
+            ? {
+                image: {
+                  create: {
+                    companyId,
+                    mimeType: data.imageMimeType,
+                    dataBase64: data.imageData,
+                  },
+                },
+              }
+            : {}),
           variants: {
             create: data.variants.map((variant) => ({
               companyId,
@@ -169,6 +207,7 @@ export async function POST(request: Request) {
             type: data.type,
             sku: data.sku,
             variantCount: data.variants.length,
+            hasImage: Boolean(data.imageData),
           },
         },
       });
