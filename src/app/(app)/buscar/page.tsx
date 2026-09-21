@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AppShell } from "@/components/layout/app-shell";
 import { getOperationalContext } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 
@@ -115,7 +114,7 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
   const count = products.length + identifiers.length + sales.length + customers.length;
 
   return (
-    <AppShell>
+    <>
       <div className="page-stack global-search-page">
         <section className="page-heading">
           <div>
@@ -232,6 +231,6 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
