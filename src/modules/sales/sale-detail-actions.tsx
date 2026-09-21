@@ -44,6 +44,18 @@ function money(value: number) {
   }).format(value || 0);
 }
 
+function printWithBodyClass(className: string) {
+  document.body.classList.add(className);
+  const cleanup = () => document.body.classList.remove(className);
+  window.addEventListener("afterprint", cleanup, { once: true });
+  try {
+    window.print();
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
 export function SaleDetailActions({
   saleId,
   saleNumber,
@@ -135,11 +147,7 @@ export function SaleDetailActions({
   function printA4() {
     setCompletionOpen(false);
     window.setTimeout(() => {
-      document.body.classList.add("print-sale-a4");
-      const cleanup = () => document.body.classList.remove("print-sale-a4");
-      window.addEventListener("afterprint", cleanup, { once: true });
-      window.print();
-      window.setTimeout(cleanup, 1200);
+      printWithBodyClass("print-sale-a4");
     }, 120);
   }
 
@@ -167,17 +175,22 @@ export function SaleDetailActions({
     setSharing(true);
     try {
       const file = await buildSaleReceiptPdf(ticket);
-      const canShareFiles = typeof navigator.share === "function"
-        && typeof navigator.canShare === "function"
-        && navigator.canShare({ files: [file] });
+      const hasNativeShare = typeof navigator.share === "function";
+      const canShareFiles = hasNativeShare
+        && (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }));
 
       if (canShareFiles) {
-        await navigator.share({
-          title: "Comprobante " + documentNumber,
-          text: plainMessage,
-          files: [file],
-        });
-        return;
+        try {
+          await navigator.share({
+            title: "Comprobante " + documentNumber,
+            text: plainMessage,
+            files: [file],
+          });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.warn("No se pudo compartir el PDF de forma nativa; se usará el flujo web.", error);
+        }
       }
 
       downloadFile(file);
@@ -456,7 +469,7 @@ export function PrintTicketButton() {
     <button
       className="primary-button ticket-print-button no-print"
       type="button"
-      onClick={() => window.print()}
+      onClick={() => printWithBodyClass("print-ticket-page")}
     >
       <Printer size={16} /> Imprimir ticket
     </button>

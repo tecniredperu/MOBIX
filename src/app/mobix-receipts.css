@@ -2,3 +2,102 @@
 
 .ticket-payments>div>span>small{display:block;margin-top:1px;font-size:7.5px;color:#555}
 .receipt-payment-row>span>small{display:block;margin-top:.6mm;font-size:6.8pt;color:#6b7280}
+
+
+/* =======================================================================
+ * PRINT CONTRACT — comprobante A4 de una sola página de layout.
+ * Evita que elementos ocultos con visibility:hidden sigan ocupando páginas.
+ * ===================================================================== */
+@page sale-a4 {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+@page mobix-ticket {
+  size: 80mm auto;
+  margin: 0;
+}
+
+@media print {
+  body.print-sale-a4 {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body.print-sale-a4 .app-shell {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    background: #fff !important;
+  }
+
+  body.print-sale-a4 .sidebar,
+  body.print-sale-a4 .topbar {
+    display: none !important;
+  }
+
+  body.print-sale-a4 .page-content {
+    display: block !important;
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.print-sale-a4 .sale-detail-page {
+    display: block !important;
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.print-sale-a4 .sale-detail-page > :not(.sale-receipt-a4) {
+    display: none !important;
+  }
+
+  body.print-sale-a4 .sale-receipt-a4 {
+    page: sale-a4;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 190mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    break-before: avoid-page;
+    break-after: avoid-page;
+    break-inside: avoid-page;
+    page-break-before: avoid;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.print-sale-a4 .sale-receipt-a4 *,
+  body.print-sale-a4 .receipt-a4-header,
+  body.print-sale-a4 .receipt-a4-info,
+  body.print-sale-a4 .receipt-a4-bottom,
+  body.print-sale-a4 .receipt-a4-footer,
+  body.print-sale-a4 .receipt-a4-table tr {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .ticket-screen .ticket-page,
+  body.print-ticket-modal .ticket-page {
+    page: mobix-ticket;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

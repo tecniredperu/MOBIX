@@ -18,6 +18,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   CREDIT: "Crédito",
+  EXCHANGE_CREDIT: "Vale de cambio",
   OTHER: "Otro",
 };
 
@@ -27,6 +28,10 @@ function money(value: number) {
 
 function limaDate(value: string) {
   return new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function limaOnlyDate(value: string) {
+  return new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", dateStyle: "medium" }).format(new Date(value));
 }
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,6 +63,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         <div className="ticket-document-box">
           <strong>{DOCUMENT_LABELS[sale.documentType] ?? sale.documentType}</strong>
           <span>{documentNumber}</span>
+          {sale.status === "CANCELLED" && <b className="ticket-cancelled-stamp">ANULADO</b>}
         </div>
         <div className="ticket-meta">
           <span>Venta: {sale.saleNumber}</span>
@@ -73,6 +79,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               {item.identifiers.map((identifier, index) => (
                 <span key={index}>
                   {[identifier.imei1 ? `IMEI 1: ${identifier.imei1}` : "", identifier.imei2 ? `IMEI 2: ${identifier.imei2}` : "", identifier.serial ? `Serie: ${identifier.serial}` : ""].filter(Boolean).join(" · ")}
+                  {identifier.warrantyExpiresAt ? <><br />Garantía hasta: {limaOnlyDate(identifier.warrantyExpiresAt)}</> : null}
                 </span>
               ))}
               <div><span>{item.quantity} x {money(item.unitPrice)}</span><strong>{money(item.total)}</strong></div>
@@ -86,11 +93,19 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           <div className="ticket-total"><span>TOTAL</span><strong>{money(sale.total)}</strong></div>
         </div>
         <div className="ticket-payments">
-          {sale.payments.map((payment) => <div key={payment.id}><span>{PAYMENT_LABELS[payment.method] ?? payment.method}</span><strong>{money(payment.amount)}</strong></div>)}
+          {sale.payments.map((payment) => (
+            <div key={payment.id}>
+              <span>
+                {PAYMENT_LABELS[payment.method] ?? payment.method}
+                {payment.reference && payment.method !== "EXCHANGE_CREDIT" ? <small>Ref. {payment.reference}</small> : null}
+              </span>
+              <strong>{money(payment.amount)}</strong>
+            </div>
+          ))}
         </div>
         <footer className="ticket-footer">
-          <strong>¡Gracias por tu compra!</strong>
-          {context.settings.ticketFooter && <small className="ticket-custom-footer">{context.settings.ticketFooter}</small>}
+          <strong>{sale.status === "CANCELLED" ? "VENTA ANULADA" : "¡Gracias por tu compra!"}</strong>
+          {sale.status !== "CANCELLED" && context.settings.ticketFooter && <small className="ticket-custom-footer">{context.settings.ticketFooter}</small>}
         </footer>
       </div>
       <PrintTicketButton />
