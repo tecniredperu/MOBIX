@@ -26,8 +26,9 @@ if (process.env.MOBIX_RESTORE_CONFIRM !== "RESTORE_MOBIX") {
   throw new Error("Restore bloqueado. Define MOBIX_RESTORE_CONFIRM=RESTORE_MOBIX para confirmar una restauración destructiva.");
 }
 
-const backupFile = resolve(process.env.BACKUP_FILE?.trim() || process.argv[2] || "");
-if (!backupFile) throw new Error("Define BACKUP_FILE o pasa la ruta del .dump.");
+const backupInput = process.env.BACKUP_FILE?.trim() || process.argv[2]?.trim();
+if (!backupInput) throw new Error("Define BACKUP_FILE o pasa la ruta del .dump.");
+const backupFile = resolve(backupInput);
 await access(backupFile);
 
 const bytes = await readFile(backupFile);
