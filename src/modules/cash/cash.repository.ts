@@ -14,7 +14,6 @@ import type {
   CashMovementKind,
   CashOpenSession,
   CashPaymentMethod,
-  CashPaymentTotals,
   CashSessionHistoryItem,
 } from "./cash-types";
 
