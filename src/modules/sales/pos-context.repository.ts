@@ -91,6 +91,7 @@ function loadProducts(companyId: string, q?: string, productIds?: string[]) {
       type: true,
       name: true,
       sku: true,
+      image: { select: { id: true } },
       brand: { select: { name: true } },
       category: { select: { name: true } },
       variants: {
@@ -143,6 +144,7 @@ async function mapCatalog(
         variant: variantLabel(variant),
         salePrice: Number(variant.salePrice),
         minimumSalePrice: Number(variant.minimumSalePrice),
+        imageUrl: product.image ? `/api/products/${product.id}/image` : null,
         units: matchedUnit ? [matchedUnit] : [],
         balances: serialized
           ? warehouses.map((warehouse) => ({
@@ -430,6 +432,7 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
                   type: true,
                   name: true,
                   sku: true,
+                  image: { select: { id: true } },
                   brand: { select: { name: true } },
                   category: { select: { name: true } },
                 },
@@ -482,6 +485,7 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
       variant: variantLabel(unit.variant),
       salePrice: Number(unit.variant.salePrice),
       minimumSalePrice: Number(unit.variant.minimumSalePrice),
+      imageUrl: unit.product.image ? `/api/products/${unit.product.id}/image` : null,
       units: [matchedUnit],
       balances: [{ warehouseId, quantity: availableCount }],
     };
