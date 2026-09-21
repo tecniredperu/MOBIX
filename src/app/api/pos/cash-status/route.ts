@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { getPosCashStatus } from "@/modules/cash/pos-cash-status";
 
 export const dynamic = "force-dynamic";
