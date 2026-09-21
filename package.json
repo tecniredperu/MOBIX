@@ -22,7 +22,10 @@
     "db:migrate": "prisma migrate dev",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "prod:check": "node scripts/check-production-env.mjs",
+    "db:backup": "node scripts/backup-postgres.mjs",
+    "db:restore": "node scripts/restore-postgres.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
