@@ -46,7 +46,13 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               { barcode: { contains: q, mode: "insensitive" } },
             ],
           },
-          include: { brand: true },
+          select: {
+            id: true,
+            name: true,
+            model: true,
+            sku: true,
+            brand: { select: { name: true } },
+          },
           take: 10,
           orderBy: { name: "asc" },
         })
@@ -57,9 +63,16 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
             companyId: company.id,
             value: { contains: q, mode: "insensitive" },
           },
-          include: {
+          select: {
+            id: true,
+            type: true,
+            value: true,
             productUnit: {
-              include: { product: true, variant: true, warehouse: true },
+              select: {
+                product: { select: { name: true } },
+                variant: { select: { color: true } },
+                warehouse: { select: { name: true } },
+              },
             },
           },
           take: 10,
@@ -86,7 +99,20 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               },
             ],
           },
-          include: { customer: true },
+          select: {
+            id: true,
+            saleNumber: true,
+            documentSeries: true,
+            documentNumber: true,
+            total: true,
+            customer: {
+              select: {
+                businessName: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
           take: 10,
           orderBy: { createdAt: "desc" },
         })
@@ -104,6 +130,14 @@ export default async function GlobalSearchPage({ searchParams }: SearchPageProps
               { phone: { contains: q, mode: "insensitive" } },
               { whatsapp: { contains: q, mode: "insensitive" } },
             ],
+          },
+          select: {
+            id: true,
+            businessName: true,
+            firstName: true,
+            lastName: true,
+            documentNumber: true,
+            phone: true,
           },
           take: 10,
           orderBy: { createdAt: "desc" },
