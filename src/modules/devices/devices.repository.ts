@@ -29,12 +29,39 @@ export async function getDevices(filters: { q?: string; status?: string; warehou
       where,
       orderBy: { createdAt: "desc" },
       take: 150,
-      include: {
-        product: { include: { brand: true } },
-        variant: true,
-        warehouse: { include: { branch: true } },
-        identifiers: true,
-        purchase: { include: { supplier: true } },
+      select: {
+        id: true,
+        purchaseCost: true,
+        status: true,
+        createdAt: true,
+        product: {
+          select: {
+            name: true,
+            model: true,
+            brand: { select: { name: true } },
+          },
+        },
+        variant: {
+          select: {
+            ram: true,
+            storage: true,
+            color: true,
+            sku: true,
+          },
+        },
+        warehouse: {
+          select: {
+            name: true,
+            branch: { select: { name: true } },
+          },
+        },
+        identifiers: { select: { type: true, value: true } },
+        purchase: {
+          select: {
+            number: true,
+            supplier: { select: { businessName: true } },
+          },
+        },
       },
     }),
     prisma.warehouse.findMany({
