@@ -40,6 +40,8 @@ export async function createProductAction(
     sku: readString(formData, "sku"),
     barcode: readString(formData, "barcode"),
     description: readString(formData, "description"),
+    imageData: readString(formData, "imageData"),
+    imageMimeType: readString(formData, "imageMimeType"),
     warrantyDays: readString(formData, "warrantyDays"),
     minimumStock: readString(formData, "minimumStock"),
     variants: readVariants(formData),
