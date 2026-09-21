@@ -53,8 +53,8 @@ type ExchangeCreditLockRow = {
 };
 
 type ExistingPaymentReferenceRow = {
-  id: string;
-  saleNumber: string;
+  source: "VENTA" | "ABONO";
+  label: string;
 };
 
 type CancelSaleLockRow = {
@@ -265,6 +265,23 @@ export async function createSaleAction(input: CreateSaleInput) {
     }
   }
 
+  const protectedReferenceKeys = new Set<string>();
+  for (const payment of input.payments) {
+    if (!["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)) continue;
+    const normalizedReference = normalizePaymentReference(payment.reference);
+    if (!normalizedReference) continue;
+
+    const key = payment.method + ":" + normalizedReference;
+    if (protectedReferenceKeys.has(key)) {
+      throw new Error(
+        "La referencia " + payment.reference?.trim()
+        + " de " + payment.method
+        + " está repetida dentro de la misma venta.",
+      );
+    }
+    protectedReferenceKeys.add(key);
+  }
+
   const exchangePayments = input.payments.filter((payment) => payment.method === "EXCHANGE_CREDIT");
   if (exchangePayments.length > 1) {
     throw new Error("Solo se puede aplicar un vale de cambio por venta.");
@@ -302,7 +319,7 @@ export async function createSaleAction(input: CreateSaleInput) {
     }
 
     const uniqueReferencePayments = input.payments.filter((payment) =>
-      ["YAPE", "PLIN", "TRANSFER"].includes(payment.method)
+      ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(payment.method)
       && Boolean(payment.reference?.trim()),
     );
 
@@ -316,20 +333,36 @@ export async function createSaleAction(input: CreateSaleInput) {
       `;
 
       const existingReference = await tx.$queryRaw<ExistingPaymentReferenceRow[]>`
-        SELECT sp."id", s."saleNumber"
-        FROM "sale_payments" sp
-        INNER JOIN "sales" s ON s."id" = sp."saleId"
-        WHERE s."companyId" = ${company.id}
-          AND sp."paymentMethod"::text = ${payment.method}
-          AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        SELECT "source", "label"
+        FROM (
+          SELECT 'VENTA'::text AS "source", s."saleNumber"::text AS "label"
+          FROM "sale_payments" sp
+          INNER JOIN "sales" s ON s."id" = sp."saleId"
+          WHERE s."companyId" = ${company.id}
+            AND sp."paymentMethod"::text = ${payment.method}
+            AND regexp_replace(upper(COALESCE(sp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+
+          UNION ALL
+
+          SELECT 'ABONO'::text AS "source", s."saleNumber"::text AS "label"
+          FROM "receivable_payments" rp
+          INNER JOIN "accounts_receivable" ar ON ar."id" = rp."receivableId"
+          INNER JOIN "sales" s ON s."id" = ar."saleId"
+          WHERE rp."companyId" = ${company.id}
+            AND rp."paymentMethod"::text = ${payment.method}
+            AND regexp_replace(upper(COALESCE(rp."reference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        ) references_used
         LIMIT 1
       `;
 
-      if (existingReference[0]) {
+      const duplicate = existingReference[0];
+      if (duplicate) {
         throw new Error(
           "La referencia " + payment.reference?.trim()
           + " de " + payment.method
-          + " ya fue utilizada en la venta " + existingReference[0].saleNumber + ".",
+          + " ya fue utilizada en "
+          + (duplicate.source === "VENTA" ? "la venta " : "un abono de la venta ")
+          + duplicate.label + ".",
         );
       }
     }
@@ -902,6 +935,23 @@ export async function cancelSaleAction(input: {
       } else if (item.product.type === "ACCESSORY") {
         await lockInventoryBalance(tx, company.id, sale.warehouseId, item.variantId);
 
+        const currentBalance = await tx.inventoryBalance.findUnique({
+          where: {
+            companyId_warehouseId_variantId: {
+              companyId: company.id,
+              warehouseId: sale.warehouseId,
+              variantId: item.variantId,
+            },
+          },
+        });
+        const oldQty = Number(currentBalance?.quantity ?? 0);
+        const oldAverage = Number(currentBalance?.averageCost ?? 0);
+        const restoredCost = Number(item.unitCost);
+        const newQty = oldQty + item.quantity;
+        const newAverage = newQty > 0
+          ? roundMoney((oldQty * oldAverage + item.quantity * restoredCost) / newQty)
+          : restoredCost;
+
         await tx.inventoryBalance.upsert({
           where: {
             companyId_warehouseId_variantId: {
@@ -916,10 +966,11 @@ export async function cancelSaleAction(input: {
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            averageCost: Number(item.unitCost),
+            averageCost: restoredCost,
           },
           update: {
-            quantity: { increment: item.quantity },
+            quantity: newQty,
+            averageCost: newAverage,
           },
         });
 
