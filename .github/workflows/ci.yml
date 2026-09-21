@@ -139,6 +139,33 @@ jobs:
             /tmp/mobix-pos-sale-fixture.json \
             /tmp/mobix-pos-sale-response.json
 
+      - name: Validar comprobantes de la venta real
+        run: |
+          set -euo pipefail
+
+          SALE_ID=$(node -e 'const x=JSON.parse(require("fs").readFileSync("/tmp/mobix-pos-sale-response.json","utf8")); if(!x.sale?.id) process.exit(1); process.stdout.write(x.sale.id)')
+
+          DETAIL_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/ventas/${SALE_ID}?created=1")
+          echo "$DETAIL_HTML" | grep -q "sale-receipt-a4"
+          echo "$DETAIL_HTML" | grep -q "receipt-document-box"
+          echo "$DETAIL_HTML" | grep -q "receipt-a4-table"
+          echo "$DETAIL_HTML" | grep -q "Forma de pago"
+
+          TICKET_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/ventas/${SALE_ID}/ticket")
+          echo "$TICKET_HTML" | grep -q "ticket-page"
+          echo "$TICKET_HTML" | grep -q "BOLETA DE VENTA"
+          echo "$TICKET_HTML" | grep -q "Efectivo"
+
+          COMBINED=$(printf "%s\n%s" "$DETAIL_HTML" "$TICKET_HTML" | tr '[:upper:]' '[:lower:]')
+          if echo "$COMBINED" | grep -q "facturación electrónica se implementará más adelante"; then
+            echo "El comprobante contiene un aviso de facturación electrónica pendiente."
+            exit 1
+          fi
+
       - name: Verificar protección de acceso
         run: |
           curl -fsS http://127.0.0.1:3001/login >/dev/null
