@@ -59,3 +59,24 @@ test("backups nunca se versionan ni entran al contexto Docker", async () => {
   assert.ok(gitignore.includes("backups/"));
   assert.ok(dockerignore.includes("backups"));
 });
+
+
+test("producción valida secretos antes de arrancar", async () => {
+  const script = await source("scripts/validate-production-env.mjs");
+  const pkg = JSON.parse(await source("package.json"));
+  const docker = await source("Dockerfile");
+
+  assert.ok(script.includes("AUTH_SECRET debe tener al menos 32 caracteres"));
+  assert.ok(script.includes("DATABASE_URL"));
+  assert.ok(pkg.scripts.start.startsWith("npm run prod:validate"));
+  assert.ok(docker.includes("npm run prod:validate"));
+});
+
+test("existe simulacro automático de recuperación", async () => {
+  const workflow = await source(".github/workflows/backup-restore-drill.yml");
+
+  assert.ok(workflow.includes("MOBIX Backup Restore Drill"));
+  assert.ok(workflow.includes("pg_dump"));
+  assert.ok(workflow.includes("pg_restore"));
+  assert.ok(workflow.includes("Comparar integridad origen vs restore"));
+});
