@@ -20,6 +20,7 @@ export type ProductListItem = {
   minimumStock: number;
   status: "ACTIVE" | "INACTIVE";
   variantSummary: string;
+  imageUrl: string | null;
 };
 
 export type ProductCatalogOption = {

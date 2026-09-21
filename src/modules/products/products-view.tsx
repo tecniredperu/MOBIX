@@ -84,7 +84,7 @@ export function ProductsView({ products, summary, pagination, brands, categories
                 const lowStock = product.type !== "SERVICE" && product.stock <= product.minimumStock;
                 return (
                   <tr key={product.id}>
-                    <td><div className="product-cell"><div className="product-thumb">{product.name.slice(0, 1).toUpperCase()}</div><div><strong>{product.name}</strong><span>{product.variantSummary}{product.model ? ` · ${product.model}` : ""}</span></div></div></td>
+                    <td><div className="product-cell"><div className="product-thumb">{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" decoding="async" /> : product.name.slice(0, 1).toUpperCase()}</div><div><strong>{product.name}</strong><span>{product.variantSummary}{product.model ? ` · ${product.model}` : ""}</span></div></div></td>
                     <td>{PRODUCT_TYPE_LABELS[product.type as ProductTypeValue]}</td>
                     <td>{product.brand}</td>
                     <td className="right"><strong className={lowStock ? "stock-low" : undefined}>{product.type === "SERVICE" ? "—" : product.stock}</strong></td>

@@ -32,6 +32,7 @@ export type PosCatalogItem = {
   variant: string;
   salePrice: number;
   minimumSalePrice: number;
+  imageUrl: string | null;
   units: PosUnit[];
   balances: PosBalance[];
 };

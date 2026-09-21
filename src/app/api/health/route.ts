@@ -11,6 +11,7 @@ type SchemaProbe = {
   returnRefundCashSession: boolean;
   exchangeRefundCashSession: boolean;
   userSessionVersion: boolean;
+  productImagesTable: boolean;
   suppliersTable: boolean;
   purchasesTable: boolean;
   purchaseItemsTable: boolean;
@@ -30,6 +31,7 @@ type SchemaProbe = {
 
 function moduleStatus(schema: SchemaProbe | undefined) {
   return {
+    catalog: Boolean(schema?.productImagesTable),
     purchases: Boolean(
       schema?.suppliersTable &&
       schema.purchasesTable &&
@@ -90,6 +92,7 @@ export async function GET() {
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'sessionVersion'
         ) AS "userSessionVersion",
+        to_regclass('public.product_images') IS NOT NULL AS "productImagesTable",
 
         to_regclass('public.suppliers') IS NOT NULL AS "suppliersTable",
         to_regclass('public.purchases') IS NOT NULL AS "purchasesTable",
