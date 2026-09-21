@@ -56,6 +56,18 @@ type ReceivableLockRow = {
 
 type CashSessionRow = { id: string };
 
+type ExistingRefundReferenceRow = {
+  source: "DEVOLUCION" | "VALE";
+  label: string;
+};
+
+function normalizePaymentReference(value?: string | null) {
+  return (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 async function returnedQuantityMap(
   client: Pick<typeof prisma, "returnItem">,
   companyId: string,
@@ -198,6 +210,51 @@ export async function createReturnAction(input: CreateReturnInput) {
       const remaining = row.item.quantity - (currentPriorMap.get(row.item.id) ?? 0);
       if (row.quantity > remaining) {
         throw new Error(`La cantidad disponible para devolver de ${row.item.product.name} cambió. Actualiza la pantalla.`);
+      }
+    }
+
+    if (
+      input.type === "RETURN"
+      && ["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.refundMethod ?? "")
+      && refundReference
+    ) {
+      const normalizedReference = normalizePaymentReference(refundReference);
+      const lockKey = company.id + ":REFUND:" + input.refundMethod + ":" + normalizedReference;
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const duplicateRows = await tx.$queryRaw<ExistingRefundReferenceRow[]>`
+        SELECT "source", "label"
+        FROM (
+          SELECT 'DEVOLUCION'::text AS "source", ro."returnNumber"::text AS "label"
+          FROM "return_orders" ro
+          WHERE ro."companyId" = ${company.id}
+            AND ro."status" = 'COMPLETED'
+            AND ro."refundMethod" = ${input.refundMethod}
+            AND regexp_replace(upper(COALESCE(ro."refundReference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+
+          UNION ALL
+
+          SELECT 'VALE'::text AS "source", ro."returnNumber"::text AS "label"
+          FROM "exchange_credits" ec
+          INNER JOIN "return_orders" ro ON ro."id" = ec."returnOrderId"
+          WHERE ec."companyId" = ${company.id}
+            AND ec."refundedAt" IS NOT NULL
+            AND ec."refundMethod"::text = ${input.refundMethod}
+            AND regexp_replace(upper(COALESCE(ec."refundReference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        ) refund_references
+        LIMIT 1
+      `;
+
+      const duplicate = duplicateRows[0];
+      if (duplicate) {
+        throw new Error(
+          "La referencia de devolución " + refundReference
+          + " ya fue utilizada en "
+          + (duplicate.source === "DEVOLUCION" ? "la devolución " : "el reembolso del vale ")
+          + duplicate.label + ".",
+        );
       }
     }
 
@@ -545,6 +602,47 @@ export async function refundExchangeCreditAction(input: {
 
     const amount = roundMoney(Number(credit.balance ?? 0));
     if (amount <= 0.01) throw new Error("El vale ya no tiene saldo por devolver.");
+
+    if (["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.method) && reference) {
+      const normalizedReference = normalizePaymentReference(reference);
+      const lockKey = company.id + ":REFUND:" + input.method + ":" + normalizedReference;
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
+
+      const duplicateRows = await tx.$queryRaw<ExistingRefundReferenceRow[]>`
+        SELECT "source", "label"
+        FROM (
+          SELECT 'DEVOLUCION'::text AS "source", ro."returnNumber"::text AS "label"
+          FROM "return_orders" ro
+          WHERE ro."companyId" = ${company.id}
+            AND ro."status" = 'COMPLETED'
+            AND ro."refundMethod" = ${input.method}
+            AND regexp_replace(upper(COALESCE(ro."refundReference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+
+          UNION ALL
+
+          SELECT 'VALE'::text AS "source", ro."returnNumber"::text AS "label"
+          FROM "exchange_credits" ec
+          INNER JOIN "return_orders" ro ON ro."id" = ec."returnOrderId"
+          WHERE ec."companyId" = ${company.id}
+            AND ec."refundedAt" IS NOT NULL
+            AND ec."refundMethod"::text = ${input.method}
+            AND regexp_replace(upper(COALESCE(ec."refundReference", '')), '[^A-Z0-9]', '', 'g') = ${normalizedReference}
+        ) refund_references
+        LIMIT 1
+      `;
+
+      const duplicate = duplicateRows[0];
+      if (duplicate) {
+        throw new Error(
+          "La referencia de devolución " + reference
+          + " ya fue utilizada en "
+          + (duplicate.source === "DEVOLUCION" ? "la devolución " : "el reembolso del vale ")
+          + duplicate.label + ".",
+        );
+      }
+    }
 
     let cashSessionId: string | null = null;
     {
