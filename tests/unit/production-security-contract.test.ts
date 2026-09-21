@@ -46,3 +46,15 @@ test("backup y restore tienen verificación y protección contra sobrescritura a
   assert.ok(restore.includes('"--clean"'));
   assert.ok(gitignore.includes("*.dump"));
 });
+
+
+test("auditoría administrativa está aislada por empresa y redacta campos sensibles", async () => {
+  const repository = await source("src/modules/admin/admin.repository.ts");
+  const page = await source("src/app/(app)/administracion/auditoria/page.tsx");
+
+  assert.ok(repository.includes("where: { companyId: company.id }"));
+  assert.ok(repository.includes("AUDIT_SENSITIVE_KEYS"));
+  assert.ok(repository.includes('"[REDACTED]"'));
+  assert.ok(page.includes('requirePermission("roles.manage")'));
+  assert.ok(page.includes("getAuditLogData(200)"));
+});
