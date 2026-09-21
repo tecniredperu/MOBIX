@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { ReturnForm } from "@/modules/returns/return-form";
 import { getReturnSaleOptions } from "@/modules/returns/returns.repository";
@@ -30,12 +29,12 @@ export default async function NewReturnPage({
     : undefined;
 
   return (
-    <AppShell>
+    <>
       <ReturnForm
         sales={sales}
         initialSaleId={matchedSale?.id ?? ""}
         initialUnitId={unitId}
       />
-    </AppShell>
+    </>
   );
 }
