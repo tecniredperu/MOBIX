@@ -177,7 +177,9 @@ jobs:
             --data "$PRODUCT_PAYLOAD" \
             http://127.0.0.1:3001/api/products)
           PRODUCT_ID=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.product?.id) process.exit(1); process.stdout.write(x.product.id)' "$PRODUCT_RESPONSE")
+          VARIANT_ID=$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.product?.variants?.[0]?.id) process.exit(1); process.stdout.write(x.product.variants[0].id)' "$PRODUCT_RESPONSE")
           test -n "$PRODUCT_ID"
+          test -n "$VARIANT_ID"
 
           PRODUCTS_HTML=$(curl -fsS \
             -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
@@ -185,6 +187,47 @@ jobs:
           echo "$PRODUCTS_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA"
           echo "$PRODUCTS_HTML" | grep -q "Producto guardado"
           echo "$PRODUCTS_HTML" | grep -q "CI Caseify"
+
+          EDIT_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/productos/${PRODUCT_ID}/editar")
+          echo "$EDIT_HTML" | grep -q "Editar producto"
+          echo "$EDIT_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA"
+
+          UPDATE_PAYLOAD=$(cat <<JSON
+          {"action":"update","categoryId":"${CATEGORY_ID}","brandId":"${BRAND_ID}","name":"CI CASE IPHONE 17 PRO MAX SILICONA EDITADO","model":"CI-CASE-17PM-V2","sku":"CI-CASE-17PM","barcode":"CI170001","description":"Producto editado por CI","warrantyDays":45,"minimumStock":3,"removeImage":false,"variants":[{"id":"${VARIANT_ID}","sku":"CI-CASE-17PM-BLK","barcode":"CI170001-BLK","color":"Negro","ram":"","storage":"","purchasePrice":16.5,"salePrice":31.9,"minimumSalePrice":25.9}]}
+          JSON
+          )
+
+          UPDATE_RESPONSE=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$UPDATE_PAYLOAD" \
+            "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
+          echo "$UPDATE_RESPONSE" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA EDITADO"
+
+          UPDATED_PRODUCTS_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/productos?updated=1")
+          echo "$UPDATED_PRODUCTS_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA EDITADO"
+          echo "$UPDATED_PRODUCTS_HTML" | grep -q "Producto actualizado"
+
+          DISABLE_PRODUCT=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data '{"action":"status","status":"INACTIVE"}' \
+            "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
+          echo "$DISABLE_PRODUCT" | grep -q '"status":"INACTIVE"'
+
+          ENABLE_PRODUCT=$(curl -fsS \
+            -X PATCH \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data '{"action":"status","status":"ACTIVE"}' \
+            "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
+          echo "$ENABLE_PRODUCT" | grep -q '"status":"ACTIVE"'
 
           CATEGORY_PATCH=$(curl -fsS \
             -X PATCH \
@@ -245,6 +288,20 @@ jobs:
           if [ "$INVALID_STATUS" != "400" ]; then
             echo "Se esperaba HTTP 400 para producto inválido y se recibió $INVALID_STATUS"
             cat /tmp/mobix-invalid-product.json || true
+            exit 1
+          fi
+
+          DELETE_RESPONSE=$(curl -fsS \
+            -X DELETE \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            "http://127.0.0.1:3001/api/products/${PRODUCT_ID}")
+          echo "$DELETE_RESPONSE" | grep -q '"deleted":true'
+
+          AFTER_DELETE_HTML=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/productos)
+          if echo "$AFTER_DELETE_HTML" | grep -q "CI CASE IPHONE 17 PRO MAX SILICONA EDITADO"; then
+            echo "El producto eliminado lógicamente sigue apareciendo en la lista."
             exit 1
           fi
 
