@@ -32,7 +32,7 @@
 }
 
 *{box-sizing:border-box}
-html,body{max-width:100%;overflow-x:hidden}
+html, body{max-width:100%;overflow-x:hidden}
 html{background:var(--bg)}
 body{
   margin:0;
@@ -45,8 +45,8 @@ body{
   text-rendering:optimizeLegibility;
   font-feature-settings:"cv02","cv03","cv04","cv11";
 }
-button,input,select,textarea{font:inherit}
-button,a,input,select,textarea{transition:border-color .16s ease,background .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease}
+button, input, select, textarea{font:inherit}
+button, a, input, select, textarea{transition:border-color .16s ease,background .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease}
 ::selection{background:#dbe6ff;color:#14379b}
 
 /* APP SHELL --------------------------------------------------------------- */
@@ -70,8 +70,8 @@ button,a,input,select,textarea{transition:border-color .16s ease,background .16s
   box-shadow:0 9px 22px rgba(49,94,251,.24);
   font-size:17px;font-weight:800;letter-spacing:-.03em
 }
-.brand-copy strong,.brand strong{font-size:16px;font-weight:760;letter-spacing:.07em;color:#fff}
-.brand-copy span,.brand span{font-size:9.5px;color:#738099;letter-spacing:.025em;margin-top:2px}
+.brand-copy strong, .brand strong{font-size:16px;font-weight:760;letter-spacing:.07em;color:#fff}
+.brand-copy span, .brand span{font-size:9.5px;color:#738099;letter-spacing:.025em;margin-top:2px}
 .company-selector{
   min-height:58px;margin-bottom:18px;padding:9px 10px;
   grid-template-columns:34px minmax(0,1fr) auto;
@@ -134,9 +134,9 @@ kbd{padding:3px 6px;border-color:#dfe3e8;border-radius:5px;background:#fff;color
 .eyebrow{margin-bottom:8px;color:#315efb;font-size:9px;font-weight:760;letter-spacing:.12em}
 .page-heading h1{font-size:29px;line-height:1.14;letter-spacing:-.035em;font-weight:690;color:#101828}
 .page-heading p{max-width:720px;margin-top:6px;color:#667085;font-size:12.25px;line-height:1.55}
-.panel-heading h2,.section-title h2,.dashboard-section-heading h2{color:#1d2939;font-weight:670;letter-spacing:-.018em}
+.panel-heading h2, .section-title h2, .dashboard-section-heading h2{color:#1d2939;font-weight:670;letter-spacing:-.018em}
 .panel-heading h2{font-size:14px}
-.panel-heading p,.section-title p,.dashboard-section-heading p{color:#667085}
+.panel-heading p, .section-title p, .dashboard-section-heading p{color:#667085}
 .section-title h2{font-size:16px}
 .section-title p{font-size:11.5px;line-height:1.5}
 
@@ -159,7 +159,7 @@ kbd{padding:3px 6px;border-color:#dfe3e8;border-radius:5px;background:#fff;color
 .row-menu{border-radius:8px}
 
 /* CARDS / PANELS ---------------------------------------------------------- */
-.panel,.stat-card,.product-summary,.mobix-summary-grid article,.dashboard-quick-card{
+.panel, .stat-card, .product-summary, .mobix-summary-grid article, .dashboard-quick-card{
   border-color:var(--border);
   box-shadow:var(--shadow-sm)
 }
@@ -175,7 +175,7 @@ kbd{padding:3px 6px;border-color:#dfe3e8;border-radius:5px;background:#fff;color
 
 .mobix-summary-grid{gap:12px}
 .mobix-summary-grid article{padding:16px;border-radius:14px;gap:7px 10px}
-.mobix-summary-grid article>svg,.summary-symbol{width:36px;height:36px;border-radius:10px;background:#f1f5ff;color:#315efb}
+.mobix-summary-grid article>svg, .summary-symbol{width:36px;height:36px;border-radius:10px;background:#f1f5ff;color:#315efb}
 .mobix-summary-grid article span:not(.summary-symbol){font-size:10.5px;color:#667085}
 .mobix-summary-grid article strong{font-size:19px;font-weight:680;letter-spacing:-.025em;color:#101828}
 
@@ -197,21 +197,21 @@ kbd{padding:3px 6px;border-color:#dfe3e8;border-radius:5px;background:#fff;color
 .dashboard-quick-copy small{font-size:9.4px;color:#7c8799;line-height:1.38}
 
 /* FORMS ------------------------------------------------------------------ */
-input,select,textarea{color:#1d2939}
+input, select, textarea{color:#1d2939}
 .mobix-form-section{padding:18px}
 .mobix-form-grid{gap:12px}
-.mobix-form-grid label>span,.line-fields label>span,.payment-field>span,.pos-warehouse span{
+.mobix-form-grid label>span, .line-fields label>span, .payment-field>span, .pos-warehouse span{
   color:#475467;font-size:10px;font-weight:650;letter-spacing:.005em
 }
-.mobix-form-grid input,.mobix-form-grid select,.purchase-add-row select,.line-fields input,.imei-row input,.pos-unit-select,.pos-warehouse select,.payment-line select,.payment-line input,.filter-select select{
+.mobix-form-grid input, .mobix-form-grid select, .purchase-add-row select, .line-fields input, .imei-row input, .pos-unit-select, .pos-warehouse select, .payment-line select, .payment-line input, .filter-select select{
   height:40px;border:1px solid #d8dde5;background:#fff;border-radius:9px;padding:0 10px;
   color:#1d2939;font-size:11.5px;outline:0
 }
-.mobix-form-grid input::placeholder,.line-fields input::placeholder,.imei-row input::placeholder,.payment-line input::placeholder{color:#a6afbd}
-.mobix-form-grid input:focus,.mobix-form-grid select:focus,.purchase-add-row select:focus,.line-fields input:focus,.imei-row input:focus,.pos-unit-select:focus,.pos-warehouse select:focus,.payment-line select:focus,.payment-line input:focus,.filter-select select:focus{
+.mobix-form-grid input::placeholder, .line-fields input::placeholder, .imei-row input::placeholder, .payment-line input::placeholder{color:#a6afbd}
+.mobix-form-grid input:focus, .mobix-form-grid select:focus, .purchase-add-row select:focus, .line-fields input:focus, .imei-row input:focus, .pos-unit-select:focus, .pos-warehouse select:focus, .payment-line select:focus, .payment-line input:focus, .filter-select select:focus{
   border-color:#9db4ff;box-shadow:0 0 0 3px rgba(49,94,251,.075);background:#fff
 }
-.form-footnote,.tax-note{color:#667085;font-size:10px;line-height:1.55}
+.form-footnote, .tax-note{color:#667085;font-size:10px;line-height:1.55}
 .tax-note{background:#f8fafc;border:1px solid #eef1f4;border-radius:9px}
 .error-banner{background:#fff6f5;border-color:#fecdca;color:#912018;border-radius:11px}
 .error-banner strong{font-size:11.5px}.error-banner span{font-size:10.5px}
@@ -235,9 +235,9 @@ input,select,textarea{color:#1d2939}
 .product-cell strong{color:#1d2939;font-size:11px;font-weight:640}
 .product-cell span{color:#98a2b3;font-size:9px}
 .product-thumb{background:#f2f4f7;color:#526071;border-radius:8px}
-.stacked-cell span,.identifier-stack span,.tiny-muted{font-size:9.8px;color:#667085}
+.stacked-cell span, .identifier-stack span, .tiny-muted{font-size:9.8px;color:#667085}
 .identifier-stack b{font-size:8.8px;color:#98a2b3}
-.identifier-stack code,.imei-code{font-size:10px;background:#f8fafc;border-color:#e4e7ec;color:#344054;border-radius:6px}
+.identifier-stack code, .imei-code{font-size:10px;background:#f8fafc;border-color:#e4e7ec;color:#344054;border-radius:6px}
 .status-badge{min-height:22px;padding:0 8px;font-size:9px;font-weight:650;letter-spacing:.005em}
 .movement-badge{padding:4px 8px;font-size:9.5px;font-weight:650}
 
@@ -261,11 +261,13 @@ input,select,textarea{color:#1d2939}
 /* POS --------------------------------------------------------------------- */
 .pos-page{min-width:0;max-width:100%}
 .pos-layout{max-width:100%;min-width:0;gap:14px}
-.pos-catalog-panel,.pos-checkout,.pos-cart-card,.pos-customer-card,.pos-payment-card,.pos-total-card{min-width:0}
+.pos-catalog-panel, .pos-checkout, .pos-cart-card, .pos-customer-card, .pos-payment-card, .pos-total-card{min-width:0}
+
 .pos-search{height:52px;border-bottom-color:#eaecf0;color:#98a2b3}
 .pos-search input{font-size:11.5px;color:#344054}
 .pos-product{border-bottom-color:#eef1f4;background:#fff}
 .pos-product:hover{background:#fafcff}
+
 .pos-product-copy strong{font-size:11.5px;color:#1d2939;font-weight:650;line-height:1.35}
 .pos-product-copy span{font-size:9.5px;color:#667085;line-height:1.35}
 .pos-product-copy small{font-size:9px;color:#067647;font-weight:540}
@@ -273,11 +275,20 @@ input,select,textarea{color:#1d2939}
 .pos-card-title{min-height:47px;padding:0 14px;border-bottom-color:#eef1f4;background:#fff}
 .pos-card-title strong{font-size:11.5px;color:#1d2939;font-weight:670}.pos-card-title>span{font-size:9.5px;color:#98a2b3}
 .pos-cart-line{padding:11px 13px;border-bottom-color:#eef1f4}
+
+
+
 .qty-control{border-color:#d8dde5;border-radius:8px}
 .payment-line{background:#fbfcfe;border-color:#e3e7ec;border-radius:11px;padding:11px}
 .payment-field>span{text-transform:none;letter-spacing:0;font-size:9.5px;color:#667085}
 .payment-actions .ghost-button{border-color:#d8e1f3;background:#fff;color:#315efb;font-size:10px;font-weight:650;white-space:nowrap}
 .payment-actions .ghost-button:hover{background:#f4f7ff;border-color:#bdcbef}
+
+
+
+
+
+
 
 /* SALES / DETAIL ---------------------------------------------------------- */
 .sale-info-card{padding:14px;border-radius:13px}
@@ -288,11 +299,11 @@ input,select,textarea{color:#1d2939}
 .table-action-link{font-weight:650!important;color:#315efb!important}
 
 /* STATES ----------------------------------------------------------------- */
-.status-badge.device-available,.status-badge.purchase-received,.status-badge.sale-completed{background:#ecfdf3;color:#067647}
+.status-badge.device-available, .status-badge.purchase-received, .status-badge.sale-completed{background:#ecfdf3;color:#067647}
 .status-badge.device-sold{background:#f2f4f7;color:#475467}
 .status-badge.device-reserved{background:#fffaeb;color:#b54708}
-.status-badge.device-warranty,.status-badge.device-technical_service{background:#eef4ff;color:#315efb}
-.status-badge.device-damaged,.status-badge.device-lost,.status-badge.purchase-cancelled,.status-badge.sale-cancelled,.status-badge.sale-refunded{background:#fef3f2;color:#b42318}
+.status-badge.device-warranty, .status-badge.device-technical_service{background:#eef4ff;color:#315efb}
+.status-badge.device-damaged, .status-badge.device-lost, .status-badge.purchase-cancelled, .status-badge.sale-cancelled, .status-badge.sale-refunded{background:#fef3f2;color:#b42318}
 .status-badge.device-in_transfer{background:#f4f3ff;color:#6938ef}
 
 /* SCROLLBARS -------------------------------------------------------------- */
