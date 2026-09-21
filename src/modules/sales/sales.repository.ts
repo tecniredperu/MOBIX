@@ -16,18 +16,6 @@ function customerDisplayName(customer: { businessName?: string | null; firstName
   return name || fallback;
 }
 
-function getLimaDayBounds() {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Lima",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const start = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day), 5, 0, 0));
-  return { start, end: new Date(start.getTime() + 86_400_000) };
-}
-
 export async function getSaleDetail(id: string) {
   const company = await getActiveCompany();
   const sale = await prisma.sale.findFirst({
