@@ -7,7 +7,7 @@ async function source(path: string) {
 }
 
 function hasRule(css: string, selector: string, fragments: string[]) {
-  const start = css.indexOf(selector);
+  const start = css.lastIndexOf(selector);
   assert.notEqual(start, -1, `No se encontró el selector ${selector}`);
   const open = css.indexOf("{", start);
   const close = css.indexOf("}", open);
