@@ -46,6 +46,12 @@ function extractIdentifierCandidate(value: string) {
     .replace(/\s+/g, "");
 }
 
+function productImageUrl(productId: string, updatedAt?: Date | null) {
+  return updatedAt
+    ? `/api/products/${productId}/image?v=${updatedAt.getTime()}`
+    : null;
+}
+
 function loadProducts(companyId: string, q?: string, productIds?: string[]) {
   const tokens = searchTokens(q);
 
@@ -91,7 +97,7 @@ function loadProducts(companyId: string, q?: string, productIds?: string[]) {
       type: true,
       name: true,
       sku: true,
-      image: { select: { id: true } },
+      image: { select: { id: true, updatedAt: true } },
       brand: { select: { name: true } },
       category: { select: { name: true } },
       variants: {
@@ -144,7 +150,7 @@ async function mapCatalog(
         variant: variantLabel(variant),
         salePrice: Number(variant.salePrice),
         minimumSalePrice: Number(variant.minimumSalePrice),
-        imageUrl: product.image ? `/api/products/${product.id}/image` : null,
+        imageUrl: productImageUrl(product.id, product.image?.updatedAt),
         units: matchedUnit ? [matchedUnit] : [],
         balances: serialized
           ? warehouses.map((warehouse) => ({
@@ -432,7 +438,7 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
                   type: true,
                   name: true,
                   sku: true,
-                  image: { select: { id: true } },
+                  image: { select: { id: true, updatedAt: true } },
                   brand: { select: { name: true } },
                   category: { select: { name: true } },
                 },
@@ -485,7 +491,7 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
       variant: variantLabel(unit.variant),
       salePrice: Number(unit.variant.salePrice),
       minimumSalePrice: Number(unit.variant.minimumSalePrice),
-      imageUrl: unit.product.image ? `/api/products/${unit.product.id}/image` : null,
+      imageUrl: productImageUrl(unit.product.id, unit.product.image?.updatedAt),
       units: [matchedUnit],
       balances: [{ warehouseId, quantity: availableCount }],
     };
