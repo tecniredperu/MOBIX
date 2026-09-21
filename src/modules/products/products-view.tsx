@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronDown, Plus, Search, SlidersHorizontal } from "luci
 import { Pagination } from "@/components/pagination";
 import { PRODUCT_TYPE_LABELS } from "./product-types";
 import type { ProductCatalogOption, ProductListItem, ProductTypeValue } from "./product-types";
+import { ProductRowActions } from "./product-row-actions";
 
 type ProductSummary = {
   activeProducts: number;
@@ -25,7 +26,7 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 }).format(value);
 }
 
-export function ProductsView({ products, summary, pagination, brands, categories, filters, created, canManage }: {
+export function ProductsView({ products, summary, pagination, brands, categories, filters, created, updated, canManage }: {
   products: ProductListItem[];
   summary: ProductSummary;
   pagination: PaginationInfo;
@@ -33,6 +34,7 @@ export function ProductsView({ products, summary, pagination, brands, categories
   categories: ProductCatalogOption[];
   filters: ActiveFilters;
   created: boolean;
+  updated: boolean;
   canManage: boolean;
 }) {
   return (
@@ -46,10 +48,13 @@ export function ProductsView({ products, summary, pagination, brands, categories
         {canManage && <Link href="/productos/nuevo" className="primary-button"><Plus size={18} /> Nuevo producto</Link>}
       </section>
 
-      {created && canManage && (
+      {(created || updated) && canManage && (
         <div className="success-banner">
           <CheckCircle2 size={18} />
-          <div><strong>Producto guardado</strong><span>El producto y sus variantes ya están registrados en PostgreSQL.</span></div>
+          <div>
+            <strong>{updated ? "Producto actualizado" : "Producto guardado"}</strong>
+            <span>{updated ? "Los cambios ya están disponibles en catálogo y POS." : "El producto y sus variantes ya están registrados en PostgreSQL."}</span>
+          </div>
         </div>
       )}
 
@@ -78,7 +83,7 @@ export function ProductsView({ products, summary, pagination, brands, categories
 
         <div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th>Producto</th><th>Tipo</th><th>Marca</th><th className="right">Stock</th><th className="right">Precio</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Tipo</th><th>Marca</th><th className="right">Stock</th><th className="right">Precio</th><th>Estado</th>{canManage && <th className="product-actions-heading">Acciones</th>}</tr></thead>
             <tbody>
               {products.map((product) => {
                 const lowStock = product.type !== "SERVICE" && product.stock <= product.minimumStock;
@@ -90,10 +95,19 @@ export function ProductsView({ products, summary, pagination, brands, categories
                     <td className="right"><strong className={lowStock ? "stock-low" : undefined}>{product.type === "SERVICE" ? "—" : product.stock}</strong></td>
                     <td className="right"><strong>{formatMoney(product.price)}</strong></td>
                     <td><span className={`status-badge${product.status === "INACTIVE" ? " inactive" : ""}`}>{product.status === "ACTIVE" ? "Activo" : "Inactivo"}</span></td>
+                    {canManage && (
+                      <td className="product-actions-column">
+                        <ProductRowActions
+                          productId={product.id}
+                          productName={product.name}
+                          status={product.status}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
-              {products.length === 0 && <tr><td colSpan={6}><div className="empty-table-state"><Search size={22} /><strong>No encontramos productos</strong><span>{canManage ? "Prueba otros filtros o registra un producto nuevo." : "Prueba con otros filtros de búsqueda."}</span></div></td></tr>}
+              {products.length === 0 && <tr><td colSpan={canManage ? 7 : 6}><div className="empty-table-state"><Search size={22} /><strong>No encontramos productos</strong><span>{canManage ? "Prueba otros filtros o registra un producto nuevo." : "Prueba con otros filtros de búsqueda."}</span></div></td></tr>}
             </tbody>
           </table>
         </div>
