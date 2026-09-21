@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && next build",
-    "start": "prisma migrate deploy && npm run db:bootstrap && next start",
+    "start": "npm run prod:validate && prisma migrate deploy && npm run db:bootstrap && next start",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "tsx --test tests/unit/*.test.ts",
@@ -25,7 +25,8 @@
     "db:studio": "prisma studio",
     "db:backup": "node scripts/backup-db.mjs",
     "db:backup:verify": "node scripts/verify-backup.mjs",
-    "db:restore": "node scripts/restore-db.mjs"
+    "db:restore": "node scripts/restore-db.mjs",
+    "prod:validate": "node scripts/validate-production-env.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
