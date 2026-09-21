@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { PrintTicketButton } from "@/modules/sales/sale-detail-actions";
 import { getSaleDetail } from "@/modules/sales/sales.repository";
 
@@ -35,7 +35,7 @@ function limaOnlyDate(value: string) {
 }
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
-  const context = await requirePermission("sales.view");
+  const context = await requirePermissionWithSettings("sales.view");
   const { id } = await params;
   const sale = await getSaleDetail(id);
   if (!sale) notFound();
