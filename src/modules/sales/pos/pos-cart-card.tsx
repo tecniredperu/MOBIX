@@ -18,66 +18,100 @@ export function PosCartCard({
 
   return (
     <section className="panel pos-cart-card pos-v5-cart-card">
-      <div className="pos-card-title">
-        <div><ShoppingCart size={18} /><strong>Venta actual ({units})</strong></div>
+      <div className="pos-card-title pos-cart-premium-title">
+        <div>
+          <ShoppingCart size={19} />
+          <strong>Venta actual ({units})</strong>
+        </div>
         {cart.length > 0 && (
           <button className="pos-clear-cart" type="button" onClick={onClear}>
-            <Trash2 size={14} />
+            <Trash2 size={16} />
             Limpiar
           </button>
         )}
       </div>
+
       <div className="pos-cart-lines">
-        {cart.map((line) => (
-          <div className="pos-cart-line" key={line.key}>
-            <div className="pos-cart-line-head">
-              <div>
-                <strong>{line.name}</strong>
-                <span>{line.variant}</span>
-                {line.unitLabel && <code>{line.unitLabel}</code>}
+        {cart.map((line) => {
+          const serialized = line.type === "PHONE" || line.type === "SERIALIZED";
+          const lineTotal = line.quantity * line.unitPrice;
+
+          return (
+            <div className="pos-cart-line pos-cart-premium-line" key={line.key}>
+              <div className="pos-cart-product-info">
+                <strong title={line.name}>{line.name}</strong>
+                <div className="pos-cart-product-meta">
+                  <span title={line.variant}>Variante: {line.variant || "Estándar"}</span>
+                  {line.unitLabel && <code title={line.unitLabel}>· {line.unitLabel}</code>}
+                </div>
               </div>
-              <button
-                className="row-menu danger"
-                type="button"
-                onClick={() => onRemove(line.key)}
-                aria-label={`Quitar ${line.name}`}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-            <div className="pos-cart-controls">
-              {line.type === "PHONE" || line.type === "SERIALIZED" ? (
-                <span className="fixed-qty">1 und.</span>
-              ) : (
-                <div className="qty-control">
-                  <button type="button" onClick={() => onQuantityChange(line.key, line.quantity - 1)}>
-                    <Minus size={13} />
-                  </button>
+
+              <div className="pos-cart-premium-actions">
+                {serialized ? (
+                  <div className="qty-control pos-cart-qty-control is-fixed" aria-label="Cantidad fija: 1">
+                    <button type="button" disabled aria-hidden="true">
+                      <Minus size={14} />
+                    </button>
+                    <input type="number" value={1} readOnly aria-label="Cantidad" />
+                    <button type="button" disabled aria-hidden="true">
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="qty-control pos-cart-qty-control">
+                    <button
+                      type="button"
+                      onClick={() => onQuantityChange(line.key, line.quantity - 1)}
+                      aria-label={`Disminuir cantidad de ${line.name}`}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={line.quantity}
+                      onChange={(event) => onQuantityChange(line.key, Number(event.target.value))}
+                      aria-label={`Cantidad de ${line.name}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onQuantityChange(line.key, line.quantity + 1)}
+                      aria-label={`Aumentar cantidad de ${line.name}`}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                )}
+
+                <label className="pos-cart-line-price" title="Importe de la línea">
+                  <span>S/</span>
                   <input
                     type="number"
-                    min="1"
-                    value={line.quantity}
-                    onChange={(event) => onQuantityChange(line.key, Number(event.target.value))}
+                    min={line.minimumSalePrice * line.quantity}
+                    step="0.01"
+                    value={Number(lineTotal.toFixed(2))}
+                    onChange={(event) => {
+                      const total = Number(event.target.value);
+                      const unitPrice = line.quantity > 0 ? total / line.quantity : total;
+                      onPriceChange(line.key, unitPrice);
+                    }}
+                    aria-label={`Importe de ${line.name}`}
                   />
-                  <button type="button" onClick={() => onQuantityChange(line.key, line.quantity + 1)}>
-                    <Plus size={13} />
-                  </button>
-                </div>
-              )}
-              <label className="price-control">
-                <span>S/</span>
-                <input
-                  type="number"
-                  min={line.minimumSalePrice}
-                  step="0.01"
-                  value={line.unitPrice}
-                  onChange={(event) => onPriceChange(line.key, Number(event.target.value))}
-                />
-              </label>
-              <strong>{formatPen(line.quantity * line.unitPrice)}</strong>
+                </label>
+
+                <button
+                  className="pos-cart-remove"
+                  type="button"
+                  onClick={() => onRemove(line.key)}
+                  aria-label={`Quitar ${line.name}`}
+                  title={`Eliminar ${line.name}`}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {!cart.length && (
           <div className="pos-empty-cart">
