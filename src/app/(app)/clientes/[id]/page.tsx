@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { CustomerDetailView } from "@/modules/customers/customer-detail-view";
 import { getCustomerDetail } from "@/modules/customers/customers.repository";
@@ -13,8 +12,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   if (!customer) notFound();
 
   return (
-    <AppShell>
+    <>
       <CustomerDetailView customer={customer} />
-    </AppShell>
+    </>
   );
 }
