@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 import { CatalogManager } from "@/modules/products/catalog-manager";
@@ -26,7 +25,7 @@ export default async function CategoriesPage() {
   });
 
   return (
-    <AppShell>
+    <>
       <CatalogManager
         kind="category"
         title="Categorías"
@@ -42,6 +41,6 @@ export default async function CategoriesPage() {
           updatedAt: category.updatedAt.toISOString(),
         }))}
       />
-    </AppShell>
+    </>
   );
 }
