@@ -7,19 +7,30 @@ async function source(path: string) {
 }
 
 function hasRule(css: string, selector: string, fragments: string[]) {
-  const start = css.lastIndexOf(selector);
-  assert.notEqual(start, -1, `No se encontró el selector ${selector}`);
-  const open = css.indexOf("{", start);
-  const close = css.indexOf("}", open);
-  assert.notEqual(open, -1, `No se encontró apertura de ${selector}`);
-  assert.notEqual(close, -1, `No se encontró cierre de ${selector}`);
-  const block = css.slice(open + 1, close);
-  for (const fragment of fragments) {
-    assert.ok(
-      block.includes(fragment),
-      `${selector} debe conservar "${fragment}" como parte del contrato visual del POS.`,
-    );
+  let cursor = 0;
+  const blocks: string[] = [];
+
+  while (cursor < css.length) {
+    const start = css.indexOf(selector, cursor);
+    if (start === -1) break;
+
+    const afterSelector = start + selector.length;
+    const tail = css.slice(afterSelector);
+    const openOffset = tail.search(/^\s*\{/);
+    if (openOffset !== -1) {
+      const open = afterSelector + openOffset + tail.slice(openOffset).indexOf("{");
+      const close = css.indexOf("}", open);
+      if (close !== -1) blocks.push(css.slice(open + 1, close));
+    }
+
+    cursor = afterSelector;
   }
+
+  assert.ok(blocks.length > 0, `No se encontró el selector exacto ${selector}`);
+  assert.ok(
+    blocks.some((block) => fragments.every((fragment) => block.includes(fragment))),
+    `${selector} debe conservar: ${fragments.join(", ")}.`,
+  );
 }
 
 test("mobix-pos-final.css permanece como último override global", async () => {
