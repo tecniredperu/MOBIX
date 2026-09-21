@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Info,
+  ImagePlus,
   PackageCheck,
   Plus,
   Save,
@@ -100,6 +101,57 @@ function addCatalogOption(current: ProductCatalogOption[], option: ProductCatalo
   return next.sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
+
+function readImageAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressProductImage(file: File) {
+  const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+  if (!allowed.has(file.type)) throw new Error("Usa una imagen JPG, PNG o WebP.");
+  if (file.size > 6 * 1024 * 1024) throw new Error("La imagen original no puede superar 6 MB.");
+
+  const source = await readImageAsDataUrl(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new window.Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error("No se pudo procesar la imagen."));
+    element.src = source;
+  });
+
+  const render = (maxSide: number, quality: number) => {
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("No se pudo preparar la imagen.");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/webp", quality);
+  };
+
+  let dataUrl = render(720, 0.82);
+  if (dataUrl.length > 1_050_000) dataUrl = render(560, 0.72);
+  if (dataUrl.length > 1_050_000) throw new Error("La imagen sigue siendo demasiado pesada. Prueba otra foto.");
+
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) throw new Error("No se pudo preparar la imagen.");
+  return {
+    preview: dataUrl,
+    data: dataUrl.slice(comma + 1),
+    mimeType: "image/webp",
+  };
+}
+
 export function ProductForm({
   categories,
   brands,
@@ -123,6 +175,11 @@ export function ProductForm({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newBrandName, setNewBrandName] = useState("");
   const [catalogErrors, setCatalogErrors] = useState<{ category?: string; brand?: string }>({});
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageData, setImageData] = useState("");
+  const [imageMimeType, setImageMimeType] = useState("");
+  const [imageError, setImageError] = useState("");
+  const [imageProcessing, setImageProcessing] = useState(false);
 
   const typeRule = useMemo(() => {
     if (type === "PHONE") {
@@ -245,6 +302,8 @@ export function ProductForm({
       <form action={formAction} className="product-editor">
         <input type="hidden" name="type" value={type} />
         <input type="hidden" name="variants" value={serializedVariants} />
+        <input type="hidden" name="imageData" value={imageData} />
+        <input type="hidden" name="imageMimeType" value={imageMimeType} />
 
         <div className="editor-main">
           {state.status === "error" && (
@@ -300,6 +359,65 @@ export function ProductForm({
             </div>
 
             <div className="form-grid two-columns">
+              <div className="product-image-field span-2">
+                <div className={imagePreview ? "product-image-preview has-image" : "product-image-preview"}>
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Vista previa del producto" />
+                  ) : (
+                    <ImagePlus size={28} />
+                  )}
+                </div>
+                <div className="product-image-copy">
+                  <strong>Imagen del producto</strong>
+                  <span>Se optimiza automáticamente para catálogo y POS. JPG, PNG o WebP.</span>
+                  <div className="product-image-actions">
+                    <label className="secondary-button product-image-select">
+                      <ImagePlus size={15} />
+                      {imagePreview ? "Cambiar imagen" : "Seleccionar imagen"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        disabled={pending || imageProcessing}
+                        onChange={async (event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          setImageError("");
+                          setImageProcessing(true);
+                          try {
+                            const optimized = await compressProductImage(file);
+                            setImagePreview(optimized.preview);
+                            setImageData(optimized.data);
+                            setImageMimeType(optimized.mimeType);
+                          } catch (error) {
+                            setImageError(error instanceof Error ? error.message : "No se pudo procesar la imagen.");
+                          } finally {
+                            setImageProcessing(false);
+                            event.target.value = "";
+                          }
+                        }}
+                      />
+                    </label>
+                    {imagePreview && (
+                      <button
+                        type="button"
+                        className="cancel-button"
+                        onClick={() => {
+                          setImagePreview("");
+                          setImageData("");
+                          setImageMimeType("");
+                          setImageError("");
+                        }}
+                      >
+                        <Trash2 size={14} /> Quitar
+                      </button>
+                    )}
+                  </div>
+                  {imageProcessing && <small className="product-image-status">Optimizando imagen…</small>}
+                  {imageError && <span className="field-error">{imageError}</span>}
+                  <FieldError errors={state.fieldErrors?.imageData} />
+                </div>
+              </div>
+
               <label className="form-field span-2">
                 <span>Nombre del producto <b>*</b></span>
                 <input name="name" placeholder="Ej. Samsung Galaxy A56 5G" required />
