@@ -307,6 +307,7 @@ jobs:
             "/transferencias"
             "/administracion/usuarios"
             "/administracion/roles"
+            "/administracion/auditoria"
             "/configuracion"
             "/cuenta"
             "/buscar?q=iPhone"
