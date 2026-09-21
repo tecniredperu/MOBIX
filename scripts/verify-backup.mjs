@@ -14,8 +14,9 @@ function run(tool, args) {
   return result.stdout;
 }
 
-const backupFile = resolve(process.env.BACKUP_FILE?.trim() || process.argv[2] || "");
-if (!backupFile) throw new Error("Define BACKUP_FILE o pasa la ruta del .dump.");
+const backupInput = process.env.BACKUP_FILE?.trim() || process.argv[2]?.trim();
+if (!backupInput) throw new Error("Define BACKUP_FILE o pasa la ruta del .dump.");
+const backupFile = resolve(backupInput);
 await access(backupFile);
 
 const listing = run(process.env.PG_RESTORE_BIN?.trim() || "pg_restore", ["--list", backupFile]);
