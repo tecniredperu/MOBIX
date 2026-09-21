@@ -23,9 +23,15 @@ type ReceivableLockRow = {
   balance: unknown;
   status: string;
   saleNumber: string;
+  branchId: string;
+  branchName: string;
 };
 
-type CashSessionRow = { id: string };
+type CashSessionRow = {
+  id: string;
+  branchId: string;
+  branchName: string;
+};
 
 type ExistingCollectionReferenceRow = {
   source: string;
@@ -251,21 +257,22 @@ export async function registerReceivablePaymentAction(input: {
 
   const result = await prisma.$transaction(async (tx) => {
     const sessions = await tx.$queryRaw<CashSessionRow[]>`
-      SELECT "id"
-      FROM "cash_sessions"
-      WHERE "companyId" = ${company.id}
-        AND "userId" = ${membership.userId}
-        AND "status" = 'OPEN'::"CashSessionStatus"
-      ORDER BY "openedAt" DESC
+      SELECT cs."id", cs."branchId", b."name" AS "branchName"
+      FROM "cash_sessions" cs
+      INNER JOIN "branches" b ON b."id" = cs."branchId"
+      WHERE cs."companyId" = ${company.id}
+        AND cs."userId" = ${membership.userId}
+        AND cs."status" = 'OPEN'::"CashSessionStatus"
+      ORDER BY cs."openedAt" DESC
       LIMIT 1
-      FOR UPDATE
+      FOR UPDATE OF cs
     `;
     const openSession = sessions[0];
     if (!openSession) {
       throw new Error("Abre Caja antes de registrar un cobro. Todo abono debe quedar asociado al turno activo.");
     }
 
-    if (["YAPE", "PLIN", "TRANSFER"].includes(input.method)) {
+    if (["YAPE", "PLIN", "CARD", "TRANSFER"].includes(input.method)) {
       const normalizedReference = normalizePaymentReference(reference);
       const lockKey = company.id + ":" + input.method + ":" + normalizedReference;
       await tx.$executeRaw`
@@ -306,9 +313,17 @@ export async function registerReceivablePaymentAction(input: {
     }
 
     const rows = await tx.$queryRaw<ReceivableLockRow[]>`
-      SELECT ar."id", ar."customerId", ar."balance", ar."status"::text AS "status", s."saleNumber"
+      SELECT
+        ar."id",
+        ar."customerId",
+        ar."balance",
+        ar."status"::text AS "status",
+        s."saleNumber",
+        s."branchId",
+        b."name" AS "branchName"
       FROM "accounts_receivable" ar
       INNER JOIN "sales" s ON s."id" = ar."saleId"
+      INNER JOIN "branches" b ON b."id" = s."branchId"
       WHERE ar."id" = ${input.receivableId} AND ar."companyId" = ${company.id}
       FOR UPDATE OF ar
     `;
@@ -316,6 +331,13 @@ export async function registerReceivablePaymentAction(input: {
     if (!receivable) throw new Error("La cuenta por cobrar ya no existe.");
     if (receivable.status === "PAID" || receivable.status === "CANCELLED") {
       throw new Error("Esta cuenta por cobrar ya no admite pagos.");
+    }
+    if (openSession.branchId !== receivable.branchId) {
+      throw new Error(
+        "Tu caja está abierta en " + openSession.branchName
+        + ", pero este crédito corresponde a " + receivable.branchName
+        + ". Cierra y abre caja en la sucursal correcta antes de registrar el abono.",
+      );
     }
 
     const balance = roundMoney(Number(receivable.balance));
