@@ -107,6 +107,9 @@ export function SaleDetailView({
           name: customerName,
           documentType: sale.customer.documentType,
           documentNumber: sale.customer.documentNumber,
+          phone: sale.customer.phone,
+          email: sale.customer.email,
+          address: sale.customer.address,
         }
       : null,
     items: sale.items.map((item: any) => ({
@@ -330,7 +333,14 @@ export function SaleDetailView({
         </section>
       </div>
 
-      <section className="sale-receipt-a4" aria-label="Comprobante A4">
+      <section
+        className={[
+          "sale-receipt-a4",
+          sale.items.length > 5 ? "receipt-a4-dense" : "",
+          sale.items.length > 9 ? "receipt-a4-ultra-dense" : "",
+        ].filter(Boolean).join(" ")}
+        aria-label="Comprobante A4"
+      >
         <header className="receipt-a4-header">
           <div className="receipt-company-block">
             {company.logoUrl && <img className="receipt-company-logo" src={company.logoUrl} alt={`Logo de ${companyName}`} />}
@@ -355,6 +365,9 @@ export function SaleDetailView({
           <div className="receipt-info-row"><span>Fecha</span><strong>{limaDate(sale.createdAt)}</strong></div>
           <div className="receipt-info-row"><span>Documento</span><strong>{sale.customer?.documentNumber ? `${sale.customer.documentType || "Doc."} ${sale.customer.documentNumber}` : "Sin documento"}</strong></div>
           <div className="receipt-info-row"><span>Sucursal</span><strong>{sale.branch}</strong></div>
+          {sale.customer?.phone && <div className="receipt-info-row"><span>Teléfono</span><strong>{sale.customer.phone}</strong></div>}
+          {sale.customer?.email && <div className="receipt-info-row"><span>Correo</span><strong>{sale.customer.email}</strong></div>}
+          {sale.customer?.address && <div className="receipt-info-row receipt-info-wide"><span>Dirección</span><strong>{sale.customer.address}</strong></div>}
           <div className="receipt-info-row"><span>Condición</span><strong>{TAX_LABELS[sale.taxCondition] ?? sale.taxCondition}</strong></div>
           <div className="receipt-info-row"><span>Vendedor</span><strong>{sale.seller}</strong></div>
         </div>

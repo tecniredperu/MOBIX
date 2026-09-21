@@ -4,6 +4,44 @@
 .receipt-payment-row>span>small{display:block;margin-top:.6mm;font-size:6.8pt;color:#6b7280}
 
 
+.receipt-info-wide{grid-column:1/-1}
+
+/* Compactación progresiva del A4: conserva todo el contenido y reduce
+ * espacios cuando una venta tiene muchos renglones. */
+@media print{
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-header{padding-bottom:5mm;gap:6mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-info{padding:4mm 0 4mm;gap:2mm 6mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-info-row{font-size:8pt;line-height:1.25}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-table{font-size:7.6pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-table th{padding:2mm 2mm;font-size:7.2pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-table td{padding:2mm 2mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-item-copy{gap:.5mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-item-copy strong{font-size:8.2pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-item-copy span{font-size:7pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-item-copy small{font-size:6.4pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-bottom{margin-top:4mm;gap:6mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-payment-box{padding:3mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-payment-row{padding:1mm 0;font-size:7.8pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-summary-row{padding:1.5mm 0;font-size:8.2pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-summary-row.total{font-size:11pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-dense .receipt-a4-footer{margin-top:5mm;padding-top:3mm}
+
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-company-logo{max-height:55px}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-company-copy h2{font-size:14pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-document-box{padding:3mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-document-box h1{font-size:12pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-info{padding:3mm 0;grid-template-columns:1fr 1fr}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-info-row{grid-template-columns:24mm 1fr;font-size:7.2pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-table{font-size:6.8pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-table th{padding:1.5mm;font-size:6.5pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-table td{padding:1.5mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-item-copy strong{font-size:7.4pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-item-copy span{font-size:6.5pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-item-copy small{font-size:5.9pt}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-bottom{margin-top:3mm}
+  body.print-sale-a4 .sale-receipt-a4.receipt-a4-ultra-dense .receipt-a4-footer{margin-top:3mm;padding-top:2mm}
+}
+
 /* =======================================================================
  * PRINT CONTRACT — comprobante A4 de una sola página de layout.
  * Evita que elementos ocultos con visibility:hidden sigan ocupando páginas.

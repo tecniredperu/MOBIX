@@ -65,6 +65,9 @@ export type SaleTicketData = {
     name: string;
     documentType: string | null;
     documentNumber: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
   } | null;
   items: Array<{
     id: string;
@@ -154,6 +157,9 @@ export function SaleTicketModal({
               <span>Venta: {ticket.saleNumber}</span>
               <span>{limaDate(ticket.createdAt)}</span>
               <span>Cliente: {customer}</span>
+              {ticket.customer?.phone && <span>Tel.: {ticket.customer.phone}</span>}
+              {ticket.customer?.email && <span>{ticket.customer.email}</span>}
+              {ticket.customer?.address && <span>{ticket.customer.address}</span>}
               {ticket.customer?.documentNumber && <span>{ticket.customer.documentType}: {ticket.customer.documentNumber}</span>}
             </div>
             <div className="ticket-items">

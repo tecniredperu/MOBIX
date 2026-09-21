@@ -71,3 +71,49 @@ test("ticket directo conserva información crítica del comprobante", async () =
   assert.ok(page.includes("payment.reference"));
   assert.ok(page.includes('sale.status === "CANCELLED" ? "VENTA ANULADA"'));
 });
+
+
+test("A4 aplica compactación progresiva sin ocultar renglones", async () => {
+  const css = await source("src/app/mobix-receipts.css");
+  const view = await source("src/modules/sales/sale-detail-view.tsx");
+
+  assert.ok(view.includes('sale.items.length > 5 ? "receipt-a4-dense"'));
+  assert.ok(view.includes('sale.items.length > 9 ? "receipt-a4-ultra-dense"'));
+  assert.ok(css.includes(".receipt-a4-dense"));
+  assert.ok(css.includes(".receipt-a4-ultra-dense"));
+  assert.equal(css.includes("display:none!important}.receipt-item-copy"), false);
+});
+
+test("A4, ticket y PDF comparten datos completos del cliente", async () => {
+  const view = await source("src/modules/sales/sale-detail-view.tsx");
+  const modal = await source("src/modules/sales/sale-ticket-modal.tsx");
+  const pdf = await source("src/modules/sales/sale-receipt-pdf.ts");
+
+  for (const field of ["phone", "email", "address"]) {
+    assert.ok(view.includes(`sale.customer.${field}`));
+    assert.ok(modal.includes(`ticket.customer?.${field}`));
+    assert.ok(pdf.includes(`ticket.customer?.${field}`) || pdf.includes(`ticket.customer.${field}`));
+  }
+});
+
+test("PDF recorta espacio blanco pero permanece en una sola página A4", async () => {
+  const pdf = await source("src/modules/sales/sale-receipt-pdf.ts");
+
+  assert.ok(pdf.includes("cropCanvasHeight"));
+  assert.ok(pdf.includes("const renderedCanvas = cropCanvasHeight(canvas, y + 100)"));
+  assert.ok(pdf.includes("/Count 1"));
+  assert.ok(pdf.includes("renderedCanvas.width"));
+  assert.ok(pdf.includes("renderedCanvas.height"));
+});
+
+test("comprobantes no muestran aviso pendiente de facturación electrónica", async () => {
+  const files = await Promise.all([
+    source("src/modules/sales/sale-detail-view.tsx"),
+    source("src/modules/sales/sale-ticket-modal.tsx"),
+    source("src/modules/sales/sale-receipt-pdf.ts"),
+  ]);
+  const combined = files.join("\n").toLocaleLowerCase("es-PE");
+
+  assert.equal(combined.includes("facturación electrónica se implementará más adelante"), false);
+  assert.equal(combined.includes("facturacion electronica se implementara mas adelante"), false);
+});
