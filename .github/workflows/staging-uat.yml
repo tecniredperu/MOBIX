@@ -125,6 +125,18 @@ jobs:
           SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
           echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
 
+      - name: Verificar health interno protegido
+        run: |
+          set -euo pipefail
+
+          PRIVATE_STATUS=$(curl -s -o /tmp/health-private-unauth.json -w "%{http_code}" http://127.0.0.1:3001/api/health/details)
+          test "$PRIVATE_STATUS" = "401"
+
+          PRIVATE_HEALTH=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/api/health/details)
+          node -e "const h=JSON.parse(process.argv[1]);if(h.status!=='ok'||h.schema!=='ok'||!h.modules?.security)process.exit(1)" "$PRIVATE_HEALTH"
+
       - name: Smoke UAT de rutas operativas
         run: |
           set -e
@@ -154,6 +166,7 @@ jobs:
             "/configuracion"
             "/administracion/usuarios"
             "/administracion/roles"
+            "/administracion/auditoria"
             "/cuenta"
             "/buscar?q=uat"
           )
