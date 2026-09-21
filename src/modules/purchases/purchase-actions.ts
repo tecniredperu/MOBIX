@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { prisma } from "@/lib/prisma";
 import type { CreatePurchaseInput } from "./purchase-types";
