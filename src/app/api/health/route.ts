@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { BUILD_COMMIT } from "@/lib/build-info";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -5,6 +6,19 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store, max-age=0" };
+
+function secureEqual(a: string, b: string) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function canShowDetails(request: Request) {
+  const expected = process.env.HEALTH_DETAILS_TOKEN?.trim();
+  if (!expected) return false;
+  const provided = request.headers.get("x-mobix-health-token")?.trim() || "";
+  return secureEqual(provided, expected);
+}
 
 type SchemaProbe = {
   saleCashSession: boolean;
@@ -52,7 +66,7 @@ function moduleStatus(schema: SchemaProbe | undefined) {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const started = performance.now();
 
   try {
@@ -63,8 +77,6 @@ export async function GET() {
       {
         status: "degraded",
         service: "MOBIX",
-        database: "error",
-        schema: "unknown",
         timestamp: new Date().toISOString(),
       },
       { status: 503, headers: noStoreHeaders },
@@ -137,47 +149,65 @@ export async function GET() {
     if (!schemaReady) {
       logger.error("health.schema_outdated", new Error("El esquema de producción no coincide con la versión de MOBIX."));
       return Response.json(
-        {
-          status: "degraded",
-          service: "MOBIX",
-          database: "ok",
-          schema: "error",
-          modules,
-          migration: schema?.failedMigration ? "failed" : "ok",
-          databaseLatencyMs,
-          timestamp: new Date().toISOString(),
-        },
+        canShowDetails(request)
+          ? {
+              status: "degraded",
+              service: "MOBIX",
+              database: "ok",
+              schema: "error",
+              modules,
+              migration: schema?.failedMigration ? "failed" : "ok",
+              databaseLatencyMs,
+              timestamp: new Date().toISOString(),
+            }
+          : {
+              status: "degraded",
+              service: "MOBIX",
+              timestamp: new Date().toISOString(),
+            },
         { status: 503, headers: noStoreHeaders },
       );
     }
 
     return Response.json(
-      {
-        status: "ok",
-        service: "MOBIX",
-        database: "ok",
-        schema: "ok",
-        modules,
-        migration: "ok",
-        databaseLatencyMs,
-        uptimeSeconds: Math.round(process.uptime()),
-        environment: process.env.NODE_ENV ?? "unknown",
-        commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? BUILD_COMMIT,
-        timestamp: new Date().toISOString(),
-      },
+      canShowDetails(request)
+        ? {
+            status: "ok",
+            service: "MOBIX",
+            database: "ok",
+            schema: "ok",
+            modules,
+            migration: "ok",
+            databaseLatencyMs,
+            uptimeSeconds: Math.round(process.uptime()),
+            environment: process.env.NODE_ENV ?? "unknown",
+            commit: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? BUILD_COMMIT,
+            timestamp: new Date().toISOString(),
+          }
+        : {
+            status: "ok",
+            service: "MOBIX",
+            timestamp: new Date().toISOString(),
+          },
       { headers: noStoreHeaders },
     );
   } catch (error) {
     logger.error("health.schema_check_failed", error);
     return Response.json(
-      {
-        status: "degraded",
-        service: "MOBIX",
-        database: "ok",
-        schema: "error",
-        databaseLatencyMs,
-        timestamp: new Date().toISOString(),
-      },
+      canShowDetails(request)
+        ? {
+            status: "degraded",
+            service: "MOBIX",
+            database: "ok",
+            schema: "error",
+            databaseLatencyMs,
+            timestamp: new Date().toISOString(),
+          }
+        : {
+            status: "degraded",
+            service: "MOBIX",
+            timestamp: new Date().toISOString(),
+          },
       { status: 503, headers: noStoreHeaders },
     );
   }

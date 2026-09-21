@@ -62,7 +62,7 @@ jobs:
 
       - name: Generar credenciales efímeras de staging
         run: |
-          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url'))" >> "$GITHUB_ENV"
+          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url')); console.log('HEALTH_DETAILS_TOKEN='+c.randomBytes(32).toString('hex')); console.log('TRUST_PROXY_HEADERS=false')" >> "$GITHUB_ENV"
 
       - name: Instalar dependencias
         run: npm ci
@@ -107,18 +107,44 @@ jobs:
 
       - name: Comprobar health y PostgreSQL
         run: |
+          set -euo pipefail
+
+          READY=0
           for i in {1..30}; do
             if curl -fsS -o /tmp/health.json http://127.0.0.1:3001/api/health; then
-              if node -e "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));if(h.status!=='ok'||h.database!=='ok')process.exit(1)"; then
-                cat /tmp/health.json
-                exit 0
+              if node -e "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));if(h.status!=='ok')process.exit(1)"; then
+                READY=1
+                break
               fi
             fi
             sleep 1
           done
-          cat /tmp/mobix-staging.log || true
-          [ -f /tmp/health.json ] && cat /tmp/health.json || true
-          exit 1
+
+          if [ "$READY" != "1" ]; then
+            cat /tmp/mobix-staging.log || true
+            [ -f /tmp/health.json ] && cat /tmp/health.json || true
+            exit 1
+          fi
+
+          PRIVATE_HEALTH=$(curl -fsS \
+            -H "X-Mobix-Health-Token: ${HEALTH_DETAILS_TOKEN}" \
+            http://127.0.0.1:3001/api/health)
+
+          node -e '
+            const h=JSON.parse(process.argv[1]);
+            if(
+              h.status!=="ok" ||
+              h.database!=="ok" ||
+              h.schema!=="ok" ||
+              h.migration!=="ok" ||
+              !h.modules?.security
+            ){
+              console.error(h);
+              process.exit(1);
+            }
+          ' "$PRIVATE_HEALTH"
+
+          cat /tmp/health.json
 
       - name: Crear sesión de UAT web
         run: |
@@ -154,6 +180,7 @@ jobs:
             "/configuracion"
             "/administracion/usuarios"
             "/administracion/roles"
+            "/administracion/auditoria"
             "/cuenta"
             "/buscar?q=uat"
           )

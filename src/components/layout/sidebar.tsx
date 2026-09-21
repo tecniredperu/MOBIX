@@ -13,6 +13,7 @@ import {
   Repeat2,
   Settings,
   ShieldCheck,
+  History,
   ShoppingBag,
   ShoppingCart,
   Smartphone,
@@ -208,11 +209,20 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
       <div className="sidebar-bottom">
         {showAdmin && (
           <Link
-            className={`nav-item${isActivePath(pathname, "/administracion") ? " active" : ""}`}
+            className={`nav-item${isActivePath(pathname, "/administracion") && !isActivePath(pathname, "/administracion/auditoria") ? " active" : ""}`}
             href={adminHref}
           >
             <ShieldCheck size={18} />
             <span>Administración</span>
+          </Link>
+        )}
+        {allowed("roles.manage") && (
+          <Link
+            className={`nav-item${isActivePath(pathname, "/administracion/auditoria") ? " active" : ""}`}
+            href="/administracion/auditoria"
+          >
+            <History size={18} />
+            <span>Auditoría</span>
           </Link>
         )}
         {allowed("settings.manage") && (

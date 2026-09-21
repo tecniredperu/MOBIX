@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && next build",
-    "start": "prisma migrate deploy && npm run db:bootstrap && next start",
+    "start": "npm run prod:check && prisma migrate deploy && npm run db:bootstrap && next start",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "tsx --test tests/unit/*.test.ts",
@@ -22,7 +22,10 @@
     "db:migrate": "prisma migrate dev",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "prod:check": "node scripts/check-production-env.mjs",
+    "db:backup": "node scripts/backup-postgres.mjs",
+    "db:restore": "node scripts/restore-postgres.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
