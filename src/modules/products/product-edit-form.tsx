@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Barcode, ImagePlus, Save, Trash2 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { PRODUCT_TYPE_LABELS, type ProductCatalogOption, type ProductTypeValue } from "./product-types";
 
 type EditableVariant = {
@@ -167,7 +167,7 @@ export function ProductEditForm({
     minimumSalePrice: Number(variant.minimumSalePrice || 0),
   })), [variants]);
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
