@@ -25,6 +25,6 @@ function RoleCard({role,groups,pending,onError,onSaved}:{role:any;groups:any[];p
 }
 
 function PermissionGrid({groups,selected,onToggle,disabled}:{groups:any[];selected:string[];onToggle:(c:string)=>void;disabled:boolean}){
- const LABELS:Record<string,string>={dashboard:"Dashboard",sales:"Ventas",purchases:"Compras",inventory:"Inventario",returns:"Devoluciones",cash:"Caja",customers:"Clientes",service:"Postventa",reports:"Reportes",costs:"Costos y utilidad",users:"Usuarios",roles:"Roles",settings:"Configuración"};
+ const LABELS:Record<string,string>={dashboard:"Dashboard",sales:"Ventas",purchases:"Compras",inventory:"Inventario",returns:"Devoluciones",cash:"Caja",customers:"Clientes",service:"Postventa",reports:"Reportes",costs:"Costos y utilidad",users:"Usuarios",roles:"Roles",audit:"Auditoría",settings:"Configuración"};
  return <div className="permission-groups">{groups.map(([group,items]:any)=><div className="permission-group" key={group}><strong>{LABELS[group]||group}</strong><div>{items.map((p:any)=><label key={p.code}><input type="checkbox" disabled={disabled} checked={selected.includes(p.code)} onChange={()=>onToggle(p.code)}/><span><b>{p.name}</b><small>{p.description}</small></span></label>)}</div></div>)}</div>
 }

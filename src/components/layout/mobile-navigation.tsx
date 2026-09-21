@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeftRight, BadgeDollarSign, Boxes, ChartNoAxesCombined, CircleDollarSign,
-  LayoutDashboard, Menu, PackageSearch, Repeat2, Settings, ShieldCheck,
+  LayoutDashboard, Menu, PackageSearch, Repeat2, ScrollText, Settings, ShieldCheck,
   ShoppingBag, ShoppingCart, Smartphone, Truck, Users, Wrench, X,
 } from "lucide-react";
 
@@ -46,6 +46,7 @@ export function MobileNavigation({ companyName, companyLogoUrl, branchName, user
   const permissionSet = useMemo(() => new Set(permissions), [permissions]);
   const allowed = (code: string) => isSystem || permissionSet.has(code);
   const showAdmin = allowed("users.manage") || allowed("roles.manage");
+  const showAudit = allowed("audit.view");
   const adminHref = allowed("users.manage") ? "/administracion/usuarios" : "/administracion/roles";
 
   useEffect(() => setOpen(false), [pathname]);
@@ -76,7 +77,7 @@ export function MobileNavigation({ companyName, companyLogoUrl, branchName, user
             if (!items.length) return null;
             return <section key={section.label}><p>{section.label}</p>{items.map(({label,href,icon:Icon}) => <Link key={href} href={href} className={active(pathname,href)?"active":""}><Icon size={18}/><span>{label}</span></Link>)}</section>;
           })}
-          {(showAdmin || allowed("settings.manage")) && <section><p>Sistema</p>{showAdmin && <Link href={adminHref} className={active(pathname,"/administracion")?"active":""}><ShieldCheck size={18}/><span>Administración</span></Link>}{allowed("settings.manage") && <Link href="/configuracion" className={active(pathname,"/configuracion")?"active":""}><Settings size={18}/><span>Configuración</span></Link>}</section>}
+          {(showAdmin || showAudit || allowed("settings.manage")) && <section><p>Sistema</p>{showAdmin && <Link href={adminHref} className={active(pathname,"/administracion")&&!active(pathname,"/administracion/auditoria")?"active":""}><ShieldCheck size={18}/><span>Administración</span></Link>}{showAudit && <Link href="/administracion/auditoria" className={active(pathname,"/administracion/auditoria")?"active":""}><ScrollText size={18}/><span>Auditoría</span></Link>}{allowed("settings.manage") && <Link href="/configuracion" className={active(pathname,"/configuracion")?"active":""}><Settings size={18}/><span>Configuración</span></Link>}</section>}
         </nav>
         <footer className="mobile-nav-user"><div>{userName.split(/\s+/).slice(0,2).map(v=>v[0]).join("").toUpperCase()}</div><span><strong>{userName}</strong><small>{roleName}</small></span></footer>
       </aside>

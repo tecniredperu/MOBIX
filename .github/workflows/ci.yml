@@ -99,6 +99,40 @@ jobs:
           SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
           echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
 
+      - name: Verificar health público e interno
+        run: |
+          set -euo pipefail
+
+          PUBLIC_HEALTH=$(curl -fsS http://127.0.0.1:3001/api/health)
+          node -e '
+            const h=JSON.parse(process.argv[1]);
+            if(h.status!=="ok" || h.database!=="ok") process.exit(1);
+            for (const key of ["modules","environment","commit","databaseLatencyMs","uptimeSeconds"]) {
+              if (Object.prototype.hasOwnProperty.call(h,key)) {
+                console.error("El health público expone "+key);
+                process.exit(1);
+              }
+            }
+          ' "$PUBLIC_HEALTH"
+
+          PRIVATE_STATUS=$(curl -s -o /tmp/mobix-health-private.json -w "%{http_code}" http://127.0.0.1:3001/api/health/details)
+          if [ "$PRIVATE_STATUS" != "401" ]; then
+            echo "Se esperaba HTTP 401 para health interno sin sesión y se recibió $PRIVATE_STATUS"
+            cat /tmp/mobix-health-private.json || true
+            exit 1
+          fi
+
+          PRIVATE_HEALTH=$(curl -fsS \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            http://127.0.0.1:3001/api/health/details)
+          node -e '
+            const h=JSON.parse(process.argv[1]);
+            if(h.status!=="ok" || h.database!=="ok" || h.schema!=="ok" || !h.modules?.security) {
+              console.error(h);
+              process.exit(1);
+            }
+          ' "$PRIVATE_HEALTH"
+
       - name: Probar venta POS real por API
         run: |
           set -euo pipefail
@@ -275,6 +309,7 @@ jobs:
             "/transferencias"
             "/administracion/usuarios"
             "/administracion/roles"
+            "/administracion/auditoria"
             "/configuracion"
             "/cuenta"
             "/buscar?q=iPhone"

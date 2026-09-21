@@ -1,0 +1,135 @@
+name: MOBIX Backup Restore Drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 10 * * 1"
+  pull_request:
+    branches: [main]
+    paths:
+      - "prisma/**"
+      - "scripts/backup-db.mjs"
+      - "scripts/verify-backup.mjs"
+      - "scripts/restore-db.mjs"
+      - ".github/workflows/backup-restore-drill.yml"
+  push:
+    branches: [main]
+    paths:
+      - "prisma/**"
+      - "scripts/backup-db.mjs"
+      - "scripts/verify-backup.mjs"
+      - "scripts/restore-db.mjs"
+      - ".github/workflows/backup-restore-drill.yml"
+
+jobs:
+  disaster-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mobix
+          POSTGRES_PASSWORD: mobix
+          POSTGRES_DB: mobix_dr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mobix -d mobix_dr"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mobix:mobix@localhost:5432/mobix_dr?schema=public
+      NODE_ENV: test
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar base origen
+        run: |
+          npm run db:generate
+          npx prisma migrate deploy
+          npm run db:seed
+
+      - name: Crear backup PostgreSQL 16
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/dr
+          docker run --rm --network host \
+            -e PGPASSWORD=mobix \
+            -v "$PWD/artifacts/dr:/backup" \
+            postgres:16-alpine \
+            pg_dump -h 127.0.0.1 -p 5432 -U mobix -d mobix_dr \
+              --format=custom --no-owner --no-privileges \
+              --file=/backup/mobix.dump
+
+          docker run --rm \
+            -v "$PWD/artifacts/dr:/backup" \
+            postgres:16-alpine \
+            pg_restore --list /backup/mobix.dump > artifacts/dr/archive.list
+
+          test -s artifacts/dr/mobix.dump
+          grep -q "TABLE" artifacts/dr/archive.list
+
+      - name: Restaurar en base aislada
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e PGPASSWORD=mobix \
+            postgres:16-alpine \
+            psql -h 127.0.0.1 -p 5432 -U mobix -d postgres \
+              -v ON_ERROR_STOP=1 \
+              -c 'DROP DATABASE IF EXISTS mobix_restore_drill;' \
+              -c 'CREATE DATABASE mobix_restore_drill;'
+
+          docker run --rm --network host \
+            -e PGPASSWORD=mobix \
+            -v "$PWD/artifacts/dr:/backup" \
+            postgres:16-alpine \
+            pg_restore -h 127.0.0.1 -p 5432 -U mobix -d mobix_restore_drill \
+              --no-owner --no-privileges /backup/mobix.dump
+
+      - name: Comparar integridad origen vs restore
+        run: |
+          set -euo pipefail
+          QUERY='SELECT
+            (SELECT COUNT(*) FROM "_prisma_migrations"),
+            (SELECT COUNT(*) FROM "companies"),
+            (SELECT COUNT(*) FROM "users"),
+            (SELECT COUNT(*) FROM "permissions"),
+            (SELECT COUNT(*) FROM "roles"),
+            (SELECT COUNT(*) FROM "products"),
+            (SELECT COUNT(*) FROM "product_variants");'
+
+          SRC=$(docker run --rm --network host -e PGPASSWORD=mobix postgres:16-alpine \
+            psql -h 127.0.0.1 -p 5432 -U mobix -d mobix_dr -At -F '|' -c "$QUERY")
+          DST=$(docker run --rm --network host -e PGPASSWORD=mobix postgres:16-alpine \
+            psql -h 127.0.0.1 -p 5432 -U mobix -d mobix_restore_drill -At -F '|' -c "$QUERY")
+
+          printf "origen=%s\nrestore=%s\n" "$SRC" "$DST" | tee artifacts/dr/counts.txt
+          test "$SRC" = "$DST"
+
+          FAILED=$(docker run --rm --network host -e PGPASSWORD=mobix postgres:16-alpine \
+            psql -h 127.0.0.1 -p 5432 -U mobix -d mobix_restore_drill -At \
+            -c 'SELECT COUNT(*) FROM "_prisma_migrations" WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL;')
+          test "$FAILED" = "0"
+
+      - name: Guardar evidencia del simulacro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobix-drill-${{ github.run_number }}
+          path: artifacts/dr/
+          if-no-files-found: error
+          retention-days: 3
