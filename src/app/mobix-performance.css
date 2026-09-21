@@ -1,16 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
 .mobix-error-state{
   min-height: 100vh;
   display: grid;
@@ -78,15 +65,12 @@ body{ font-size: 14.5px; }
 .mobix-page-slot{ display: inline-flex; align-items: center; gap: 6px; }
 .mobix-page-ellipsis{ color: #94a3b8; font-weight: 700; }
 
-@keyframes mobix-shimmer{ to { background-position: -200% 0; } }
+}
 @keyframes mobix-spin{ to { transform: rotate(360deg); } }
-
-
 
 @media (max-width: 640px){
   .mobix-pagination{ align-items: stretch; flex-wrap: wrap; }
   .mobix-page-numbers{ order: 3; width: 100%; justify-content: center; }
   .mobix-page-button{ flex: 1; }
 }
-
 
