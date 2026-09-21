@@ -23,16 +23,14 @@ Después del primer acceso de esos usuarios, MOBIX guarda un hash scrypt y la va
 
 ## Opción recomendada: Docker
 
+Para producción usa `docker-compose.production.yml`. Esta variante no publica PostgreSQL en el host y expone MOBIX únicamente en `127.0.0.1` para colocarlo detrás del proxy HTTPS.
+
 ```bash
-docker build -t mobix:latest .
-docker run -d \
-  --name mobix \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e AUTH_SECRET="$AUTH_SECRET" \
-  mobix:latest
+docker compose -f docker-compose.production.yml build
+docker compose -f docker-compose.production.yml up -d
 ```
+
+El `docker-compose.yml` simple del repositorio queda reservado para desarrollo local.
 
 El contenedor ejecuta primero `npm run prod:check`, después `prisma migrate deploy` y finalmente inicia Next.js. Si faltan variables críticas, MOBIX falla antes de tocar el esquema. `/api/health` devuelve una respuesta pública mínima; los detalles operativos requieren el encabezado `X-Mobix-Health-Token` cuando `HEALTH_DETAILS_TOKEN` está configurado.
 
@@ -52,6 +50,8 @@ Nunca uses `npm run dev` como servidor del cliente.
 ## Proxy HTTPS
 
 Publica MOBIX detrás de HTTPS (Nginx, Cloudflare, proxy del hosting o balanceador). La cookie de sesión se marca `Secure` automáticamente en producción, por lo que el acceso final debe ser HTTPS.
+
+Existe una configuración Nginx de referencia en `deploy/nginx/mobix.conf.example`. El proxy debe sobrescribir `X-Forwarded-For` y `X-Real-IP` antes de usar `TRUST_PROXY_HEADERS=true`.
 
 ## Base de datos
 
@@ -84,6 +84,17 @@ Después de la restauración verifica `/api/health`, usuarios, catálogo, una ve
 
 ## Verificación posterior al despliegue
 
+Ejecuta primero:
+
+```bash
+MOBIX_BASE_URL="https://mobix.tudominio.com" \
+MOBIX_EXPECTED_COMMIT="SHA_DESPLEGADO" \
+HEALTH_DETAILS_TOKEN="TOKEN_PRIVADO" \
+npm run go-live:check
+```
+
+También existe el workflow manual `MOBIX Production Go-Live Check`, que usa el secret de GitHub `MOBIX_PRODUCTION_HEALTH_TOKEN`.
+
 1. `GET /api/health` debe responder HTTP 200 y no debe exponer módulos, commit ni entorno sin token.
 2. Abrir `/productos` sin sesión debe redirigir a `/login`.
 3. Iniciar sesión con un usuario real.
@@ -98,3 +109,10 @@ El código comercial debería mantenerse en un repositorio privado y la rama `ma
 ## SUNAT
 
 Los comprobantes actuales de MOBIX son registros internos. La emisión electrónica CPE/SUNAT requiere un módulo de integración específico antes de considerarlos comprobantes electrónicos enviados/aceptados por SUNAT.
+
+
+## Runbook operativo
+
+El procedimiento completo de backup, despliegue, validación, rollback y recuperación está documentado en `docs/PRODUCTION-RUNBOOK.md`.
+
+El estado de los pendientes externos se mantiene en `docs/GO-LIVE-STATUS.md`.

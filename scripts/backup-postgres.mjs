@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -61,3 +61,20 @@ const metadata = {
 
 await writeFile(metadataFile, JSON.stringify(metadata, null, 2) + "\n", "utf8");
 console.log(JSON.stringify(metadata, null, 2));
+
+
+const retentionDays = Number(process.env.MOBIX_BACKUP_RETENTION_DAYS || 0);
+if (Number.isFinite(retentionDays) && retentionDays > 0) {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const entries = await readdir(outputDir);
+  const candidates = entries.filter((name) => /^mobix-.*\.dump(?:\.json)?$/.test(name));
+
+  for (const name of candidates) {
+    const candidate = resolve(outputDir, name);
+    const info = await stat(candidate);
+    if (info.mtimeMs < cutoff) {
+      await unlink(candidate);
+      console.log("Backup antiguo eliminado: " + name);
+    }
+  }
+}

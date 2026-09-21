@@ -1,6 +1,6 @@
 # MOBIX · Checklist de salida a producción para cliente
 
-Fecha de referencia: 2026-09-19
+Fecha de referencia: 2026-09-21
 
 Este documento define el mínimo operativo antes de entregar MOBIX a un cliente real.
 
@@ -20,8 +20,10 @@ Este documento define el mínimo operativo antes de entregar MOBIX a un cliente 
 - [ ] Los backups automáticos diarios están habilitados.
 - [ ] Se conoce y se ha probado al menos una vez el procedimiento de restauración.
 - [ ] `prisma migrate deploy` termina sin errores.
-- [ ] `/api/health` responde HTTP 200 con `status=ok`, `database=ok` y `schema=ok`.
-- [ ] El campo `commit` de `/api/health` coincide con el paquete desplegado.
+- [ ] `/api/health` público responde HTTP 200 con `status=ok` sin exponer detalles internos.
+- [ ] `/api/health` con `X-Mobix-Health-Token` responde `database=ok`, `schema=ok` y `migration=ok`.
+- [ ] El campo `commit` del health protegido coincide con el paquete desplegado.
+- [ ] `npm run go-live:check` termina con GO técnico sobre el dominio final.
 
 ## 3. Validación automatizada
 
@@ -68,7 +70,7 @@ Realizar con datos de prueba identificables y luego anular/revertir cuando corre
 
 - [ ] El POS responde sin pausas perceptibles al buscar por nombre/SKU.
 - [ ] La búsqueda exacta por IMEI/serie responde correctamente.
-- [ ] Revisar varias lecturas consecutivas de `databaseLatencyMs` en `/api/health`.
+- [ ] Revisar varias lecturas consecutivas de `databaseLatencyMs` usando el health protegido.
 - [ ] Si la latencia permanece alta en varias mediciones en caliente, revisar región del servidor de aplicación, región de PostgreSQL y conectividad antes de cargar operación real.
 - [ ] Probar con el volumen estimado de catálogo y clientes del negocio.
 
@@ -78,7 +80,7 @@ Realizar con datos de prueba identificables y luego anular/revertir cuando corre
 - [ ] Cambiar/restablecer contraseña invalida las demás sesiones.
 - [ ] Suspender o cambiar acceso de un usuario invalida sus sesiones.
 - [ ] El sistema impide dejar la empresa sin al menos un administrador activo.
-- [ ] El procedimiento de rollback del despliegue está documentado.
+- [ ] El procedimiento de rollback del despliegue está documentado en `docs/PRODUCTION-RUNBOOK.md`.
 - [ ] Existe acceso a logs de ejecución de Hostinger.
 
 ## 8. Alcance legal
@@ -93,7 +95,8 @@ MOBIX registra Boleta, Factura y Nota de venta como documentos internos del sist
 
 **GO** solo cuando:
 - CI y UAT están verdes;
-- health indica base y esquema OK;
+- `npm run go-live:check` reporta GO técnico;
+- health protegido indica base y esquema OK;
 - existe backup verificable;
 - secretos expuestos fueron rotados;
 - la prueba punta a punta fue completada;

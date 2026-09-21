@@ -53,6 +53,17 @@ jobs:
           NODE_ENV: production
         run: npm run prod:check
 
+      - name: Validar compose de producción
+        env:
+          POSTGRES_USER: mobix
+          POSTGRES_PASSWORD: "ci-postgres-password"
+          POSTGRES_DB: mobix
+          DATABASE_URL: "postgresql://mobix:ci-postgres-password@postgres:5432/mobix?schema=public"
+          AUTH_SECRET: ${{ env.AUTH_SECRET }}
+          HEALTH_DETAILS_TOKEN: ${{ env.HEALTH_DETAILS_TOKEN }}
+          TRUST_PROXY_HEADERS: "false"
+        run: docker compose -f docker-compose.production.yml config >/tmp/mobix-production-compose.yml
+
       - name: Instalar dependencias
         run: npm ci
 
@@ -125,6 +136,14 @@ jobs:
               process.exit(1);
             }
           ' "$PRIVATE_HEALTH"
+
+      - name: Ejecutar verificador Go-Live contra CI
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+          MOBIX_ALLOW_HTTP: "1"
+          HEALTH_DETAILS_TOKEN: ${{ env.HEALTH_DETAILS_TOKEN }}
+          MOBIX_MAX_HEALTH_MS: "3000"
+        run: npm run go-live:check
 
       - name: Crear sesión de smoke test
         run: |

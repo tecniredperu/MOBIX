@@ -1,0 +1,46 @@
+name: MOBIX Production Go-Live Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "URL HTTPS desplegada de MOBIX"
+        required: true
+        type: string
+      expected_commit:
+        description: "SHA del commit desplegado (opcional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  go-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar dominio desplegado
+        env:
+          MOBIX_BASE_URL: ${{ inputs.base_url }}
+          MOBIX_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          HEALTH_DETAILS_TOKEN: ${{ secrets.MOBIX_PRODUCTION_HEALTH_TOKEN }}
+          MOBIX_MAX_HEALTH_MS: "1500"
+        run: node scripts/go-live-check.mjs
+
+      - name: Guardar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobix-go-live-${{ github.run_number }}
+          path: artifacts/go-live/
+          if-no-files-found: warn
+          retention-days: 30
