@@ -9,6 +9,19 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
+function postgresEnv(connectionString) {
+  const url = new URL(connectionString);
+  return {
+    ...process.env,
+    PGHOST: url.hostname,
+    PGPORT: url.port || "5432",
+    PGUSER: decodeURIComponent(url.username),
+    PGPASSWORD: decodeURIComponent(url.password),
+    PGDATABASE: decodeURIComponent(url.pathname.replace(/^\//, "")),
+    ...(url.searchParams.get("sslmode") ? { PGSSLMODE: url.searchParams.get("sslmode") } : {}),
+  };
+}
+
 const outputDir = resolve(process.env.MOBIX_BACKUP_DIR?.trim() || "backups");
 await mkdir(outputDir, { recursive: true });
 
@@ -16,20 +29,20 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const file = resolve(outputDir, `mobix-${stamp}.dump`);
 const metadataFile = file + ".json";
 
+const pgEnv = postgresEnv(databaseUrl);
 const dump = spawnSync("pg_dump", [
   "--format=custom",
   "--no-owner",
   "--no-privileges",
   "--file", file,
-  databaseUrl,
-], { stdio: "inherit" });
+], { stdio: "inherit", env: pgEnv });
 
 if (dump.status !== 0) {
   console.error("pg_dump falló. Verifica que PostgreSQL client tools estén instaladas y que DATABASE_URL sea accesible.");
   process.exit(dump.status || 1);
 }
 
-const verify = spawnSync("pg_restore", ["--list", file], { stdio: "ignore" });
+const verify = spawnSync("pg_restore", ["--list", file], { stdio: "ignore", env: pgEnv });
 if (verify.status !== 0) {
   console.error("El backup generado no pudo ser leído por pg_restore.");
   process.exit(1);
