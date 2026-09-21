@@ -31,13 +31,11 @@
 .pos-cart-line{min-width:0}
 
 
-
 .qty-control{min-width:0}
 .qty-control input{min-width:0;width:100%}
 
 
 /* Cliente y comprobante */
-
 
 
 /* Pago: pensado para una columna de caja de ~400 px. */
@@ -58,16 +56,6 @@
 
 /* Resumen y vuelto */
 .pos-total-card{overflow:hidden;padding:14px}
-
-
-
-
-
-
-
-
-
-
 
 
 .pos-total-card .tax-note, .pos-total-card .form-footnote{overflow-wrap:anywhere;line-height:1.45}
