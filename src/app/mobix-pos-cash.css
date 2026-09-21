@@ -1,4 +1,17 @@
 .pos-page-shell{display:flex;min-width:0;flex-direction:column;gap:8px}
+
+
+
+
+
+
+
+
+
+
 @media(max-width:680px){
   .pos-page-shell{gap:7px}
+  
+  
+  
 }
