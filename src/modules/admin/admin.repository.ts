@@ -16,3 +16,48 @@ export async function getAdminData(){
    branches:branches.map(b=>({id:b.id,name:b.name})),
  };
 }
+
+
+const AUDIT_SENSITIVE_KEYS = /password|passwd|secret|token|cookie|authorization|session|credential/i;
+
+function sanitizeAuditValue(value: unknown, depth = 0): unknown {
+  if (depth > 4) return "[MAX_DEPTH]";
+  if (Array.isArray(value)) return value.slice(0, 30).map((item) => sanitizeAuditValue(item, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        AUDIT_SENSITIVE_KEYS.test(key) ? "[REDACTED]" : sanitizeAuditValue(item, depth + 1),
+      ]),
+    );
+  }
+  if (typeof value === "string" && value.length > 300) return value.slice(0, 300) + "…";
+  return value;
+}
+
+export async function getAuditLogData(limit = 200) {
+  const company = await getActiveCompany();
+  const take = Math.max(1, Math.min(500, Math.floor(limit)));
+
+  const logs = await prisma.auditLog.findMany({
+    where: { companyId: company.id },
+    orderBy: { createdAt: "desc" },
+    take,
+    include: {
+      user: { select: { name: true, email: true } },
+    },
+  });
+
+  return logs.map((log) => ({
+    id: log.id,
+    createdAt: log.createdAt.toISOString(),
+    userName: log.user?.name ?? "Sistema",
+    userEmail: log.user?.email ?? null,
+    action: log.action,
+    entity: log.entity,
+    entityId: log.entityId,
+    ipAddress: log.ipAddress,
+    oldValues: sanitizeAuditValue(log.oldValues),
+    newValues: sanitizeAuditValue(log.newValues),
+  }));
+}
