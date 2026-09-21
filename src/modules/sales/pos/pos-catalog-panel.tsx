@@ -165,8 +165,21 @@ export function PosCatalogPanel({
                 <Star size={17} fill={favorite ? "currentColor" : "none"} />
               </button>
 
-              <div className="pos-product-visual">
-                {serialized ? <Smartphone size={38} /> : item.type === "SERVICE" ? <CreditCard size={36} /> : <Package size={36} />}
+              <div className={item.imageUrl ? "pos-product-visual has-image" : "pos-product-visual"}>
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : serialized ? (
+                  <Smartphone size={34} />
+                ) : item.type === "SERVICE" ? (
+                  <CreditCard size={32} />
+                ) : (
+                  <Package size={32} />
+                )}
               </div>
 
               <div className="pos-product-copy">
