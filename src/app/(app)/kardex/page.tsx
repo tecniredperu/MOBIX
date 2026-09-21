@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { requirePermission } from "@/lib/business-context";
 import { KardexView } from "@/modules/inventory/kardex-view";
 import { getKardex } from "@/modules/inventory/kardex.repository";
@@ -15,8 +14,8 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
   const { items, warehouses, summary } = await getKardex(filters);
 
   return (
-    <AppShell>
+    <>
       <KardexView items={items} warehouses={warehouses} summary={summary} filters={filters} />
-    </AppShell>
+    </>
   );
 }
