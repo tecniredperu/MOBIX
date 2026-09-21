@@ -1,5 +1,5 @@
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
-import { formatPen, type CartLine } from "./pos-shared";
+import { type CartLine } from "./pos-shared";
 
 export function PosCartCard({
   cart,
