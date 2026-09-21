@@ -46,7 +46,12 @@ jobs:
 
       - name: Generar credenciales efímeras de CI
         run: |
-          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url'))" >> "$GITHUB_ENV"
+          node -e "const c=require('crypto'); console.log('AUTH_SECRET='+c.randomBytes(48).toString('hex')); console.log('MOBIX_BOOTSTRAP_PASSWORD='+c.randomBytes(24).toString('base64url')); console.log('HEALTH_DETAILS_TOKEN='+c.randomBytes(32).toString('hex')); console.log('TRUST_PROXY_HEADERS=false')" >> "$GITHUB_ENV"
+
+      - name: Validar entorno de producción
+        env:
+          NODE_ENV: production
+        run: npm run prod:check
 
       - name: Instalar dependencias
         run: npm ci
@@ -93,6 +98,33 @@ jobs:
           done
           cat /tmp/mobix-next.log || true
           exit 1
+
+      - name: Verificar health público y protegido
+        run: |
+          set -euo pipefail
+
+          PUBLIC_HEALTH=$(curl -fsS http://127.0.0.1:3001/api/health)
+          node -e '
+            const body=JSON.parse(process.argv[1]);
+            if(body.status!=="ok") process.exit(1);
+            for(const key of ["modules","commit","environment","uptimeSeconds","databaseLatencyMs","migration"]) {
+              if(Object.prototype.hasOwnProperty.call(body,key)) {
+                console.error("El health público expone "+key);
+                process.exit(1);
+              }
+            }
+          ' "$PUBLIC_HEALTH"
+
+          PRIVATE_HEALTH=$(curl -fsS \
+            -H "X-Mobix-Health-Token: ${HEALTH_DETAILS_TOKEN}" \
+            http://127.0.0.1:3001/api/health)
+          node -e '
+            const body=JSON.parse(process.argv[1]);
+            if(body.status!=="ok" || body.schema!=="ok" || !body.modules?.security || !body.commit) {
+              console.error(body);
+              process.exit(1);
+            }
+          ' "$PRIVATE_HEALTH"
 
       - name: Crear sesión de smoke test
         run: |
@@ -534,6 +566,48 @@ jobs:
             exit 1
           fi
           grep -q "ya no están disponibles" /tmp/mobix-deleted-product-sale.json
+
+      - name: Probar backup y restauración PostgreSQL
+        run: |
+          set -euo pipefail
+
+          if ! command -v pg_dump >/dev/null 2>&1 || ! command -v pg_restore >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+          rm -rf /tmp/mobix-backups
+          MOBIX_BACKUP_DIR=/tmp/mobix-backups npm run db:backup
+          BACKUP_FILE=$(find /tmp/mobix-backups -maxdepth 1 -name '*.dump' -type f | head -n 1)
+          test -n "$BACKUP_FILE"
+          test -f "$BACKUP_FILE.json"
+
+          export PGPASSWORD=mobix
+          psql -h 127.0.0.1 -U mobix -d postgres -v ON_ERROR_STOP=1 \
+            -c 'DROP DATABASE IF EXISTS mobix_restore_test WITH (FORCE);'
+          psql -h 127.0.0.1 -U mobix -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE mobix_restore_test;'
+
+          MOBIX_RESTORE_CONFIRM=RESTORE \
+          DATABASE_URL='postgresql://mobix:mobix@127.0.0.1:5432/mobix_restore_test?schema=public' \
+            npm run db:restore -- "$BACKUP_FILE"
+
+          MIGRATIONS=$(psql -h 127.0.0.1 -U mobix -d mobix_restore_test -Atc \
+            'SELECT COUNT(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;')
+          if [ "${MIGRATIONS:-0}" -lt 1 ]; then
+            echo "La base restaurada no contiene migraciones aplicadas."
+            exit 1
+          fi
+
+          USERS=$(psql -h 127.0.0.1 -U mobix -d mobix_restore_test -Atc \
+            'SELECT COUNT(*) FROM "users";')
+          if [ "${USERS:-0}" -lt 1 ]; then
+            echo "La base restaurada no contiene usuarios."
+            exit 1
+          fi
+
+          psql -h 127.0.0.1 -U mobix -d postgres -v ON_ERROR_STOP=1 \
+            -c 'DROP DATABASE mobix_restore_test WITH (FORCE);'
 
       - name: Construir imagen Docker de producción
         run: docker build -t mobix-ci:${{ github.sha }} .
