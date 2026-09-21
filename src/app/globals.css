@@ -362,3 +362,112 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
     height: 160px;
   }
 }
+
+
+/* Product list actions --------------------------------------------------- */
+.product-actions-heading {
+  width: 250px;
+  min-width: 250px;
+  text-align: right;
+}
+
+.product-actions-column {
+  width: 250px;
+  min-width: 250px;
+}
+
+.product-actions-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.product-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.product-action-button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 8.8px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.product-action-button:hover {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+  color: #1d4ed8;
+}
+
+.product-action-button.edit {
+  color: #1d4ed8;
+}
+
+.product-action-button.deactivate {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+}
+
+.product-action-button.activate {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.product-action-button.delete {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.product-action-button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.product-action-error {
+  max-width: 245px;
+  color: #b91c1c;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: right;
+}
+
+@media (max-width: 1250px) {
+  .product-actions-heading,
+  .product-actions-column {
+    width: 126px;
+    min-width: 126px;
+  }
+
+  .product-action-button {
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+  }
+
+  .product-action-button span {
+    display: none;
+  }
+
+  .product-row-actions {
+    gap: 4px;
+  }
+}
