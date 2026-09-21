@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/business-context";
+import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
 import { getPosCashStatus } from "@/modules/cash/pos-cash-status";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { settings } = await requirePermission("sales.create");
+  const { settings } = await requirePermissionWithSettings("sales.create");
   const cashStatus = await getPosCashStatus();
 
   return NextResponse.json(
