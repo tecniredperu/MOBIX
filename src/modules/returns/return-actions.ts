@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { roundMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
