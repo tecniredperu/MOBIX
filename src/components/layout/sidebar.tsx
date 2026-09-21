@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   PackageSearch,
   Repeat2,
+  ScrollText,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -115,6 +116,7 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
   const allowed = (permission: string) => isSystem || permissionSet.has(permission);
   const adminHref = allowed("users.manage") ? "/administracion/usuarios" : "/administracion/roles";
   const showAdmin = allowed("users.manage") || allowed("roles.manage");
+  const showAudit = allowed("audit.view");
 
   return (
     <aside className="sidebar">
@@ -208,11 +210,20 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
       <div className="sidebar-bottom">
         {showAdmin && (
           <Link
-            className={`nav-item${isActivePath(pathname, "/administracion") ? " active" : ""}`}
+            className={`nav-item${isActivePath(pathname, adminHref) ? " active" : ""}`}
             href={adminHref}
           >
             <ShieldCheck size={18} />
             <span>Administración</span>
+          </Link>
+        )}
+        {showAudit && (
+          <Link
+            className={`nav-item${isActivePath(pathname, "/administracion/auditoria") ? " active" : ""}`}
+            href="/administracion/auditoria"
+          >
+            <ScrollText size={18} />
+            <span>Auditoría</span>
           </Link>
         )}
         {allowed("settings.manage") && (
