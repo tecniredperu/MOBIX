@@ -139,6 +139,82 @@ jobs:
             /tmp/mobix-pos-sale-fixture.json \
             /tmp/mobix-pos-sale-response.json
 
+      - name: Validar referencias de tarjeta y pago mixto
+        run: |
+          set -euo pipefail
+
+          WAREHOUSE_ID=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(JSON.parse(x).warehouseId)')
+          VARIANT_ID=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(JSON.parse(x).variantId)')
+          UNIT_PRICE=$(node -e 'const x=require("fs").readFileSync("/tmp/mobix-pos-sale-fixture.json","utf8"); process.stdout.write(String(JSON.parse(x).unitPrice))')
+          CARD_REF="CI-CARD-REF-001"
+
+          CARD_PAYLOAD=$(node -e '
+            const [warehouseId, variantId, unitPrice, reference] = process.argv.slice(1);
+            process.stdout.write(JSON.stringify({
+              warehouseId,
+              documentType: "RECEIPT",
+              taxCondition: "TAXED",
+              discount: 0,
+              lines: [{ variantId, quantity: 1, unitPrice: Number(unitPrice) }],
+              payments: [{ method: "CARD", amount: Number(unitPrice), reference }]
+            }));
+          ' "$WAREHOUSE_ID" "$VARIANT_ID" "$UNIT_PRICE" "$CARD_REF")
+
+          curl -fsS \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$CARD_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales \
+            > /tmp/mobix-card-sale.json
+
+          DUPLICATE_CARD_STATUS=$(curl -s \
+            -o /tmp/mobix-card-duplicate.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$CARD_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales)
+          if [ "$DUPLICATE_CARD_STATUS" != "400" ]; then
+            echo "Se esperaba HTTP 400 para referencia de tarjeta repetida y se recibió $DUPLICATE_CARD_STATUS"
+            cat /tmp/mobix-card-duplicate.json || true
+            exit 1
+          fi
+          grep -q "ya fue utilizada" /tmp/mobix-card-duplicate.json
+
+          MIXED_DUPLICATE_PAYLOAD=$(node -e '
+            const [warehouseId, variantId, unitPrice, reference] = process.argv.slice(1);
+            const half = Math.round(Number(unitPrice) * 50) / 100;
+            const rest = Math.round((Number(unitPrice) - half) * 100) / 100;
+            process.stdout.write(JSON.stringify({
+              warehouseId,
+              documentType: "RECEIPT",
+              taxCondition: "TAXED",
+              discount: 0,
+              lines: [{ variantId, quantity: 1, unitPrice: Number(unitPrice) }],
+              payments: [
+                { method: "CARD", amount: half, reference },
+                { method: "CARD", amount: rest, reference }
+              ]
+            }));
+          ' "$WAREHOUSE_ID" "$VARIANT_ID" "$UNIT_PRICE" "CI-CARD-MIXED-001")
+
+          MIXED_DUPLICATE_STATUS=$(curl -s \
+            -o /tmp/mobix-card-mixed-duplicate.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Cookie: mobix_session=${MOBIX_SESSION_TOKEN}" \
+            --data "$MIXED_DUPLICATE_PAYLOAD" \
+            http://127.0.0.1:3001/api/pos/sales)
+          if [ "$MIXED_DUPLICATE_STATUS" != "400" ]; then
+            echo "Se esperaba HTTP 400 para referencia repetida dentro del pago mixto y se recibió $MIXED_DUPLICATE_STATUS"
+            cat /tmp/mobix-card-mixed-duplicate.json || true
+            exit 1
+          fi
+          grep -q "repetida dentro de la misma venta" /tmp/mobix-card-mixed-duplicate.json
+
       - name: Validar comprobantes de la venta real
         run: |
           set -euo pipefail
