@@ -1,4 +1,4 @@
-import { requirePermission, requirePermissionWithSettings } from "@/lib/business-context";
+import { requirePermissionWithSettings } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
 import { createSaleAction } from "./sale-actions";
 import type { CreateSaleInput } from "./sale-types";
