@@ -14,26 +14,22 @@ const optionalText = z
     return text === "" ? null : text;
   });
 
-const imageDataSchema = z
-  .union([z.string(), z.null(), z.undefined()])
-  .transform((value) => {
+const imageDataSchema = z.preprocess(
+  (value) => {
     const text = typeof value === "string" ? value.trim() : "";
     return text === "" ? null : text;
-  })
-  .superRefine((value, ctx) => {
-    if (!value) return;
-    if (value.length > 1_100_000) {
-      ctx.addIssue({ code: "custom", message: "La imagen es demasiado grande. Usa una imagen más liviana." });
-      return;
-    }
-    if (!/^[A-Za-z0-9+/=]+$/.test(value)) {
-      ctx.addIssue({ code: "custom", message: "La imagen enviada no es válida." });
-    }
-  });
+  },
+  z
+    .string()
+    .max(1_100_000, "La imagen es demasiado grande. Usa una imagen más liviana.")
+    .regex(/^[A-Za-z0-9+/=]+$/, "La imagen enviada no es válida.")
+    .nullable(),
+);
 
-const imageMimeSchema = z
-  .union([z.enum(["image/jpeg", "image/png", "image/webp"]), z.literal(""), z.null(), z.undefined()])
-  .transform((value) => (typeof value === "string" && value ? value : null));
+const imageMimeSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() ? value.trim() : null),
+  z.enum(["image/jpeg", "image/png", "image/webp"]).nullable(),
+);
 
 const variantSchema = z
   .object({
