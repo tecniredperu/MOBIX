@@ -21,6 +21,41 @@ type ReturnSummaryRow = {
   count: bigint;
   cost: unknown;
 };
+type SalesSummaryRow = {
+  grossSalesTotal: unknown;
+  discountTotal: unknown;
+  grossCostTotal: unknown;
+  transactions: bigint;
+};
+type DailySalesRow = {
+  date: string;
+  sales: unknown;
+  cost: unknown;
+  count: bigint;
+};
+type ProductSalesRow = {
+  product: string;
+  brand: string | null;
+  quantity: unknown;
+  sales: unknown;
+  cost: unknown;
+};
+type SellerSalesRow = {
+  seller: string;
+  sales: unknown;
+  cost: unknown;
+  count: bigint;
+};
+type BranchSalesRow = {
+  branch: string;
+  sales: unknown;
+  cost: unknown;
+  count: bigint;
+};
+type PaymentSalesRow = {
+  method: string;
+  amount: unknown;
+};
 
 export async function getReports(filters: { from?: string; to?: string }) {
   const { company, membership, permissions } = await requirePermission("reports.view");
@@ -44,89 +79,208 @@ export async function getReports(filters: { from?: string; to?: string }) {
     }
   }
 
-  const sales = await safe("Ventas del periodo", [], () => prisma.sale.findMany({
-    where: {
-      companyId: company.id,
-      status: { in: ["COMPLETED", "REFUNDED"] },
-      createdAt: { gte: from, lte: to },
-    },
-    select: {
-      total: true,
-      discount: true,
-      createdAt: true,
-      sellerId: true,
-      branchId: true,
-      items: {
-        select: {
-          productId: true,
-          quantity: true,
-          unitCost: true,
-          total: true,
-          product: {
-            select: {
-              name: true,
-              brand: { select: { name: true } },
-            },
-          },
-        },
-      },
-      payments: { select: { paymentMethod: true, amount: true } },
-      seller: { select: { name: true } },
-      branch: { select: { name: true } },
-    },
-    orderBy: { createdAt: "asc" },
+  const [
+    salesSummaryRows,
+    dailyRows,
+    productRows,
+    sellerRows,
+    branchRows,
+    paymentRows,
+  ] = await Promise.all([
+    safe<SalesSummaryRow[]>("Resumen de ventas", [{
+      grossSalesTotal: 0,
+      discountTotal: 0,
+      grossCostTotal: 0,
+      transactions: 0n,
+    }], () => prisma.$queryRaw<SalesSummaryRow[]>`
+      WITH filtered_sales AS (
+        SELECT "id", "total", "discount"
+        FROM "sales"
+        WHERE "companyId" = ${company.id}
+          AND "status" IN ('COMPLETED', 'REFUNDED')
+          AND "createdAt" BETWEEN ${from} AND ${to}
+      ),
+      sale_costs AS (
+        SELECT si."saleId", COALESCE(SUM(si."unitCost" * si."quantity"), 0) AS "cost"
+        FROM "sale_items" si
+        INNER JOIN filtered_sales fs ON fs."id" = si."saleId"
+        GROUP BY si."saleId"
+      )
+      SELECT
+        COALESCE(SUM(fs."total"), 0) AS "grossSalesTotal",
+        COALESCE(SUM(fs."discount"), 0) AS "discountTotal",
+        COALESCE(SUM(COALESCE(sc."cost", 0)), 0) AS "grossCostTotal",
+        COUNT(*) AS "transactions"
+      FROM filtered_sales fs
+      LEFT JOIN sale_costs sc ON sc."saleId" = fs."id"
+    `),
+    safe<DailySalesRow[]>("Ventas por día", [], () => prisma.$queryRaw<DailySalesRow[]>`
+      WITH filtered_sales AS (
+        SELECT "id", "total", "createdAt"
+        FROM "sales"
+        WHERE "companyId" = ${company.id}
+          AND "status" IN ('COMPLETED', 'REFUNDED')
+          AND "createdAt" BETWEEN ${from} AND ${to}
+      ),
+      sale_costs AS (
+        SELECT si."saleId", COALESCE(SUM(si."unitCost" * si."quantity"), 0) AS "cost"
+        FROM "sale_items" si
+        INNER JOIN filtered_sales fs ON fs."id" = si."saleId"
+        GROUP BY si."saleId"
+      )
+      SELECT
+        TO_CHAR(fs."createdAt" AT TIME ZONE 'America/Lima', 'YYYY-MM-DD') AS "date",
+        COALESCE(SUM(fs."total"), 0) AS "sales",
+        COALESCE(SUM(COALESCE(sc."cost", 0)), 0) AS "cost",
+        COUNT(*) AS "count"
+      FROM filtered_sales fs
+      LEFT JOIN sale_costs sc ON sc."saleId" = fs."id"
+      GROUP BY 1
+      ORDER BY 1
+    `),
+    safe<ProductSalesRow[]>("Ventas por producto", [], () => prisma.$queryRaw<ProductSalesRow[]>`
+      WITH filtered_sales AS (
+        SELECT "id"
+        FROM "sales"
+        WHERE "companyId" = ${company.id}
+          AND "status" IN ('COMPLETED', 'REFUNDED')
+          AND "createdAt" BETWEEN ${from} AND ${to}
+      )
+      SELECT
+        p."name" AS "product",
+        b."name" AS "brand",
+        COALESCE(SUM(si."quantity"), 0) AS "quantity",
+        COALESCE(SUM(si."total"), 0) AS "sales",
+        COALESCE(SUM(si."unitCost" * si."quantity"), 0) AS "cost"
+      FROM "sale_items" si
+      INNER JOIN filtered_sales fs ON fs."id" = si."saleId"
+      INNER JOIN "products" p ON p."id" = si."productId"
+      LEFT JOIN "brands" b ON b."id" = p."brandId"
+      GROUP BY p."id", p."name", b."name"
+      ORDER BY "sales" DESC
+      LIMIT 12
+    `),
+    safe<SellerSalesRow[]>("Ventas por vendedor", [], () => prisma.$queryRaw<SellerSalesRow[]>`
+      WITH filtered_sales AS (
+        SELECT "id", "sellerId", "total"
+        FROM "sales"
+        WHERE "companyId" = ${company.id}
+          AND "status" IN ('COMPLETED', 'REFUNDED')
+          AND "createdAt" BETWEEN ${from} AND ${to}
+      ),
+      sale_costs AS (
+        SELECT si."saleId", COALESCE(SUM(si."unitCost" * si."quantity"), 0) AS "cost"
+        FROM "sale_items" si
+        INNER JOIN filtered_sales fs ON fs."id" = si."saleId"
+        GROUP BY si."saleId"
+      )
+      SELECT
+        u."name" AS "seller",
+        COALESCE(SUM(fs."total"), 0) AS "sales",
+        COALESCE(SUM(COALESCE(sc."cost", 0)), 0) AS "cost",
+        COUNT(*) AS "count"
+      FROM filtered_sales fs
+      INNER JOIN "users" u ON u."id" = fs."sellerId"
+      LEFT JOIN sale_costs sc ON sc."saleId" = fs."id"
+      GROUP BY u."id", u."name"
+      ORDER BY "sales" DESC
+    `),
+    safe<BranchSalesRow[]>("Ventas por sucursal", [], () => prisma.$queryRaw<BranchSalesRow[]>`
+      WITH filtered_sales AS (
+        SELECT "id", "branchId", "total"
+        FROM "sales"
+        WHERE "companyId" = ${company.id}
+          AND "status" IN ('COMPLETED', 'REFUNDED')
+          AND "createdAt" BETWEEN ${from} AND ${to}
+      ),
+      sale_costs AS (
+        SELECT si."saleId", COALESCE(SUM(si."unitCost" * si."quantity"), 0) AS "cost"
+        FROM "sale_items" si
+        INNER JOIN filtered_sales fs ON fs."id" = si."saleId"
+        GROUP BY si."saleId"
+      )
+      SELECT
+        b."name" AS "branch",
+        COALESCE(SUM(fs."total"), 0) AS "sales",
+        COALESCE(SUM(COALESCE(sc."cost", 0)), 0) AS "cost",
+        COUNT(*) AS "count"
+      FROM filtered_sales fs
+      INNER JOIN "branches" b ON b."id" = fs."branchId"
+      LEFT JOIN sale_costs sc ON sc."saleId" = fs."id"
+      GROUP BY b."id", b."name"
+      ORDER BY "sales" DESC
+    `),
+    safe<PaymentSalesRow[]>("Medios de pago", [], () => prisma.$queryRaw<PaymentSalesRow[]>`
+      SELECT
+        sp."paymentMethod"::text AS "method",
+        COALESCE(SUM(sp."amount"), 0) AS "amount"
+      FROM "sale_payments" sp
+      INNER JOIN "sales" s ON s."id" = sp."saleId"
+      WHERE s."companyId" = ${company.id}
+        AND s."status" IN ('COMPLETED', 'REFUNDED')
+        AND s."createdAt" BETWEEN ${from} AND ${to}
+      GROUP BY sp."paymentMethod"
+      ORDER BY "amount" DESC
+    `),
+  ]);
+
+  const salesSummary = salesSummaryRows[0];
+  const grossSalesTotal = Number(salesSummary?.grossSalesTotal ?? 0);
+  const grossCostTotal = canSeeCosts ? Number(salesSummary?.grossCostTotal ?? 0) : 0;
+  const discountTotal = Number(salesSummary?.discountTotal ?? 0);
+  const transactionCount = Number(salesSummary?.transactions ?? 0);
+
+  const daily = dailyRows.map((row) => {
+    const sales = Number(row.sales ?? 0);
+    const cost = Number(row.cost ?? 0);
+    return {
+      date: row.date,
+      sales,
+      cost: canSeeCosts ? cost : null,
+      profit: canSeeCosts ? sales - cost : null,
+      count: Number(row.count ?? 0),
+    };
+  });
+
+  const topProducts = productRows.map((row) => {
+    const sales = Number(row.sales ?? 0);
+    const cost = Number(row.cost ?? 0);
+    return {
+      product: row.product,
+      brand: row.brand ?? "Sin marca",
+      quantity: Number(row.quantity ?? 0),
+      sales,
+      cost: canSeeCosts ? cost : null,
+      profit: canSeeCosts ? sales - cost : null,
+    };
+  });
+
+  const sellers = sellerRows.map((row) => {
+    const sales = Number(row.sales ?? 0);
+    const cost = Number(row.cost ?? 0);
+    return {
+      seller: row.seller,
+      sales,
+      profit: canSeeCosts ? sales - cost : null,
+      count: Number(row.count ?? 0),
+    };
+  });
+
+  const branches = branchRows.map((row) => {
+    const sales = Number(row.sales ?? 0);
+    const cost = Number(row.cost ?? 0);
+    return {
+      branch: row.branch,
+      sales,
+      profit: canSeeCosts ? sales - cost : null,
+      count: Number(row.count ?? 0),
+    };
+  });
+
+  const payments = paymentRows.map((row) => ({
+    method: row.method,
+    amount: Number(row.amount ?? 0),
   }));
-
-  let grossSalesTotal = 0;
-  let grossCostTotal = 0;
-  let discountTotal = 0;
-  const daily = new Map<string, { date: string; sales: number; cost: number | null; profit: number | null; count: number }>();
-  const products = new Map<string, { product: string; brand: string; quantity: number; sales: number; cost: number | null; profit: number | null }>();
-  const sellers = new Map<string, { seller: string; sales: number; profit: number | null; count: number }>();
-  const branches = new Map<string, { branch: string; sales: number; profit: number | null; count: number }>();
-  const payments = new Map<string, number>();
-
-  for (const sale of sales) {
-    const saleTotal = Number(sale.total);
-    grossSalesTotal += saleTotal;
-    discountTotal += Number(sale.discount);
-    const saleCost = canSeeCosts ? sale.items.reduce((sum, item) => sum + Number(item.unitCost) * item.quantity, 0) : 0;
-    if (canSeeCosts) grossCostTotal += saleCost;
-    const key = isoDate(sale.createdAt);
-    const day = daily.get(key) ?? { date: key, sales: 0, cost: canSeeCosts ? 0 : null, profit: canSeeCosts ? 0 : null, count: 0 };
-    day.sales += saleTotal;
-    if (canSeeCosts) {
-      day.cost = Number(day.cost ?? 0) + saleCost;
-      day.profit = Number(day.profit ?? 0) + saleTotal - saleCost;
-    }
-    day.count += 1;
-    daily.set(key, day);
-
-    const seller = sellers.get(sale.sellerId) ?? { seller: sale.seller.name, sales: 0, profit: canSeeCosts ? 0 : null, count: 0 };
-    seller.sales += saleTotal;
-    if (canSeeCosts) seller.profit = Number(seller.profit ?? 0) + saleTotal - saleCost;
-    seller.count += 1;
-    sellers.set(sale.sellerId, seller);
-
-    const branch = branches.get(sale.branchId) ?? { branch: sale.branch.name, sales: 0, profit: canSeeCosts ? 0 : null, count: 0 };
-    branch.sales += saleTotal;
-    if (canSeeCosts) branch.profit = Number(branch.profit ?? 0) + saleTotal - saleCost;
-    branch.count += 1;
-    branches.set(sale.branchId, branch);
-
-    for (const payment of sale.payments) payments.set(payment.paymentMethod, (payments.get(payment.paymentMethod) ?? 0) + Number(payment.amount));
-    for (const item of sale.items) {
-      const row = products.get(item.productId) ?? { product: item.product.name, brand: item.product.brand?.name ?? "Sin marca", quantity: 0, sales: 0, cost: canSeeCosts ? 0 : null, profit: canSeeCosts ? 0 : null };
-      const itemCost = canSeeCosts ? Number(item.unitCost) * item.quantity : 0;
-      row.quantity += item.quantity;
-      row.sales += Number(item.total);
-      if (canSeeCosts) {
-        row.cost = Number(row.cost ?? 0) + itemCost;
-        row.profit = Number(row.profit ?? 0) + Number(item.total) - itemCost;
-      }
-      products.set(item.productId, row);
-    }
-  }
 
   const [receivableRows, cashDifferenceRows, returnRows, cancelledCount] = await Promise.all([
     safe<ReceivableSummaryRow[]>("Cuentas por cobrar", [{ total: 0, overdue: 0 }], () => prisma.$queryRaw<ReceivableSummaryRow[]>`
@@ -245,8 +399,8 @@ export async function getReports(filters: { from?: string; to?: string }) {
       costTotal,
       grossProfit,
       margin: canSeeCosts && salesTotal ? (Number(grossProfit) / salesTotal) * 100 : null,
-      transactions: sales.length,
-      averageTicket: sales.length ? grossSalesTotal / sales.length : 0,
+      transactions: transactionCount,
+      averageTicket: transactionCount ? grossSalesTotal / transactionCount : 0,
       purchasesTotal,
       inventoryValue,
       receivableTotal,
@@ -258,10 +412,10 @@ export async function getReports(filters: { from?: string; to?: string }) {
       returnsCount: Number(returnRows[0]?.count ?? 0),
       cancelledCount,
     },
-    daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    topProducts: [...products.values()].sort((a, b) => b.sales - a.sales).slice(0, 12),
-    sellers: [...sellers.values()].sort((a, b) => b.sales - a.sales),
-    branches: [...branches.values()].sort((a, b) => b.sales - a.sales),
-    payments: [...payments.entries()].map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount),
+    daily,
+    topProducts,
+    sellers,
+    branches,
+    payments,
   };
 }
