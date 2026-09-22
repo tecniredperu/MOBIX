@@ -129,31 +129,91 @@ export async function getDeviceDetail(id: string) {
   const company = await getActiveCompany();
   const unit = await prisma.productUnit.findFirst({
     where: { id, companyId: company.id },
-    include: {
-      product: { include: { brand: true, category: true } },
-      variant: true,
-      warehouse: { include: { branch: true } },
-      identifiers: true,
-      purchase: { include: { supplier: true } },
+    select: {
+      id: true,
+      status: true,
+      purchaseCost: true,
+      product: {
+        select: {
+          name: true,
+          model: true,
+          sku: true,
+          warrantyDays: true,
+          brand: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+      },
+      variant: {
+        select: {
+          sku: true,
+          ram: true,
+          storage: true,
+          color: true,
+        },
+      },
+      warehouse: {
+        select: {
+          name: true,
+          branch: { select: { name: true } },
+        },
+      },
+      identifiers: { select: { type: true, value: true } },
+      purchase: {
+        select: {
+          number: true,
+          issueDate: true,
+          supplier: { select: { businessName: true } },
+        },
+      },
       saleLinks: {
-        include: {
+        select: {
+          saleItemId: true,
+          warrantyDays: true,
+          warrantyStartsAt: true,
+          warrantyExpiresAt: true,
           saleItem: {
-            include: {
+            select: {
               sale: {
-                include: {
-                  customer: true,
+                select: {
+                  id: true,
+                  saleNumber: true,
+                  documentType: true,
+                  documentSeries: true,
+                  documentNumber: true,
+                  status: true,
+                  createdAt: true,
                   seller: { select: { name: true } },
+                  customer: {
+                    select: {
+                      id: true,
+                      businessName: true,
+                      firstName: true,
+                      lastName: true,
+                      documentType: true,
+                      documentNumber: true,
+                      whatsapp: true,
+                      phone: true,
+                      email: true,
+                      address: true,
+                    },
+                  },
                   exchangeCreditUsages: {
-                    include: {
+                    select: {
+                      exchangeCreditId: true,
+                      amount: true,
                       exchangeCredit: {
-                        include: {
+                        select: {
                           returnOrder: {
-                            include: {
+                            select: {
+                              returnNumber: true,
                               items: {
-                                include: {
+                                select: {
+                                  productUnitId: true,
                                   product: { select: { name: true } },
                                   productUnit: {
-                                    include: { identifiers: true },
+                                    select: {
+                                      identifiers: { select: { type: true, value: true } },
+                                    },
                                   },
                                 },
                               },
@@ -184,7 +244,10 @@ export async function getDeviceDetail(id: string) {
       },
       returnItems: {
         orderBy: { createdAt: "desc" },
-        include: {
+        select: {
+          id: true,
+          saleItemId: true,
+          disposition: true,
           returnOrder: {
             select: {
               id: true,
@@ -203,16 +266,22 @@ export async function getDeviceDetail(id: string) {
                   status: true,
                   refundedAmount: true,
                   usages: {
-                    include: {
+                    select: {
+                      saleId: true,
+                      amount: true,
                       sale: {
-                        include: {
+                        select: {
+                          saleNumber: true,
                           items: {
-                            include: {
+                            select: {
                               product: { select: { name: true } },
                               units: {
-                                include: {
+                                select: {
                                   productUnit: {
-                                    include: { identifiers: true },
+                                    select: {
+                                      id: true,
+                                      identifiers: { select: { type: true, value: true } },
+                                    },
                                   },
                                 },
                               },
