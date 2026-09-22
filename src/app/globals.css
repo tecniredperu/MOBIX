@@ -74,14 +74,6 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
 .panel-heading { padding: 17px 18px 13px; display: flex; justify-content: space-between; align-items: flex-start; }
 .panel-heading h2 { margin: 0; font-size: 13px; }
 .panel-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10.5px; }
-.empty-chart { min-height: 285px; padding: 18px; display: flex; flex-direction: column; justify-content: flex-end; }
-.chart-bars { height: 180px; display: flex; align-items: flex-end; gap: 6%; padding: 0 6% 10px; border-bottom: 1px solid #edf0f4; background-image: linear-gradient(to bottom, #f2f4f7 1px, transparent 1px); background-size: 100% 45px; }
-.chart-bars span { flex: 1; max-width: 38px; min-width: 12px; border-radius: 5px 5px 1px 1px; background: linear-gradient(to top, #dbe6ff, #88a9fa); opacity: .7; }
-.empty-chart p { margin: 15px 0 2px; text-align: center; color: #8a94a5; font-size: 10.5px; }
-.checklist { padding: 2px 17px 17px; }
-.check-row { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid #f0f2f5; }
-.check-row span { width: 29px; height: 29px; border-radius: 8px; display: grid; place-items: center; background: #f4f7fb; color: #61708a; font-size: 9px; font-weight: 700; }
-.check-row p { margin: 0; font-size: 11px; }
 
 .product-summary { display: grid; grid-template-columns: repeat(4, 1fr); background: white; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 14px; overflow: hidden; box-shadow: var(--shadow); }
 .product-summary > div { padding: 15px 18px; border-right: 1px solid var(--border); }
@@ -94,7 +86,6 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
 .table-search { flex: 1; max-width: 430px; height: 37px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; color: #8b95a6; }
 .table-search input { width: 100%; border: 0; outline: none; background: transparent; font-size: 11px; }
 .filters { display: flex; gap: 7px; }
-.filter-button { height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 9px; background: white; color: #4b5563; font-size: 10.5px; }
 .table-wrap { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; min-width: 860px; }
 .data-table th { height: 38px; padding: 0 14px; background: #fafbfc; border-bottom: 1px solid var(--border); color: #7b8493; text-align: left; text-transform: uppercase; letter-spacing: .045em; font-size: 8.5px; font-weight: 700; }
