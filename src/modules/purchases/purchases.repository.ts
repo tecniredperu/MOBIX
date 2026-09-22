@@ -14,7 +14,7 @@ export async function getPurchaseContext() {
       where: {
         companyId: company.id,
         status: "ACTIVE",
-        product: { status: "ACTIVE", controlsStock: true, type: { not: "SERVICE" } },
+        product: { status: "ACTIVE", deletedAt: null, controlsStock: true, type: { not: "SERVICE" } },
       },
       orderBy: { product: { name: "asc" } },
       select: {
