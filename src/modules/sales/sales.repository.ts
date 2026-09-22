@@ -20,23 +20,71 @@ export async function getSaleDetail(id: string) {
   const company = await getActiveCompany();
   const sale = await prisma.sale.findFirst({
     where: { id, companyId: company.id },
-    include: {
-      customer: true,
-      warehouse: { include: { branch: true } },
-      seller: true,
-      createdBy: true,
-      payments: { orderBy: { createdAt: "asc" } },
+    select: {
+      id: true,
+      saleNumber: true,
+      documentType: true,
+      documentSeries: true,
+      documentNumber: true,
+      taxCondition: true,
+      subtotal: true,
+      discount: true,
+      tax: true,
+      total: true,
+      status: true,
+      createdAt: true,
+      customer: {
+        select: {
+          id: true,
+          documentType: true,
+          documentNumber: true,
+          businessName: true,
+          firstName: true,
+          lastName: true,
+          whatsapp: true,
+          phone: true,
+          email: true,
+          address: true,
+        },
+      },
+      warehouse: {
+        select: {
+          name: true,
+          branch: { select: { name: true } },
+        },
+      },
+      seller: { select: { name: true } },
+      payments: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          paymentMethod: true,
+          amount: true,
+          reference: true,
+          notes: true,
+        },
+      },
       exchangeCreditUsages: {
-        include: {
+        select: {
+          exchangeCreditId: true,
+          amount: true,
           exchangeCredit: {
-            include: {
+            select: {
+              originalAmount: true,
+              balance: true,
+              status: true,
+              refundedAmount: true,
               returnOrder: {
-                include: {
+                select: {
+                  returnNumber: true,
                   items: {
-                    include: {
+                    select: {
+                      productUnitId: true,
                       product: { select: { name: true } },
                       productUnit: {
-                        include: { identifiers: true },
+                        select: {
+                          identifiers: { select: { type: true, value: true } },
+                        },
                       },
                     },
                   },
@@ -49,7 +97,14 @@ export async function getSaleDetail(id: string) {
       returnOrders: {
         where: { status: "COMPLETED" },
         orderBy: { createdAt: "desc" },
-        include: {
+        select: {
+          id: true,
+          returnNumber: true,
+          type: true,
+          reason: true,
+          refundMethod: true,
+          refundAmount: true,
+          createdAt: true,
           exchangeCredit: {
             select: {
               id: true,
@@ -86,12 +141,38 @@ export async function getSaleDetail(id: string) {
       },
       items: {
         orderBy: { createdAt: "asc" },
-        include: {
-          product: { include: { brand: true } },
-          variant: true,
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          unitCost: true,
+          discount: true,
+          subtotal: true,
+          tax: true,
+          total: true,
+          product: {
+            select: {
+              name: true,
+              brand: { select: { name: true } },
+            },
+          },
+          variant: {
+            select: {
+              ram: true,
+              storage: true,
+              color: true,
+            },
+          },
           units: {
-            include: {
-              productUnit: { include: { identifiers: true } },
+            select: {
+              warrantyDays: true,
+              warrantyStartsAt: true,
+              warrantyExpiresAt: true,
+              productUnit: {
+                select: {
+                  identifiers: { select: { type: true, value: true } },
+                },
+              },
             },
           },
         },

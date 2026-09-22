@@ -57,7 +57,7 @@ export async function getSalesPage(filters: {
   };
 
   const { start, end } = getLimaDayBounds();
-  const [sales, total, todaySummary, todayReturns] = await Promise.all([
+  const [sales, total, todaySummary, todayReturnsSummary, todayReturnCount] = await Promise.all([
     prisma.sale.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -100,14 +100,21 @@ export async function getSalesPage(filters: {
       _sum: { total: true },
       _count: { _all: true },
     }),
-    prisma.returnOrder.findMany({
+    prisma.returnItem.aggregate({
+      where: {
+        returnOrder: {
+          companyId: company.id,
+          status: "COMPLETED",
+          createdAt: { gte: start, lt: end },
+        },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.returnOrder.count({
       where: {
         companyId: company.id,
         status: "COMPLETED",
         createdAt: { gte: start, lt: end },
-      },
-      select: {
-        items: { select: { amount: true } },
       },
     }),
   ]);
@@ -129,11 +136,7 @@ export async function getSalesPage(filters: {
     createdAt: sale.createdAt.toISOString(),
   }));
   const todayGross = Number(todaySummary._sum.total ?? 0);
-  const todayReturnsTotal = todayReturns.reduce(
-    (sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
-    0,
-  );
+  const todayReturnsTotal = Number(todayReturnsSummary._sum.amount ?? 0);
   const todayTotal = Math.round(
     (todayGross - todayReturnsTotal + Number.EPSILON) * 100,
   ) / 100;
@@ -145,7 +148,7 @@ export async function getSalesPage(filters: {
       todayTotal,
       todayGross,
       todayReturns: Math.round((todayReturnsTotal + Number.EPSILON) * 100) / 100,
-      todayReturnCount: todayReturns.length,
+      todayReturnCount,
       todayCount,
       averageTicket: todayCount ? todayGross / todayCount : 0,
       listed: total,

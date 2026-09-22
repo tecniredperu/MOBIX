@@ -28,7 +28,6 @@ export async function getTransfers() {
       createdBy: { select: { name: true } },
       receivedBy: { select: { name: true } },
       items: { select: { quantity: true } },
-      _count: { select: { items: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 150,
@@ -48,14 +47,14 @@ export async function getTransfers() {
     toBranch: row.toWarehouse.branch.name,
     createdBy: row.createdBy.name,
     receivedBy: row.receivedBy?.name ?? null,
-    items: row._count.items,
+    items: row.items.length,
     units: row.items.reduce((sum, item) => sum + item.quantity, 0),
   }));
 }
 
 export async function getTransferOptions() {
   const company = await getActiveCompany();
-  const [warehouses, variants] = await Promise.all([
+  const [warehouses, variants, serializedStock] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE" },
       select: { id: true, name: true, branch: { select: { name: true } } },
@@ -69,12 +68,10 @@ export async function getTransferOptions() {
       },
       select: {
         id: true,
-        productId: true,
         color: true,
         ram: true,
         storage: true,
         sku: true,
-        purchasePrice: true,
         product: {
           select: {
             name: true,
@@ -82,22 +79,28 @@ export async function getTransferOptions() {
             brand: { select: { name: true } },
           },
         },
-        units: {
-          where: { status: "AVAILABLE" },
-          select: {
-            id: true,
-            warehouseId: true,
-            purchaseCost: true,
-            identifiers: { select: { type: true, value: true } },
-          },
-        },
         inventoryBalances: {
-          select: { warehouseId: true, quantity: true, averageCost: true },
+          select: { warehouseId: true, quantity: true },
         },
       },
       orderBy: { product: { name: "asc" } },
     }),
+    prisma.productUnit.groupBy({
+      by: ["variantId", "warehouseId"],
+      where: {
+        companyId: company.id,
+        status: "AVAILABLE",
+      },
+      _count: { _all: true },
+    }),
   ]);
+
+  const serializedBalanceMap = new Map<string, number>(
+    serializedStock.map((row) => [
+      `${row.variantId}:${row.warehouseId}`,
+      row._count._all,
+    ]),
+  );
 
   return {
     warehouses: warehouses.map((warehouse) => ({
@@ -107,7 +110,6 @@ export async function getTransferOptions() {
     })),
     products: variants.map((variant) => ({
       variantId: variant.id,
-      productId: variant.productId,
       name: variant.product.name,
       type: variant.product.type,
       variant:
@@ -115,21 +117,49 @@ export async function getTransferOptions() {
         variant.sku ||
         "General",
       brand: variant.product.brand?.name ?? "",
-      cost: Number(variant.purchasePrice),
-      balances: variant.inventoryBalances.map((balance) => ({
-        warehouseId: balance.warehouseId,
-        quantity: Number(balance.quantity),
-        averageCost: Number(balance.averageCost),
-      })),
-      units: variant.units.map((unit) => ({
-        id: unit.id,
-        warehouseId: unit.warehouseId,
-        cost: Number(unit.purchaseCost),
-        identifier:
-          unit.identifiers.find((identifier) => identifier.type === "IMEI_1")?.value ||
-          unit.identifiers.find((identifier) => identifier.type === "SERIAL")?.value ||
-          unit.id,
-      })),
+      balances: variant.product.type === "ACCESSORY"
+        ? variant.inventoryBalances.map((balance) => ({
+            warehouseId: balance.warehouseId,
+            quantity: Number(balance.quantity),
+          }))
+        : warehouses.map((warehouse) => ({
+            warehouseId: warehouse.id,
+            quantity: serializedBalanceMap.get(`${variant.id}:${warehouse.id}`) ?? 0,
+          })),
     })),
   };
+}
+
+export async function getTransferUnits(variantId: string, warehouseId: string) {
+  const company = await getActiveCompany();
+  if (!variantId || !warehouseId) return [];
+
+  const units = await prisma.productUnit.findMany({
+    where: {
+      companyId: company.id,
+      variantId,
+      warehouseId,
+      status: "AVAILABLE",
+      variant: {
+        status: "ACTIVE",
+        product: {
+          status: "ACTIVE",
+          type: { in: ["PHONE", "SERIALIZED"] },
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      identifiers: { select: { type: true, value: true } },
+    },
+  });
+
+  return units.map((unit) => ({
+    id: unit.id,
+    identifier:
+      unit.identifiers.find((identifier) => identifier.type === "IMEI_1")?.value
+      ?? unit.identifiers.find((identifier) => identifier.type === "SERIAL")?.value
+      ?? unit.id,
+  }));
 }

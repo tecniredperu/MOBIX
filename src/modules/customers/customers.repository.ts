@@ -205,7 +205,7 @@ export async function getCustomerDetail(id: string) {
   });
   if (!customer) return null;
 
-  const [profiles, receivables, payments, exchangeCredits, salesSummary, customerReturns] = await Promise.all([
+  const [profiles, receivables, payments, exchangeCredits, salesSummary, customerReturnsSummary] = await Promise.all([
     prisma.$queryRaw<CustomerCreditRow[]>`
       SELECT
         c."id",
@@ -295,15 +295,15 @@ export async function getCustomerDetail(id: string) {
       _sum: { total: true },
       _count: { _all: true },
     }),
-    prisma.returnOrder.findMany({
+    prisma.returnItem.aggregate({
       where: {
-        companyId: company.id,
-        status: "COMPLETED",
-        sale: { customerId: customer.id },
+        returnOrder: {
+          companyId: company.id,
+          status: "COMPLETED",
+          sale: { customerId: customer.id },
+        },
       },
-      select: {
-        items: { select: { amount: true } },
-      },
+      _sum: { amount: true },
     }),
   ]);
 
@@ -312,11 +312,7 @@ export async function getCustomerDetail(id: string) {
   const outstanding = Number(profile?.outstanding ?? 0);
   const overdue = Number(profile?.overdue ?? 0);
   const grossPurchaseTotal = Number(salesSummary._sum.total ?? 0);
-  const returnedPurchaseTotal = customerReturns.reduce(
-    (sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
-    0,
-  );
+  const returnedPurchaseTotal = Number(customerReturnsSummary._sum.amount ?? 0);
   const purchaseTotal = Math.round(
     (grossPurchaseTotal - returnedPurchaseTotal + Number.EPSILON) * 100,
   ) / 100;

@@ -185,3 +185,103 @@ test("selectores huérfanos finales no regresan al CSS global", () => {
     assert.equal(cssFiles.includes(selector), false, `Selector huérfano detectado: ${selector}`);
   }
 });
+
+
+test("POS inicial calcula crédito solo para los clientes realmente cargados", () => {
+  const pos = source("src/modules/sales/pos-context.repository.ts");
+
+  assert.ok(pos.includes("take: 100"));
+  assert.ok(pos.includes("customerIds = customers.map"));
+  assert.ok(pos.includes("prisma.accountReceivable.groupBy"));
+  assert.ok(pos.includes("customerId: { in: customerIds }"));
+  assert.equal(pos.includes("type CreditProfileRow"), false);
+  assert.equal(pos.includes('FROM "customers" c'), false);
+});
+
+test("detalles de venta y equipo usan selects acotados", () => {
+  const sales = source("src/modules/sales/sales.repository.ts");
+  const devices = source("src/modules/devices/devices.repository.ts");
+
+  assert.ok(sales.includes("export async function getSaleDetail"));
+  assert.equal(sales.includes("createdBy: true"), false);
+  assert.ok(sales.includes("customer: {"));
+  assert.ok(sales.includes("documentNumber: true"));
+  assert.ok(sales.includes("serviceOrders: {"));
+
+  assert.ok(devices.includes("export async function getDeviceDetail"));
+  assert.equal(devices.includes("product: { include:"), false);
+  assert.equal(devices.includes("variant: true"), false);
+  assert.ok(devices.includes("purchaseCost: true"));
+  assert.ok(devices.includes("returnItems: {"));
+});
+
+test("devoluciones de ventas y clientes se resumen en la base de datos", () => {
+  const sales = source("src/modules/sales/sales-list.repository.ts");
+  const customers = source("src/modules/customers/customers.repository.ts");
+
+  assert.ok(sales.includes("prisma.returnItem.aggregate"));
+  assert.ok(sales.includes("prisma.returnOrder.count"));
+  assert.equal(sales.includes("todayReturns.reduce"), false);
+
+  assert.ok(customers.includes("prisma.returnItem.aggregate"));
+  assert.equal(customers.includes("customerReturns.reduce"), false);
+});
+
+test("reportes agregan ventas en PostgreSQL en lugar de cargar todas las filas", () => {
+  const reports = source("src/modules/reports/reports.repository.ts");
+
+  assert.equal(reports.includes('safe("Ventas del periodo", [], () => prisma.sale.findMany'), false);
+  assert.ok(reports.includes('TO_CHAR(fs."createdAt" AT TIME ZONE \'America/Lima\''));
+  assert.ok(reports.includes('FROM "sale_items" si'));
+  assert.ok(reports.includes('FROM "sale_payments" sp'));
+  assert.ok(reports.includes('INNER JOIN "users" u'));
+  assert.ok(reports.includes('INNER JOIN "branches" b'));
+  assert.ok(reports.includes("const transactionCount = Number"));
+});
+
+test("transferencias cargan IMEI bajo demanda", () => {
+  const repository = source("src/modules/transfers/transfers.repository.ts");
+  const form = source("src/modules/transfers/transfer-form.tsx");
+  const route = source("src/app/api/transfers/units/route.ts");
+
+  assert.ok(repository.includes("prisma.productUnit.groupBy"));
+  assert.ok(repository.includes("export async function getTransferUnits"));
+  assert.equal(repository.includes("units: {"), false);
+  assert.ok(form.includes("/api/transfers/units"));
+  assert.ok(form.includes("loadUnits(product.variantId)"));
+  assert.ok(route.includes('requirePermission("inventory.transfer")'));
+});
+
+test("caja consulta solo campos utilizados en el resumen", () => {
+  const cash = source("src/modules/cash/cash.repository.ts");
+
+  assert.ok(cash.includes("openingAmount: true"));
+  assert.ok(cash.includes("movements: {"));
+  assert.ok(cash.includes("paymentMethod: true"));
+  assert.equal(cash.includes("include: {\n      branch:"), false);
+});
+
+test("redondeo monetario usa una sola implementación compartida", () => {
+  const money = source("src/lib/money.ts");
+  const cash = source("src/modules/cash/cash.repository.ts");
+  const payments = source("src/modules/sales/sale-payment-service.ts");
+  const purchases = source("src/modules/purchases/purchase-actions.ts");
+
+  assert.ok(money.includes("export function roundMoney"));
+  for (const module of [cash, payments, purchases]) {
+    assert.ok(module.includes('import { roundMoney } from "@/lib/money"'));
+    assert.equal(module.includes("function money(value: number)"), false);
+    assert.equal(module.includes("function roundMoney(value: number)"), false);
+  }
+});
+
+test("selectores residuales retirados no regresan", () => {
+  const cssFiles = readdirSync("src/app")
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => source(join("src/app", name)))
+    .join("\n");
+
+  for (const selector of [".dashboard-grid", ".fixed-qty"]) {
+    assert.equal(cssFiles.includes(selector), false, `Selector residual detectado: ${selector}`);
+  }
+});
