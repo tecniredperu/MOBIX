@@ -161,3 +161,27 @@ test("build no ejecuta migraciones y start sí conserva migrate deploy", () => {
   assert.equal(pkg.scripts.build.includes("migrate deploy"), false);
   assert.ok(pkg.scripts.start.includes("prisma migrate deploy"));
 });
+
+
+test("selectores huérfanos finales no regresan al CSS global", () => {
+  const cssFiles = readdirSync("src/app")
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => source(join("src/app", name)))
+    .join("\n");
+
+  for (const selector of [
+    ".chart-bars",
+    ".check-row",
+    ".checklist",
+    ".empty-chart",
+    ".filter-button",
+    ".login-hero-copy",
+    ".pos-heading",
+    ".field-help",
+    ".help-text",
+    ".pos-credit-profile",
+    ".main-shell",
+  ]) {
+    assert.equal(cssFiles.includes(selector), false, `Selector huérfano detectado: ${selector}`);
+  }
+});
