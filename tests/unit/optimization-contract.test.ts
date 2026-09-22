@@ -229,3 +229,20 @@ test("Detalle de cliente agrega devoluciones sin cargar historial completo", () 
   assert.ok(customers.includes('COALESCE(SUM(ri."amount"), 0) AS "total"'));
   assert.ok(customers.includes('INNER JOIN "sales" s ON s."id" = ro."saleId"'));
 });
+
+
+test("índices de producción permanecen alineados con las lecturas frecuentes", () => {
+  const schema = source("prisma/schema.prisma");
+  const migration = source("prisma/migrations/20260922124500_query_performance_indexes/migration.sql");
+
+  for (const indexName of [
+    "products_company_status_deleted_name_idx",
+    "purchases_company_status_issue_date_idx",
+    "customers_company_status_updated_idx",
+    "cash_sessions_company_status_closed_idx",
+    "audit_logs_company_created_idx",
+  ]) {
+    assert.ok(schema.includes(indexName), `Índice ausente del schema: ${indexName}`);
+    assert.ok(migration.includes(indexName), `Índice ausente de la migración: ${indexName}`);
+  }
+});
