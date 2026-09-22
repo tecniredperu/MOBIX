@@ -21,13 +21,48 @@ const loadAuthContext = cache(async () => {
       user: { status: "ACTIVE" },
       role: { status: "ACTIVE" },
     },
-    include: {
-      company: true,
-      user: true,
-      defaultBranch: true,
+    select: {
+      id: true,
+      companyId: true,
+      userId: true,
+      roleId: true,
+      defaultBranchId: true,
+      status: true,
+      company: {
+        select: {
+          id: true,
+          businessName: true,
+          tradeName: true,
+          ruc: true,
+          email: true,
+          phone: true,
+          address: true,
+          logoUrl: true,
+          currency: true,
+          timezone: true,
+          status: true,
+        },
+      },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          sessionVersion: true,
+        },
+      },
+      defaultBranch: { select: { id: true, name: true } },
       role: {
-        include: {
-          permissions: { include: { permission: true } },
+        select: {
+          id: true,
+          name: true,
+          isSystem: true,
+          status: true,
+          permissions: {
+            select: { permission: { select: { code: true } } },
+          },
         },
       },
     },
