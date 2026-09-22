@@ -28,7 +28,6 @@ export async function getTransfers() {
       createdBy: { select: { name: true } },
       receivedBy: { select: { name: true } },
       items: { select: { quantity: true } },
-      _count: { select: { items: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 150,
@@ -48,7 +47,7 @@ export async function getTransfers() {
     toBranch: row.toWarehouse.branch.name,
     createdBy: row.createdBy.name,
     receivedBy: row.receivedBy?.name ?? null,
-    items: row._count.items,
+    items: row.items.length,
     units: row.items.reduce((sum, item) => sum + item.quantity, 0),
   }));
 }
