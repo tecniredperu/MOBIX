@@ -92,6 +92,28 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+export const MOBILE_NAV_SECTIONS: NavSection[] = [
+  NAV_SECTIONS[0],
+  NAV_SECTIONS[1],
+  {
+    label: "Inventario",
+    items: [
+      { label: "Productos", href: "/productos", icon: Boxes, permission: "inventory.view" },
+      ...NAV_SECTIONS[2].items.slice(1),
+    ],
+  },
+  NAV_SECTIONS[3],
+  {
+    label: "Gestión",
+    items: [
+      { label: "Clientes", href: "/clientes", icon: Users, permission: "customers.manage" },
+      { label: "Servicio técnico", href: "/servicio-tecnico", icon: Wrench, permission: "service.manage" },
+      { label: "Caja", href: "/caja", icon: CircleDollarSign, permission: "cash.manage" },
+      { label: "Reportes gerenciales", href: "/reportes", icon: ChartNoAxesCombined, permission: "reports.view" },
+    ],
+  },
+];
+
 export const MOBILE_QUICK_NAV = [
   { label: "Inicio", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
   { label: "POS", href: "/pos", icon: ShoppingCart, permission: "sales.create" },
