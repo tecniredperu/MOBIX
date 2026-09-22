@@ -90,7 +90,6 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
           amount: true,
           concept: true,
           reference: true,
-          notes: true,
           createdAt: true,
         },
       },
