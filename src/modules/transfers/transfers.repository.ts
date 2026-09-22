@@ -65,7 +65,15 @@ export async function getTransferOptions() {
       where: {
         companyId: company.id,
         status: "ACTIVE",
-        product: { status: "ACTIVE", type: { in: ["PHONE", "SERIALIZED", "ACCESSORY"] } },
+        product: {
+          status: "ACTIVE",
+          deletedAt: null,
+          type: { in: ["PHONE", "SERIALIZED", "ACCESSORY"] },
+        },
+        OR: [
+          { units: { some: { status: "AVAILABLE" } } },
+          { inventoryBalances: { some: { quantity: { gt: 0 } } } },
+        ],
       },
       select: {
         id: true,

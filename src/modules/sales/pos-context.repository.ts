@@ -2,14 +2,6 @@ import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import type { PosCatalogItem, PosCustomer, PosUnit, PosWarehouse } from "./sale-types";
 
-type CreditProfileRow = {
-  id: string;
-  creditEnabled: boolean;
-  creditLimit: unknown;
-  creditDays: number;
-  outstanding: unknown;
-};
-
 type ProductForPos = Awaited<ReturnType<typeof loadProducts>>[number];
 
 function variantLabel(input: { ram: string | null; storage: string | null; color: string | null }) {
@@ -133,6 +125,7 @@ async function mapCatalog(
       })
     : [];
   const stockMap = new Map(serializedStock.map((row) => [`${row.variantId}:${row.warehouseId}`, row._count._all]));
+  const saleableWarehouseIds = new Set(warehouses.map((warehouse) => warehouse.id));
 
   return products.flatMap((product): PosCatalogItem[] =>
     product.variants.map((variant) => {
@@ -157,10 +150,12 @@ async function mapCatalog(
               warehouseId: warehouse.id,
               quantity: stockMap.get(`${variant.id}:${warehouse.id}`) ?? 0,
             }))
-          : variant.inventoryBalances.map((balance) => ({
-              warehouseId: balance.warehouseId,
-              quantity: Number(balance.quantity),
-            })),
+          : variant.inventoryBalances
+              .filter((balance) => saleableWarehouseIds.has(balance.warehouseId))
+              .map((balance) => ({
+                warehouseId: balance.warehouseId,
+                quantity: Number(balance.quantity),
+              })),
       };
     }),
   ).slice(0, 120);
@@ -232,7 +227,7 @@ async function searchAvailableIdentifiers(companyId: string, rawQuery: string, w
 
 export async function getOptimizedPosContext() {
   const company = await getActiveCompany();
-  const [warehouses, products, customers, creditProfiles] = await Promise.all([
+  const [warehouses, products, customers] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
       orderBy: { name: "asc" },
@@ -243,37 +238,59 @@ export async function getOptimizedPosContext() {
       where: { companyId: company.id, status: "ACTIVE" },
       orderBy: { updatedAt: "desc" },
       take: 100,
+      select: {
+        id: true,
+        documentType: true,
+        documentNumber: true,
+        businessName: true,
+        firstName: true,
+        lastName: true,
+        whatsapp: true,
+        phone: true,
+        creditEnabled: true,
+        creditLimit: true,
+        creditDays: true,
+      },
     }),
-    prisma.$queryRaw<CreditProfileRow[]>`
-      SELECT c."id", c."creditEnabled", c."creditLimit", c."creditDays",
-        COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN', 'PARTIAL')), 0) AS "outstanding"
-      FROM "customers" c
-      LEFT JOIN "accounts_receivable" ar ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
-      WHERE c."companyId" = ${company.id}
-      GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
-    `,
   ]);
 
-  const creditMap = new Map(creditProfiles.map((profile) => [profile.id, profile]));
-  const catalog = await mapCatalog(company.id, warehouses, products);
+  const customerIds = customers.map((customer) => customer.id);
+  const [catalog, outstandingRows] = await Promise.all([
+    mapCatalog(company.id, warehouses, products),
+    customerIds.length
+      ? prisma.accountReceivable.groupBy({
+          by: ["customerId"],
+          where: {
+            companyId: company.id,
+            customerId: { in: customerIds },
+            status: { in: ["OPEN", "PARTIAL"] },
+            balance: { gt: 0 },
+          },
+          _sum: { balance: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const outstandingMap = new Map(
+    outstandingRows.map((row) => [row.customerId, Number(row._sum.balance ?? 0)]),
+  );
   const warehouseOptions: PosWarehouse[] = warehouses.map((warehouse) => ({
     id: warehouse.id,
     name: warehouse.name,
     branchName: warehouse.branch.name,
   }));
   const customerOptions: PosCustomer[] = customers.map((customer) => {
-    const profile = creditMap.get(customer.id);
-    const creditLimit = Number(profile?.creditLimit ?? 0);
-    const outstanding = Number(profile?.outstanding ?? 0);
+    const creditLimit = Number(customer.creditLimit ?? 0);
+    const outstanding = outstandingMap.get(customer.id) ?? 0;
     return {
       id: customer.id,
       documentType: customer.documentType,
       documentNumber: customer.documentNumber,
       name: customerDisplayName(customer, "Cliente"),
       phone: customer.whatsapp ?? customer.phone,
-      creditEnabled: Boolean(profile?.creditEnabled),
+      creditEnabled: customer.creditEnabled,
       creditLimit,
-      creditDays: Number(profile?.creditDays ?? 30),
+      creditDays: Number(customer.creditDays ?? 30),
       outstanding,
       availableCredit: Math.max(0, creditLimit - outstanding),
     };
@@ -289,7 +306,12 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
 
   const [warehouses, textProducts, identifierHits] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+      where: {
+        companyId: company.id,
+        status: "ACTIVE",
+        isSaleable: true,
+        ...(warehouseId ? { id: warehouseId } : {}),
+      },
       select: { id: true },
     }),
     loadProducts(company.id, query),
@@ -379,6 +401,19 @@ export async function searchPosCustomers(q: string) {
     },
     orderBy: { updatedAt: "desc" },
     take: 30,
+    select: {
+      id: true,
+      documentType: true,
+      documentNumber: true,
+      businessName: true,
+      firstName: true,
+      lastName: true,
+      whatsapp: true,
+      phone: true,
+      creditEnabled: true,
+      creditLimit: true,
+      creditDays: true,
+    },
   });
 
   if (!customers.length) return [];
@@ -389,6 +424,7 @@ export async function searchPosCustomers(q: string) {
       companyId: company.id,
       customerId: { in: customers.map((customer) => customer.id) },
       status: { in: ["OPEN", "PARTIAL"] },
+      balance: { gt: 0 },
     },
     _sum: { balance: true },
   });
@@ -513,10 +549,17 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
     };
   }
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+  const warehouse = await prisma.warehouse.findFirst({
+    where: {
+      id: warehouseId,
+      companyId: company.id,
+      status: "ACTIVE",
+      isSaleable: true,
+    },
     select: { id: true },
   });
+  if (!warehouse) return null;
+  const warehouses = [warehouse];
 
   const variantHit = await prisma.productVariant.findFirst({
     where: {

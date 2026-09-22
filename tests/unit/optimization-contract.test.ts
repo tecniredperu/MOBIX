@@ -75,11 +75,14 @@ test("consultas críticas conservan las optimizaciones de payload", () => {
   const reports = source("src/modules/reports/reports.repository.ts");
   const pos = source("src/modules/sales/pos-context.repository.ts");
 
-  assert.ok(dashboard.includes('_count: { select: { units: { where: { status: "AVAILABLE" } } } }'));
+  assert.equal(dashboard.includes("stockProducts"), false);
   assert.equal(
-    dashboard.includes('units: { where: { status: "AVAILABLE" }, select: { id: true } }'),
+    dashboard.includes('_count: { select: { units: { where: { status: "AVAILABLE" } } } }'),
     false,
   );
+  assert.ok(dashboard.includes("WITH active_products AS"));
+  assert.ok(dashboard.includes('FROM "product_units" pu'));
+  assert.ok(dashboard.includes('FROM "inventory_balances" ib'));
 
   assert.equal(reports.includes("prisma.inventoryBalance.findMany"), false);
   assert.equal(reports.includes('prisma.productUnit.findMany({ where: { companyId: company.id, status: "AVAILABLE" }'), false);
@@ -184,4 +187,76 @@ test("selectores huérfanos finales no regresan al CSS global", () => {
   ]) {
     assert.equal(cssFiles.includes(selector), false, `Selector huérfano detectado: ${selector}`);
   }
+});
+
+
+test("POS limita crédito y payload a clientes realmente cargados", () => {
+  const pos = source("src/modules/sales/pos-context.repository.ts");
+
+  assert.equal(pos.includes("type CreditProfileRow"), false);
+  assert.equal(pos.includes('FROM "customers" c\n      LEFT JOIN "accounts_receivable"'), false);
+  assert.ok(pos.includes('customerId: { in: customerIds }'));
+  assert.ok(pos.includes('select: {\n        id: true,\n        documentType: true'));
+  assert.ok(pos.includes('...(warehouseId ? { id: warehouseId } : {})'));
+});
+
+test("Reportes no carga items y pagos completos por cada venta", () => {
+  const reports = source("src/modules/reports/reports.repository.ts");
+
+  const salesBlock = reports.slice(
+    reports.indexOf('safe("Ventas del periodo"'),
+    reports.indexOf('canSeeCosts\n      ? safe<SaleCostRow[]>'),
+  );
+
+  assert.equal(salesBlock.includes("items:"), false);
+  assert.equal(salesBlock.includes("payments:"), false);
+  assert.ok(reports.includes('FROM "sale_items" si'));
+  assert.ok(reports.includes('FROM "sale_payments" sp'));
+  assert.ok(reports.includes('GROUP BY si."productId", p."name", b."name"'));
+});
+
+test("Dashboard calcula stock bajo y devoluciones con agregación SQL", () => {
+  const dashboard = source("src/modules/dashboard/dashboard.repository.ts");
+
+  assert.equal(dashboard.includes("stockProducts"), false);
+  assert.equal(dashboard.includes("inventoryBalances: { select: { quantity: true } }"), false);
+  assert.ok(dashboard.includes("WITH active_products AS"));
+  assert.ok(dashboard.includes('FROM "return_orders" ro'));
+  assert.ok(dashboard.includes('COALESCE(SUM(ri."amount"), 0) AS "amount"'));
+});
+
+test("Detalle de cliente agrega devoluciones sin cargar historial completo", () => {
+  const customers = source("src/modules/customers/customers.repository.ts");
+
+  assert.equal(customers.includes("customerReturns.reduce"), false);
+  assert.ok(customers.includes('COALESCE(SUM(ri."amount"), 0) AS "total"'));
+  assert.ok(customers.includes('INNER JOIN "sales" s ON s."id" = ro."saleId"'));
+});
+
+
+test("índices de producción permanecen alineados con las lecturas frecuentes", () => {
+  const schema = source("prisma/schema.prisma");
+  const migration = source("prisma/migrations/20260922124500_query_performance_indexes/migration.sql");
+
+  for (const indexName of [
+    "products_company_status_deleted_name_idx",
+    "purchases_company_status_issue_date_idx",
+    "customers_company_status_updated_idx",
+    "cash_sessions_company_status_closed_idx",
+    "audit_logs_company_created_idx",
+  ]) {
+    assert.ok(schema.includes(indexName), `Índice ausente del schema: ${indexName}`);
+    assert.ok(migration.includes(indexName), `Índice ausente de la migración: ${indexName}`);
+  }
+});
+
+
+test("catálogos operativos no cargan productos borrados ni transferencias imposibles", () => {
+  const purchases = source("src/modules/purchases/purchases.repository.ts");
+  const transfers = source("src/modules/transfers/transfers.repository.ts");
+
+  assert.ok(purchases.includes('deletedAt: null'));
+  assert.ok(transfers.includes('deletedAt: null'));
+  assert.ok(transfers.includes('{ units: { some: { status: "AVAILABLE" } } }'));
+  assert.ok(transfers.includes('{ inventoryBalances: { some: { quantity: { gt: 0 } } } }'));
 });

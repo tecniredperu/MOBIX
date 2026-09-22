@@ -28,6 +28,9 @@ function dayLabel(value: Date) {
   }).format(value).replace(".", "");
 }
 
+type LowStockRow = { count: bigint };
+type DashboardReturnRow = { createdAt: Date; amount: unknown };
+
 function customerName(customer: {
   businessName: string | null;
   firstName: string | null;
@@ -44,34 +47,51 @@ export async function getDashboardData() {
   const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
   const sevenDayStart = new Date(todayStart.getTime() - 6 * 86_400_000);
 
-  const [availableUnits, activeProducts, stockProducts, weekSales, weekReturns, recentSales, openCash] = await Promise.all([
+  const [availableUnits, activeProducts, lowStockRows, weekSales, weekReturns, recentSales, openCash] = await Promise.all([
     prisma.productUnit.count({
       where: { companyId: company.id, status: "AVAILABLE", product: { status: "ACTIVE" } },
     }),
     prisma.product.count({
       where: { companyId: company.id, status: "ACTIVE", deletedAt: null },
     }),
-    prisma.product.findMany({
-      where: {
-        companyId: company.id,
-        status: "ACTIVE",
-        deletedAt: null,
-        controlsStock: true,
-        type: { not: "SERVICE" },
-      },
-      select: {
-        id: true,
-        type: true,
-        minimumStock: true,
-        variants: {
-          where: { status: "ACTIVE" },
-          select: {
-            _count: { select: { units: { where: { status: "AVAILABLE" } } } },
-            inventoryBalances: { select: { quantity: true } },
-          },
-        },
-      },
-    }),
+    prisma.$queryRaw<LowStockRow[]>`
+      WITH active_products AS (
+        SELECT p."id", p."type", p."minimumStock"
+        FROM "products" p
+        WHERE p."companyId" = ${company.id}
+          AND p."status" = 'ACTIVE'
+          AND p."deletedAt" IS NULL
+          AND p."controlsStock" = TRUE
+          AND p."type" <> 'SERVICE'
+      ),
+      serialized_stock AS (
+        SELECT pu."productId", COUNT(*)::numeric AS "stock"
+        FROM "product_units" pu
+        INNER JOIN "product_variants" pv
+          ON pv."id" = pu."variantId" AND pv."status" = 'ACTIVE'
+        WHERE pu."companyId" = ${company.id}
+          AND pu."status" = 'AVAILABLE'
+        GROUP BY pu."productId"
+      ),
+      regular_stock AS (
+        SELECT ib."productId", COALESCE(SUM(ib."quantity"), 0) AS "stock"
+        FROM "inventory_balances" ib
+        INNER JOIN "product_variants" pv
+          ON pv."id" = ib."variantId" AND pv."status" = 'ACTIVE'
+        WHERE ib."companyId" = ${company.id}
+        GROUP BY ib."productId"
+      )
+      SELECT COUNT(*)::bigint AS "count"
+      FROM active_products p
+      LEFT JOIN serialized_stock ss ON ss."productId" = p."id"
+      LEFT JOIN regular_stock rs ON rs."productId" = p."id"
+      WHERE (
+        CASE
+          WHEN p."type" IN ('PHONE', 'SERIALIZED') THEN COALESCE(ss."stock", 0)
+          ELSE COALESCE(rs."stock", 0)
+        END
+      ) <= p."minimumStock"
+    `,
     prisma.sale.findMany({
       where: {
         companyId: company.id,
@@ -80,17 +100,16 @@ export async function getDashboardData() {
       },
       select: { total: true, createdAt: true },
     }),
-    prisma.returnOrder.findMany({
-      where: {
-        companyId: company.id,
-        status: "COMPLETED",
-        createdAt: { gte: sevenDayStart, lt: tomorrowStart },
-      },
-      select: {
-        createdAt: true,
-        items: { select: { amount: true } },
-      },
-    }),
+    prisma.$queryRaw<DashboardReturnRow[]>`
+      SELECT ro."createdAt", COALESCE(SUM(ri."amount"), 0) AS "amount"
+      FROM "return_orders" ro
+      LEFT JOIN "return_items" ri ON ri."returnOrderId" = ro."id"
+      WHERE ro."companyId" = ${company.id}
+        AND ro."status" = 'COMPLETED'
+        AND ro."createdAt" >= ${sevenDayStart}
+        AND ro."createdAt" < ${tomorrowStart}
+      GROUP BY ro."id", ro."createdAt"
+    `,
     prisma.sale.findMany({
       where: { companyId: company.id, status: { in: ["COMPLETED", "REFUNDED"] } },
       orderBy: { createdAt: "desc" },
@@ -120,22 +139,12 @@ export async function getDashboardData() {
     (order) => order.createdAt >= todayStart && order.createdAt < tomorrowStart,
   );
   const todayReturns = todayReturnOrders.reduce(
-    (sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
+    (sum, order) => sum + Number(order.amount),
     0,
   );
   const todayTotal = Math.round((todayGross - todayReturns + Number.EPSILON) * 100) / 100;
 
-  let lowStock = 0;
-  for (const product of stockProducts) {
-    const stock = product.variants.reduce((total, variant) => {
-      if (product.type === "PHONE" || product.type === "SERIALIZED") {
-        return total + variant._count.units;
-      }
-      return total + variant.inventoryBalances.reduce((sum, balance) => sum + Number(balance.quantity), 0);
-    }, 0);
-    if (stock <= product.minimumStock) lowStock += 1;
-  }
+  const lowStock = Number(lowStockRows[0]?.count ?? 0);
 
   const chart = Array.from({ length: 7 }, (_, index) => {
     const start = new Date(sevenDayStart.getTime() + index * 86_400_000);
@@ -161,10 +170,7 @@ export async function getDashboardData() {
   for (const order of weekReturns) {
     const item = chartMap.get(limaDateKey(order.createdAt));
     if (!item) continue;
-    const returned = order.items.reduce(
-      (sum, line) => sum + Number(line.amount),
-      0,
-    );
+    const returned = Number(order.amount);
     item.returns += returned;
     item.total -= returned;
     item.returnCount += 1;
