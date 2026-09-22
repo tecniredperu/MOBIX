@@ -125,6 +125,7 @@ async function mapCatalog(
       })
     : [];
   const stockMap = new Map(serializedStock.map((row) => [`${row.variantId}:${row.warehouseId}`, row._count._all]));
+  const saleableWarehouseIds = new Set(warehouses.map((warehouse) => warehouse.id));
 
   return products.flatMap((product): PosCatalogItem[] =>
     product.variants.map((variant) => {
@@ -149,10 +150,12 @@ async function mapCatalog(
               warehouseId: warehouse.id,
               quantity: stockMap.get(`${variant.id}:${warehouse.id}`) ?? 0,
             }))
-          : variant.inventoryBalances.map((balance) => ({
-              warehouseId: balance.warehouseId,
-              quantity: Number(balance.quantity),
-            })),
+          : variant.inventoryBalances
+              .filter((balance) => saleableWarehouseIds.has(balance.warehouseId))
+              .map((balance) => ({
+                warehouseId: balance.warehouseId,
+                quantity: Number(balance.quantity),
+              })),
       };
     }),
   ).slice(0, 120);
@@ -303,7 +306,12 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
 
   const [warehouses, textProducts, identifierHits] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+      where: {
+        companyId: company.id,
+        status: "ACTIVE",
+        isSaleable: true,
+        ...(warehouseId ? { id: warehouseId } : {}),
+      },
       select: { id: true },
     }),
     loadProducts(company.id, query),
@@ -416,6 +424,7 @@ export async function searchPosCustomers(q: string) {
       companyId: company.id,
       customerId: { in: customers.map((customer) => customer.id) },
       status: { in: ["OPEN", "PARTIAL"] },
+      balance: { gt: 0 },
     },
     _sum: { balance: true },
   });
@@ -540,10 +549,17 @@ export async function resolvePosScan(rawValue: string, warehouseId: string) {
     };
   }
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+  const warehouse = await prisma.warehouse.findFirst({
+    where: {
+      id: warehouseId,
+      companyId: company.id,
+      status: "ACTIVE",
+      isSaleable: true,
+    },
     select: { id: true },
   });
+  if (!warehouse) return null;
+  const warehouses = [warehouse];
 
   const variantHit = await prisma.productVariant.findFirst({
     where: {
