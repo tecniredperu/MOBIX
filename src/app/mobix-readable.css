@@ -106,7 +106,7 @@ body{
   font-size: 12.5px;
   line-height: 1.35;
 }
-.form-footnote, .tax-note, .field-help, .help-text{
+.form-footnote, .tax-note{
   font-size: 11.5px;
 }
 .field-error{ font-size: 11.5px; line-height: 1.4; }
