@@ -246,3 +246,14 @@ test("índices de producción permanecen alineados con las lecturas frecuentes",
     assert.ok(migration.includes(indexName), `Índice ausente de la migración: ${indexName}`);
   }
 });
+
+
+test("catálogos operativos no cargan productos borrados ni transferencias imposibles", () => {
+  const purchases = source("src/modules/purchases/purchases.repository.ts");
+  const transfers = source("src/modules/transfers/transfers.repository.ts");
+
+  assert.ok(purchases.includes('deletedAt: null'));
+  assert.ok(transfers.includes('deletedAt: null'));
+  assert.ok(transfers.includes('{ units: { some: { status: "AVAILABLE" } } }'));
+  assert.ok(transfers.includes('{ inventoryBalances: { some: { quantity: { gt: 0 } } } }'));
+});
