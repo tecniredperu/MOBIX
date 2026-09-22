@@ -1,6 +1,7 @@
 import { requireAuthContext } from "@/lib/auth-context";
 import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
+import { roundMoney } from "@/lib/money";
 import {
   CASH_PAYMENT_METHODS,
   calculateExpectedCash,
@@ -46,9 +47,6 @@ type ReceivableCollectionRow = {
   customerName: string;
 };
 
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 function paymentMethod(value: string | null | undefined): CashPaymentMethod | null {
   if (!value) return null;
