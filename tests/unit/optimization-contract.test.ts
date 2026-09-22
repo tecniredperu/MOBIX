@@ -75,11 +75,14 @@ test("consultas críticas conservan las optimizaciones de payload", () => {
   const reports = source("src/modules/reports/reports.repository.ts");
   const pos = source("src/modules/sales/pos-context.repository.ts");
 
-  assert.ok(dashboard.includes('_count: { select: { units: { where: { status: "AVAILABLE" } } } }'));
+  assert.equal(dashboard.includes("stockProducts"), false);
   assert.equal(
-    dashboard.includes('units: { where: { status: "AVAILABLE" }, select: { id: true } }'),
+    dashboard.includes('_count: { select: { units: { where: { status: "AVAILABLE" } } } }'),
     false,
   );
+  assert.ok(dashboard.includes("WITH active_products AS"));
+  assert.ok(dashboard.includes('FROM "product_units" pu'));
+  assert.ok(dashboard.includes('FROM "inventory_balances" ib'));
 
   assert.equal(reports.includes("prisma.inventoryBalance.findMany"), false);
   assert.equal(reports.includes('prisma.productUnit.findMany({ where: { companyId: company.id, status: "AVAILABLE" }'), false);
