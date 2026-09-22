@@ -55,7 +55,9 @@ test("PDF de venta es A4 de una sola página e incluye datos de empresa", async 
 test("WhatsApp prioriza compartir el PDF completo y conserva fallback web", async () => {
   const actions = await source("src/modules/sales/sale-detail-actions.tsx");
 
-  assert.ok(actions.includes("const file = await buildSaleReceiptPdf(ticket)"));
+  assert.ok(actions.includes('await import("./sale-receipt-pdf")'));
+  assert.ok(actions.includes("const file = await buildPdf(ticket)"));
+  assert.equal(actions.includes('import { buildSaleReceiptPdf } from "./sale-receipt-pdf"'), false);
   assert.ok(actions.includes("files: [file]"));
   assert.ok(actions.includes("navigator.share"));
   assert.ok(actions.includes("downloadFile(file)"));
