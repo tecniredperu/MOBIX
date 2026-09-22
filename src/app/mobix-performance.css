@@ -67,9 +67,7 @@ body{ font-size: 14.5px; }
 
 @keyframes mobix-spin{ to { transform: rotate(360deg); } }
 
-@media (max-width: 640px){
-  .mobix-pagination{ align-items: stretch; flex-wrap: wrap; }
+@media (max-width: 640px){.mobix-pagination{ align-items: stretch; flex-wrap: wrap; }
   .mobix-page-numbers{ order: 3; width: 100%; justify-content: center; }
   .mobix-page-button{ flex: 1; }
 }
-
