@@ -3,36 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ArrowLeftRight, BadgeDollarSign, Boxes, ChartNoAxesCombined, CircleDollarSign,
-  History, LayoutDashboard, Menu, PackageSearch, Repeat2, Settings, ShieldCheck,
-  ShoppingBag, ShoppingCart, Smartphone, Truck, Users, Wrench, X,
-} from "lucide-react";
-
-const sections = [
-  { label: "Inicio", items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" }] },
-  { label: "Ventas", items: [
-    { label: "Punto de venta", href: "/pos", icon: ShoppingCart, permission: "sales.create" },
-    { label: "Ventas", href: "/ventas", icon: BadgeDollarSign, permission: "sales.view" },
-    { label: "Devoluciones / cambios", href: "/devoluciones", icon: Repeat2, permission: "returns.manage" },
-  ]},
-  { label: "Inventario", items: [
-    { label: "Productos", href: "/productos", icon: Boxes, permission: "inventory.view" },
-    { label: "Equipos / IMEI", href: "/equipos", icon: Smartphone, permission: "inventory.view" },
-    { label: "Kardex", href: "/kardex", icon: PackageSearch, permission: "inventory.view" },
-    { label: "Transferencias", href: "/transferencias", icon: ArrowLeftRight, permission: "inventory.transfer" },
-  ]},
-  { label: "Compras", items: [
-    { label: "Compras", href: "/compras", icon: ShoppingBag, permission: "purchases.view" },
-    { label: "Proveedores", href: "/proveedores", icon: Truck, permission: "purchases.view" },
-  ]},
-  { label: "Gestión", items: [
-    { label: "Clientes", href: "/clientes", icon: Users, permission: "customers.manage" },
-    { label: "Servicio técnico", href: "/servicio-tecnico", icon: Wrench, permission: "service.manage" },
-    { label: "Caja", href: "/caja", icon: CircleDollarSign, permission: "cash.manage" },
-    { label: "Reportes gerenciales", href: "/reportes", icon: ChartNoAxesCombined, permission: "reports.view" },
-  ]},
-];
+import { History, Menu, Settings, ShieldCheck, X } from "lucide-react";
+import { MOBILE_NAV_SECTIONS, MOBILE_QUICK_NAV } from "./navigation-config";
 
 function active(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -56,12 +28,7 @@ export function MobileNavigation({ companyName, companyLogoUrl, branchName, user
     return () => { document.body.style.overflow = previous; };
   }, [open]);
 
-  const quick = [
-    { label: "Inicio", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
-    { label: "POS", href: "/pos", icon: ShoppingCart, permission: "sales.create" },
-    { label: "Ventas", href: "/ventas", icon: BadgeDollarSign, permission: "sales.view" },
-    { label: "Caja", href: "/caja", icon: CircleDollarSign, permission: "cash.manage" },
-  ].filter((item) => allowed(item.permission));
+  const quick = MOBILE_QUICK_NAV.filter((item) => allowed(item.permission));
 
   return <>
     <button type="button" className="mobile-nav-trigger" aria-label="Abrir menú" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={21}/></button>
@@ -71,7 +38,7 @@ export function MobileNavigation({ companyName, companyLogoUrl, branchName, user
         <header className="mobile-nav-header"><b>M</b><div><strong>MOBIX</strong><span>Gestión móvil</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Cerrar"><X size={20}/></button></header>
         <div className="mobile-company-card"><div>{companyLogoUrl ? <img src={companyLogoUrl} alt=""/> : companyName.slice(0,2).toUpperCase()}</div><span><strong>{companyName}</strong><small>{branchName}</small></span></div>
         <nav className="mobile-nav-list">
-          {sections.map((section) => {
+          {MOBILE_NAV_SECTIONS.map((section) => {
             const items = section.items.filter((item) => allowed(item.permission));
             if (!items.length) return null;
             return <section key={section.label}><p>{section.label}</p>{items.map(({label,href,icon:Icon}) => <Link key={href} href={href} className={active(pathname,href)?"active":""}><Icon size={18}/><span>{label}</span></Link>)}</section>;
