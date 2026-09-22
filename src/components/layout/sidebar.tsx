@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import { History, Settings, ShieldCheck } from "lucide-react";
 import { NAV_SECTIONS } from "./navigation-config";
 
@@ -20,7 +21,7 @@ function isActivePath(pathname: string, href: string) {
 
 export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, permissions }: SidebarProps) {
   const pathname = usePathname();
-  const permissionSet = new Set(permissions);
+  const permissionSet = useMemo(() => new Set(permissions), [permissions]);
   const allowed = (permission: string) => isSystem || permissionSet.has(permission);
   const adminHref = allowed("users.manage") ? "/administracion/usuarios" : "/administracion/roles";
   const showAdmin = allowed("users.manage") || allowed("roles.manage");
