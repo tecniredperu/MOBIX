@@ -6,7 +6,7 @@
 
 @media print{
   body.print-service-a4 .sidebar,body.print-service-a4 .topbar{display:none!important}
-  body.print-service-a4,body.print-service-a4 .app-shell,body.print-service-a4 .main-shell,body.print-service-a4 .page-content{width:auto!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
+  body.print-service-a4,body.print-service-a4 .app-shell,body.print-service-a4 .page-content{width:auto!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
   body.print-service-a4 .service-detail-page{width:auto!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
   body.print-service-a4 .service-detail-page> :not(.service-detail-heading){display:none!important}
   body.print-service-a4 .service-detail-heading{display:block!important;width:auto!important;max-width:none!important;margin:0!important;padding:0!important;overflow:visible!important}
