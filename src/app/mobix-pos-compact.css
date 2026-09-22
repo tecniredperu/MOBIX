@@ -4,7 +4,6 @@
  * demanda para reducir scroll y carga visual.
  */
 
-
 .pos-page .pos-warehouse{ min-width: 250px; }
 
 .pos-layout{
@@ -31,15 +30,11 @@
 
 /* Bloques plegables ------------------------------------------------------- */
 
-
 /* Resumen final ----------------------------------------------------------- */
-
 
 /* Mantener el bloque de cobro accesible en pantallas altas. */
 
-
-@media (max-width: 1180px){
-  .pos-layout{ grid-template-columns: 1fr; }
+@media (max-width: 1180px){.pos-layout{ grid-template-columns: 1fr; }
   .pos-catalog-list{ min-height: 0; max-height: 430px; }
   .pos-checkout{
     display: grid;
@@ -47,19 +42,9 @@
     align-items: start;
   }
   .pos-cart-card, .pos-total-card{ grid-column: 1 / -1; }
-  
-  
-  
 }
 
-@media (max-width: 760px){
-  
-  .pos-page .pos-warehouse{ width: 100%; min-width: 0; }
+@media (max-width: 760px){.pos-page .pos-warehouse{ width: 100%; min-width: 0; }
   .pos-checkout{ display: flex; }
   .pos-catalog-list{ max-height: 390px; }
-  
-  
-  
-  
-  
 }
