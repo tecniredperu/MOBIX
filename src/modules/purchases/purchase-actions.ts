@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requirePermissionWithSettings } from "@/lib/business-context";
 import { lockInventoryBalance } from "@/lib/inventory-lock";
 import { prisma } from "@/lib/prisma";
+import { roundMoney } from "@/lib/money";
 import type { CreatePurchaseInput } from "./purchase-types";
 
-function money(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 function normalizeIdentifier(value?: string) {
   return value?.trim().toUpperCase() ?? "";
@@ -106,13 +104,13 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
   }
 
   const lineAmounts = input.lines.map((line) => {
-    const lineSubtotal = money(line.quantity * line.unitCost);
-    const lineTax = input.taxCondition === "TAXED" ? money(lineSubtotal * TAX_RATE) : 0;
-    return { subtotal: lineSubtotal, tax: lineTax, total: money(lineSubtotal + lineTax) };
+    const lineSubtotal = roundMoney(line.quantity * line.unitCost);
+    const lineTax = input.taxCondition === "TAXED" ? roundMoney(lineSubtotal * TAX_RATE) : 0;
+    return { subtotal: lineSubtotal, tax: lineTax, total: roundMoney(lineSubtotal + lineTax) };
   });
-  const subtotal = money(lineAmounts.reduce((sum, line) => sum + line.subtotal, 0));
-  const tax = money(lineAmounts.reduce((sum, line) => sum + line.tax, 0));
-  const total = money(subtotal + tax);
+  const subtotal = roundMoney(lineAmounts.reduce((sum, line) => sum + line.subtotal, 0));
+  const tax = roundMoney(lineAmounts.reduce((sum, line) => sum + line.tax, 0));
+  const total = roundMoney(subtotal + tax);
   const taxLabel = input.taxCondition === "TAXED" ? "Gravado" : input.taxCondition === "EXEMPT" ? "Exonerado" : "Inafecto";
   const documentTypeLabel = input.documentType === "FACTURA" ? "01 - Factura" : input.documentType === "BOLETA" ? "03 - Boleta de venta" : input.documentType === "GUIA" ? "Guía / documento de ingreso" : "Otro";
 
@@ -212,7 +210,7 @@ export async function createPurchaseAction(input: CreatePurchaseInput) {
         const previousQty = Number(balance?.quantity ?? 0);
         const previousCost = Number(balance?.averageCost ?? 0);
         const newQty = previousQty + line.quantity;
-        const averageCost = newQty > 0 ? money(((previousQty * previousCost) + (line.quantity * line.unitCost)) / newQty) : line.unitCost;
+        const averageCost = newQty > 0 ? roundMoney(((previousQty * previousCost) + (line.quantity * line.unitCost)) / newQty) : line.unitCost;
 
         await tx.inventoryBalance.upsert({
           where: { companyId_warehouseId_variantId: { companyId: company.id, warehouseId: input.warehouseId, variantId: variant.id } },
