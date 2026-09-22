@@ -413,6 +413,7 @@ model Product {
   @@unique([companyId, barcode])
   @@index([companyId, type, status])
   @@index([companyId, brandId, categoryId])
+  @@index([companyId, status, deletedAt, name], map: "products_company_status_deleted_name_idx")
   @@map("products")
 }
 
@@ -564,6 +565,7 @@ model Purchase {
   @@unique([companyId, number])
   @@index([companyId, supplierId, issueDate])
   @@index([companyId, warehouseId, status])
+  @@index([companyId, status, issueDate], map: "purchases_company_status_issue_date_idx")
   @@map("purchases")
 }
 
@@ -618,6 +620,7 @@ model Customer {
   @@unique([companyId, documentNumber])
   @@index([companyId, status])
   @@index([companyId, phone])
+  @@index([companyId, status, updatedAt], map: "customers_company_status_updated_idx")
   @@map("customers")
 }
 
@@ -799,6 +802,7 @@ model CashSession {
 
   @@index([companyId, branchId, status, openedAt])
   @@index([companyId, userId, status, openedAt])
+  @@index([companyId, status, closedAt], map: "cash_sessions_company_status_closed_idx")
   @@map("cash_sessions")
 }
 
@@ -1128,5 +1132,6 @@ model AuditLog {
 
   @@index([companyId, entity, entityId, createdAt])
   @@index([companyId, userId, createdAt])
+  @@index([companyId, createdAt], map: "audit_logs_company_created_idx")
   @@map("audit_logs")
 }
