@@ -72,10 +72,29 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
   const company = await getActiveCompany();
   const session = await prisma.cashSession.findFirst({
     where: { id: sessionId, companyId: company.id },
-    include: {
+    select: {
+      id: true,
+      openingAmount: true,
+      openingNotes: true,
+      expectedAmount: true,
+      closingAmount: true,
+      difference: true,
+      closingNotes: true,
+      openedAt: true,
+      closedAt: true,
       branch: { select: { id: true, name: true } },
       user: { select: { id: true, name: true } },
-      movements: { orderBy: { createdAt: "desc" } },
+      movements: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          reference: true,
+          notes: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -91,8 +110,13 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
         },
       },
       orderBy: { createdAt: "desc" },
-      include: {
-        sale: { select: { id: true, saleNumber: true, createdAt: true } },
+      select: {
+        id: true,
+        paymentMethod: true,
+        amount: true,
+        reference: true,
+        createdAt: true,
+        sale: { select: { saleNumber: true } },
       },
     }),
     prisma.sale.aggregate({
@@ -130,7 +154,13 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
         refundAmount: { gt: 0 },
       },
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        returnNumber: true,
+        refundMethod: true,
+        refundReference: true,
+        refundAmount: true,
+        createdAt: true,
         sale: { select: { saleNumber: true } },
         customer: {
           select: {
@@ -149,7 +179,13 @@ export async function getCashSessionSummary(sessionId: string): Promise<CashOpen
         refundedAt: { not: null },
       },
       orderBy: { refundedAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        refundedAmount: true,
+        refundedAt: true,
+        updatedAt: true,
+        refundMethod: true,
+        refundReference: true,
         customer: {
           select: {
             businessName: true,
