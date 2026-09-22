@@ -161,3 +161,86 @@ test("build no ejecuta migraciones y start sí conserva migrate deploy", () => {
   assert.equal(pkg.scripts.build.includes("migrate deploy"), false);
   assert.ok(pkg.scripts.start.includes("prisma migrate deploy"));
 });
+
+
+test("auth usa payload explícito y no vuelve a includes amplios", () => {
+  const auth = source("src/lib/auth-context.ts");
+  assert.ok(auth.includes("select: {"));
+  assert.ok(auth.includes("sessionVersion: true"));
+  assert.ok(auth.includes("permissions: {"));
+  assert.equal(auth.includes("company: true"), false);
+  assert.equal(auth.includes("user: true"), false);
+  assert.equal(auth.includes("defaultBranch: true"), false);
+});
+
+test("POS inicial limita clientes y agrega deuda en una sola consulta", () => {
+  const pos = source("src/modules/sales/pos-context.repository.ts");
+  assert.ok(pos.includes("type PosCustomerSeedRow"));
+  assert.ok(pos.includes('LIMIT 100'));
+  assert.ok(pos.includes('LEFT JOIN "accounts_receivable"'));
+  assert.equal(pos.includes("const creditMap = new Map"), false);
+  assert.ok(pos.includes("serializedVariantIds"));
+  assert.ok(pos.includes('product.type === "PHONE" || product.type === "SERIALIZED"'));
+  assert.ok(pos.includes("...(warehouseId ? { id: warehouseId } : {})"));
+});
+
+test("Kardex y administración conservan selects acotados", () => {
+  const kardex = source("src/modules/inventory/kardex.repository.ts");
+  const admin = source("src/modules/admin/admin.repository.ts");
+
+  assert.equal(kardex.includes("product: { include:"), false);
+  assert.equal(kardex.includes("createdBy: true"), false);
+  assert.ok(kardex.includes('createdBy: { select: { name: true } }'));
+
+  assert.equal(admin.includes("include:{user:true,role:true,defaultBranch:true}"), false);
+  assert.ok(admin.includes("user:{select:{name:true,email:true,phone:true,status:true}}"));
+  assert.ok(admin.includes("oldValues: true"));
+  assert.ok(admin.includes("newValues: true"));
+});
+
+test("navegación desktop y móvil comparten una configuración única", () => {
+  const sidebar = source("src/components/layout/sidebar.tsx");
+  const mobile = source("src/components/layout/mobile-navigation.tsx");
+  const config = source("src/components/layout/navigation-config.ts");
+
+  assert.ok(sidebar.includes("NAV_SECTIONS"));
+  assert.ok(mobile.includes("MOBILE_NAV_SECTIONS"));
+  assert.ok(mobile.includes("MOBILE_QUICK_NAV"));
+  assert.ok(config.includes('label: "Punto de venta"'));
+  assert.equal(sidebar.includes("const sections:"), false);
+  assert.equal(mobile.includes("const sections ="), false);
+});
+
+test("generadores PDF pesados se cargan bajo demanda", () => {
+  const files = [
+    ["src/modules/sales/sale-detail-actions.tsx", "./sale-receipt-pdf"],
+    ["src/modules/returns/return-detail-actions.tsx", "./return-receipt-pdf"],
+    ["src/modules/service/service-print-actions.tsx", "./service-receipt-pdf"],
+    ["src/modules/cash/cash-close-report.tsx", "./cash-close-pdf"],
+  ] as const;
+
+  for (const [path, modulePath] of files) {
+    const code = source(path);
+    assert.ok(code.includes(`await import("${modulePath}")`), `${path} debe cargar el PDF bajo demanda`);
+  }
+});
+
+test("CSS retirado en fase 2 no vuelve a aparecer", () => {
+  const allCss = readdirSync("src/app")
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => source(join("src/app", name)))
+    .join("\n");
+
+  for (const selector of [
+    ".empty-chart",
+    ".chart-bars",
+    ".check-row",
+    ".nav-item.disabled-link",
+    ".fixed-qty",
+    ".login-hero-copy .eyebrow",
+    ".page-content>.app-shell",
+    ".pos-v5 .pos-heading",
+  ]) {
+    assert.equal(allCss.includes(selector), false, `Selector muerto reintroducido: ${selector}`);
+  }
+});
