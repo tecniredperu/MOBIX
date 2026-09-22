@@ -131,11 +131,15 @@ async function mapCatalog(
   products: ProductForPos[],
   matchedUnitsByVariant?: Map<string, PosUnit>,
 ) {
-  const variantIds = products.flatMap((product) => product.variants.map((variant) => variant.id));
-  const serializedStock = variantIds.length
+  const serializedVariantIds = products.flatMap((product) =>
+    product.type === "PHONE" || product.type === "SERIALIZED"
+      ? product.variants.map((variant) => variant.id)
+      : [],
+  );
+  const serializedStock = serializedVariantIds.length
     ? await prisma.productUnit.groupBy({
         by: ["variantId", "warehouseId"],
-        where: { companyId, status: "AVAILABLE", variantId: { in: variantIds } },
+        where: { companyId, status: "AVAILABLE", variantId: { in: serializedVariantIds } },
         _count: { _all: true },
       })
     : [];
@@ -302,7 +306,12 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
 
   const [warehouses, textProducts, identifierHits] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+      where: {
+        companyId: company.id,
+        status: "ACTIVE",
+        isSaleable: true,
+        ...(warehouseId ? { id: warehouseId } : {}),
+      },
       select: { id: true },
     }),
     loadProducts(company.id, query),
