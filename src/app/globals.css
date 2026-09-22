@@ -69,7 +69,7 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
 .stat-card p { margin: 0 0 5px; color: var(--muted); font-size: 11px; }
 .stat-card strong { display: block; font-size: 23px; letter-spacing: -.025em; }
 .stat-card span { display: block; margin-top: 7px; color: #8a94a5; font-size: 10px; }
-.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .8fr); gap: 14px; }
+
 .panel { background: white; border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow); }
 .panel-heading { padding: 17px 18px 13px; display: flex; justify-content: space-between; align-items: flex-start; }
 .panel-heading h2 { margin: 0; font-size: 13px; }
@@ -102,19 +102,16 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
 .row-menu:hover { background: #f1f4f8; }
 .table-footer { min-height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: #8b94a4; font-size: 9.5px; }
 
-@media (max-width: 1050px) {
-  .app-shell { grid-template-columns: 78px minmax(0, 1fr); }
+@media (max-width: 1050px) {.app-shell { grid-template-columns: 78px minmax(0, 1fr); }
   .sidebar { padding-inline: 10px; }
   .brand > div:not(.brand-mark), .company-copy, .company-selector > svg, .nav-section > p, .nav-item span, .sidebar-bottom .nav-item { font-size: 0; }
   .brand { justify-content: center; padding-inline: 0; }
   .company-selector { display: flex; justify-content: center; padding: 8px; }
   .nav-item { justify-content: center; }
   .stat-grid, .product-summary { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-grid { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 720px) {
-  .app-shell { display: block; }
+@media (max-width: 720px) {.app-shell { display: block; }
   .sidebar { display: none; }
   .topbar { padding: 0 16px; }
   .user-copy { display: none; }
@@ -230,23 +227,20 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
 .cancel-button { min-height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #667085; font-size: 10.5px; font-weight: 600; }
 .cancel-button:hover { background: #f6f7f9; }
 
-@media (max-width: 1180px) {
-  .product-editor { grid-template-columns: 1fr; }
+@media (max-width: 1180px) {.product-editor { grid-template-columns: 1fr; }
   .sticky-card { position: static; }
   .editor-sidebar .editor-card { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
   .editor-sidebar h3, .editor-sidebar .side-card-copy { grid-column: 1 / -1; }
   .editor-actions { margin-top: 0; padding-top: 0; border-top: 0; align-self: end; }
 }
 
-@media (max-width: 840px) {
-  .product-type-grid, .two-columns, .variant-grid { grid-template-columns: 1fr; }
+@media (max-width: 840px) {.product-type-grid, .two-columns, .variant-grid { grid-template-columns: 1fr; }
   .span-2 { grid-column: span 1; }
   .variant-heading { flex-direction: column; }
   .secondary-button { width: 100%; }
   .editor-sidebar .editor-card { display: block; }
   .editor-actions { margin-top: 16px; padding-top: 14px; border-top: 1px solid #edf0f4; }
 }
-
 
 /* Product image editor --------------------------------------------------- */
 .product-image-field {
@@ -343,8 +337,7 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
   display: block;
 }
 
-@media (max-width: 700px) {
-  .product-image-field {
+@media (max-width: 700px) {.product-image-field {
     grid-template-columns: 1fr;
   }
 
@@ -353,7 +346,6 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
     height: 160px;
   }
 }
-
 
 /* Product list actions --------------------------------------------------- */
 .product-actions-heading {
@@ -441,8 +433,7 @@ kbd { padding: 3px 6px; border: 1px solid #dfe3e9; border-radius: 5px; backgroun
   text-align: right;
 }
 
-@media (max-width: 1250px) {
-  .product-actions-heading,
+@media (max-width: 1250px) {.product-actions-heading,
   .product-actions-column {
     width: 126px;
     min-width: 126px;
