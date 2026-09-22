@@ -1,11 +1,9 @@
 import { requirePermissionWithSettings } from "@/lib/business-context";
 import { prisma } from "@/lib/prisma";
+import { roundMoney } from "@/lib/money";
 import { createSaleAction } from "./sale-actions";
 import type { CreateSaleInput } from "./sale-types";
 
-function money(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 async function assertCashPolicyForSale(warehouseId: string) {
   const { company, membership, settings } = await requirePermissionWithSettings("sales.create");
@@ -43,25 +41,25 @@ async function assertCashPolicyForSale(warehouseId: string) {
 export async function createSaleWithChange(input: CreateSaleInput) {
   await assertCashPolicyForSale(input.warehouseId);
 
-  const gross = money(
+  const gross = roundMoney(
     input.lines.reduce(
       (sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
       0,
     ),
   );
-  const discount = money(Number(input.discount || 0));
-  const total = money(Math.max(0, gross - discount));
+  const discount = roundMoney(Number(input.discount || 0));
+  const total = roundMoney(Math.max(0, gross - discount));
 
-  const tendered = money(
+  const tendered = roundMoney(
     input.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
   );
 
   if (tendered < total - 0.01) {
-    throw new Error(`Falta cobrar S/ ${money(total - tendered).toFixed(2)} para completar la venta.`);
+    throw new Error(`Falta cobrar S/ ${roundMoney(total - tendered).toFixed(2)} para completar la venta.`);
   }
 
-  const change = money(Math.max(0, tendered - total));
-  const cashReceived = money(
+  const change = roundMoney(Math.max(0, tendered - total));
+  const cashReceived = roundMoney(
     input.payments
       .filter((payment) => payment.method === "CASH")
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
@@ -77,34 +75,34 @@ export async function createSaleWithChange(input: CreateSaleInput) {
   const normalizedReversed = [...input.payments]
     .reverse()
     .map((payment) => {
-      const received = money(Number(payment.amount || 0));
+      const received = roundMoney(Number(payment.amount || 0));
       if (payment.method !== "CASH" || remainingChange <= 0) {
         return { ...payment, amount: received };
       }
 
       const changeFromThisPayment = Math.min(received, remainingChange);
-      remainingChange = money(remainingChange - changeFromThisPayment);
-      return { ...payment, amount: money(received - changeFromThisPayment) };
+      remainingChange = roundMoney(remainingChange - changeFromThisPayment);
+      return { ...payment, amount: roundMoney(received - changeFromThisPayment) };
     })
     .reverse()
     .filter((payment) => payment.amount > 0.009);
 
-  const normalizedTotal = money(
+  const normalizedTotal = roundMoney(
     normalizedReversed.reduce((sum, payment) => sum + payment.amount, 0),
   );
 
-  const roundingDifference = money(total - normalizedTotal);
+  const roundingDifference = roundMoney(total - normalizedTotal);
   if (Math.abs(roundingDifference) > 0 && Math.abs(roundingDifference) <= 0.01) {
     const cashIndex = normalizedReversed.findIndex((payment) => payment.method === "CASH");
     if (cashIndex >= 0) {
       normalizedReversed[cashIndex] = {
         ...normalizedReversed[cashIndex],
-        amount: money(normalizedReversed[cashIndex].amount + roundingDifference),
+        amount: roundMoney(normalizedReversed[cashIndex].amount + roundingDifference),
       };
     }
   }
 
-  const normalizedCheck = money(
+  const normalizedCheck = roundMoney(
     normalizedReversed.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
   );
   if (Math.abs(normalizedCheck - total) > 0.01) {
