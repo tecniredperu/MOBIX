@@ -110,10 +110,6 @@
     padding-bottom: 18px;
   }
 
-  .pos-v5 .pos-heading {
-    margin-bottom: 8px;
-  }
-
   .pos-v5 .pos-layout {
     align-items: start;
     gap: 10px;
@@ -792,10 +788,6 @@
 
   .pos-v5 {
     gap: 8px;
-  }
-
-  .pos-v5 .pos-heading {
-    display: none !important;
   }
 
   .pos-v5 .pos-layout {

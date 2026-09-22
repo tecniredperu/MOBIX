@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Download, MessageCircle, Printer, Receipt, Smartphone } from "lucide-react";
 import { ServiceTicketModal } from "./service-ticket-modal";
-import {
-  buildServiceReceiptPdf,
-  type ServiceReceiptData,
-} from "./service-receipt-pdf";
+import type { ServiceReceiptData } from "./service-receipt-pdf";
 import type { ServiceStatus } from "./service-types";
+
+async function buildPdf(receipt: ServiceReceiptData) {
+  const { buildServiceReceiptPdf } = await import("./service-receipt-pdf");
+  return buildServiceReceiptPdf(receipt);
+}
 
 const STATUS_LABELS: Record<ServiceStatus, string> = {
   RECEIVED: "Recibido",
@@ -198,7 +200,7 @@ export function ServicePrintActions({
     if (downloading) return;
     setDownloading(true);
     try {
-      const file = await buildServiceReceiptPdf(receipt);
+      const file = await buildPdf(receipt);
       downloadFile(file);
     } catch (error) {
       console.error(error);
@@ -212,7 +214,7 @@ export function ServicePrintActions({
     if (sharing) return;
     setSharing(true);
     try {
-      const file = await buildServiceReceiptPdf(receipt);
+      const file = await buildPdf(receipt);
       const canShareFiles =
         typeof navigator.share === "function"
         && typeof navigator.canShare === "function"

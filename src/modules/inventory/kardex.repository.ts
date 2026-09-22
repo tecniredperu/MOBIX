@@ -33,12 +33,34 @@ export async function getKardex(filters: { q?: string; movementType?: string; wa
       where,
       orderBy: { createdAt: "desc" },
       take: 200,
-      include: {
-        product: { include: { brand: true } },
-        variant: true,
-        warehouse: { include: { branch: true } },
-        productUnit: { include: { identifiers: true } },
-        createdBy: true,
+      select: {
+        id: true,
+        createdAt: true,
+        movementType: true,
+        quantity: true,
+        unitCost: true,
+        referenceType: true,
+        referenceId: true,
+        notes: true,
+        product: {
+          select: {
+            name: true,
+            brand: { select: { name: true } },
+          },
+        },
+        variant: { select: { ram: true, storage: true, color: true } },
+        warehouse: {
+          select: {
+            name: true,
+            branch: { select: { name: true } },
+          },
+        },
+        productUnit: {
+          select: {
+            identifiers: { select: { type: true, value: true } },
+          },
+        },
+        createdBy: { select: { name: true } },
       },
     }),
     prisma.warehouse.findMany({

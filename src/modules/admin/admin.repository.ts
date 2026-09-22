@@ -4,10 +4,34 @@ import { prisma } from "@/lib/prisma";
 export async function getAdminData(){
  const company=await getActiveCompany();
  const [memberships,roles,permissions,branches]=await Promise.all([
-   prisma.companyUser.findMany({where:{companyId:company.id},include:{user:true,role:true,defaultBranch:true},orderBy:{createdAt:"asc"}}),
-   prisma.role.findMany({where:{companyId:company.id},include:{permissions:{include:{permission:true}},_count:{select:{memberships:true}}},orderBy:[{isSystem:"desc"},{name:"asc"}]}),
-   prisma.permission.findMany({orderBy:{code:"asc"}}),
-   prisma.branch.findMany({where:{companyId:company.id,status:"ACTIVE"},orderBy:{name:"asc"}}),
+   prisma.companyUser.findMany({
+     where:{companyId:company.id},
+     orderBy:{createdAt:"asc"},
+     select:{
+       id:true,userId:true,roleId:true,defaultBranchId:true,status:true,
+       user:{select:{name:true,email:true,phone:true,status:true}},
+       role:{select:{name:true}},
+       defaultBranch:{select:{name:true}},
+     },
+   }),
+   prisma.role.findMany({
+     where:{companyId:company.id},
+     orderBy:[{isSystem:"desc"},{name:"asc"}],
+     select:{
+       id:true,name:true,description:true,isSystem:true,status:true,
+       permissions:{select:{permission:{select:{code:true}}}},
+       _count:{select:{memberships:true}},
+     },
+   }),
+   prisma.permission.findMany({
+     orderBy:{code:"asc"},
+     select:{id:true,code:true,name:true,description:true},
+   }),
+   prisma.branch.findMany({
+     where:{companyId:company.id,status:"ACTIVE"},
+     orderBy:{name:"asc"},
+     select:{id:true,name:true},
+   }),
  ]);
  return {
    users:memberships.map(m=>({membershipId:m.id,userId:m.userId,name:m.user.name,email:m.user.email,phone:m.user.phone,status:m.status,userStatus:m.user.status,roleId:m.roleId,role:m.role.name,branchId:m.defaultBranchId,branch:m.defaultBranch?.name||"Sin sucursal"})),
@@ -43,7 +67,15 @@ export async function getAuditLogData(limit = 200) {
     where: { companyId: company.id },
     orderBy: { createdAt: "desc" },
     take,
-    include: {
+    select: {
+      id: true,
+      createdAt: true,
+      action: true,
+      entity: true,
+      entityId: true,
+      ipAddress: true,
+      oldValues: true,
+      newValues: true,
       user: { select: { name: true, email: true } },
     },
   });

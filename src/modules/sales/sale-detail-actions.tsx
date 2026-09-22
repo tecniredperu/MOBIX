@@ -16,13 +16,17 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cancelSaleAction } from "./sale-actions";
-import { buildSaleReceiptPdf } from "./sale-receipt-pdf";
 import { SaleTicketModal, type SaleTicketData } from "./sale-ticket-modal";
 
 function whatsappNumber(value?: string | null) {
   const digits = value?.replace(/\D/g, "") ?? "";
   if (!digits) return "";
   return digits.startsWith("51") ? digits : "51" + digits;
+}
+
+async function buildPdf(ticket: SaleTicketData) {
+  const { buildSaleReceiptPdf } = await import("./sale-receipt-pdf");
+  return buildSaleReceiptPdf(ticket);
 }
 
 function downloadFile(file: File) {
@@ -160,7 +164,7 @@ export function SaleDetailActions({
     if (downloading) return;
     setDownloading(true);
     try {
-      const file = await buildSaleReceiptPdf(ticket);
+      const file = await buildPdf(ticket);
       downloadFile(file);
     } catch (error) {
       console.error(error);
@@ -174,7 +178,7 @@ export function SaleDetailActions({
     if (sharing) return;
     setSharing(true);
     try {
-      const file = await buildSaleReceiptPdf(ticket);
+      const file = await buildPdf(ticket);
       const hasNativeShare = typeof navigator.share === "function";
       const canShareFiles = hasNativeShare
         && (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }));

@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 
 export async function AppShell({ children }: { children: ReactNode }) {
   const auth = await requireAuthContext();
+  const permissions = [...auth.permissions];
   return (
     <div className="app-shell">
       <MobileNavigation
@@ -15,14 +16,14 @@ export async function AppShell({ children }: { children: ReactNode }) {
         userName={auth.user.name}
         roleName={auth.role.name}
         isSystem={auth.role.isSystem}
-        permissions={[...auth.permissions]}
+        permissions={permissions}
       />
       <Sidebar
         companyName={auth.company.tradeName ?? auth.company.businessName}
         companyLogoUrl={auth.company.logoUrl}
         branchName={auth.membership.defaultBranch?.name ?? "Sin sucursal asignada"}
         isSystem={auth.role.isSystem}
-        permissions={[...auth.permissions]}
+        permissions={permissions}
       />
       <div className="app-main">
         <Topbar userName={auth.user.name} roleName={auth.role.name} />

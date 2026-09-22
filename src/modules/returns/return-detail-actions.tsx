@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { Download, MessageCircle, Printer, Repeat2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  buildReturnReceiptPdf,
-  type ReturnReceiptData,
-} from "./return-receipt-pdf";
+import type { ReturnReceiptData } from "./return-receipt-pdf";
 
 function whatsappNumber(value?: string | null) {
   const digits = value?.replace(/\D/g, "") ?? "";
   if (!digits) return "";
   return digits.startsWith("51") ? digits : "51" + digits;
+}
+
+async function buildPdf(receipt: ReturnReceiptData) {
+  const { buildReturnReceiptPdf } = await import("./return-receipt-pdf");
+  return buildReturnReceiptPdf(receipt);
 }
 
 function downloadFile(file: File) {
@@ -69,7 +71,7 @@ export function ReturnDetailActions({
     if (downloading) return;
     setDownloading(true);
     try {
-      const file = await buildReturnReceiptPdf(receipt);
+      const file = await buildPdf(receipt);
       downloadFile(file);
     } catch (error) {
       console.error(error);
@@ -83,7 +85,7 @@ export function ReturnDetailActions({
     if (sharing) return;
     setSharing(true);
     try {
-      const file = await buildReturnReceiptPdf(receipt);
+      const file = await buildPdf(receipt);
       const canShareFiles =
         typeof navigator.share === "function"
         && typeof navigator.canShare === "function"

@@ -2,8 +2,15 @@ import { getActiveCompany } from "@/lib/company-context";
 import { prisma } from "@/lib/prisma";
 import type { PosCatalogItem, PosCustomer, PosUnit, PosWarehouse } from "./sale-types";
 
-type CreditProfileRow = {
+type PosCustomerSeedRow = {
   id: string;
+  documentType: string | null;
+  documentNumber: string | null;
+  businessName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  whatsapp: string | null;
   creditEnabled: boolean;
   creditLimit: unknown;
   creditDays: number;
@@ -124,11 +131,15 @@ async function mapCatalog(
   products: ProductForPos[],
   matchedUnitsByVariant?: Map<string, PosUnit>,
 ) {
-  const variantIds = products.flatMap((product) => product.variants.map((variant) => variant.id));
-  const serializedStock = variantIds.length
+  const serializedVariantIds = products.flatMap((product) =>
+    product.type === "PHONE" || product.type === "SERIALIZED"
+      ? product.variants.map((variant) => variant.id)
+      : [],
+  );
+  const serializedStock = serializedVariantIds.length
     ? await prisma.productUnit.groupBy({
         by: ["variantId", "warehouseId"],
-        where: { companyId, status: "AVAILABLE", variantId: { in: variantIds } },
+        where: { companyId, status: "AVAILABLE", variantId: { in: serializedVariantIds } },
         _count: { _all: true },
       })
     : [];
@@ -232,48 +243,54 @@ async function searchAvailableIdentifiers(companyId: string, rawQuery: string, w
 
 export async function getOptimizedPosContext() {
   const company = await getActiveCompany();
-  const [warehouses, products, customers, creditProfiles] = await Promise.all([
+  const [warehouses, products, customerRows] = await Promise.all([
     prisma.warehouse.findMany({
       where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, branch: { select: { name: true } } },
     }),
     loadProducts(company.id),
-    prisma.customer.findMany({
-      where: { companyId: company.id, status: "ACTIVE" },
-      orderBy: { updatedAt: "desc" },
-      take: 100,
-    }),
-    prisma.$queryRaw<CreditProfileRow[]>`
-      SELECT c."id", c."creditEnabled", c."creditLimit", c."creditDays",
+    prisma.$queryRaw<PosCustomerSeedRow[]>`
+      SELECT c."id", c."documentType", c."documentNumber", c."businessName",
+        c."firstName", c."lastName", c."phone", c."whatsapp",
+        c."creditEnabled", c."creditLimit", c."creditDays",
         COALESCE(SUM(ar."balance") FILTER (WHERE ar."status" IN ('OPEN', 'PARTIAL')), 0) AS "outstanding"
-      FROM "customers" c
-      LEFT JOIN "accounts_receivable" ar ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
-      WHERE c."companyId" = ${company.id}
-      GROUP BY c."id", c."creditEnabled", c."creditLimit", c."creditDays"
+      FROM (
+        SELECT "id", "companyId", "documentType", "documentNumber", "businessName",
+          "firstName", "lastName", "phone", "whatsapp", "creditEnabled",
+          "creditLimit", "creditDays", "updatedAt"
+        FROM "customers"
+        WHERE "companyId" = ${company.id} AND "status" = 'ACTIVE'
+        ORDER BY "updatedAt" DESC
+        LIMIT 100
+      ) c
+      LEFT JOIN "accounts_receivable" ar
+        ON ar."customerId" = c."id" AND ar."companyId" = c."companyId"
+      GROUP BY c."id", c."companyId", c."documentType", c."documentNumber",
+        c."businessName", c."firstName", c."lastName", c."phone", c."whatsapp",
+        c."creditEnabled", c."creditLimit", c."creditDays", c."updatedAt"
+      ORDER BY c."updatedAt" DESC
     `,
   ]);
 
-  const creditMap = new Map(creditProfiles.map((profile) => [profile.id, profile]));
   const catalog = await mapCatalog(company.id, warehouses, products);
   const warehouseOptions: PosWarehouse[] = warehouses.map((warehouse) => ({
     id: warehouse.id,
     name: warehouse.name,
     branchName: warehouse.branch.name,
   }));
-  const customerOptions: PosCustomer[] = customers.map((customer) => {
-    const profile = creditMap.get(customer.id);
-    const creditLimit = Number(profile?.creditLimit ?? 0);
-    const outstanding = Number(profile?.outstanding ?? 0);
+  const customerOptions: PosCustomer[] = customerRows.map((customer) => {
+    const creditLimit = Number(customer.creditLimit ?? 0);
+    const outstanding = Number(customer.outstanding ?? 0);
     return {
       id: customer.id,
       documentType: customer.documentType,
       documentNumber: customer.documentNumber,
       name: customerDisplayName(customer, "Cliente"),
       phone: customer.whatsapp ?? customer.phone,
-      creditEnabled: Boolean(profile?.creditEnabled),
+      creditEnabled: customer.creditEnabled,
       creditLimit,
-      creditDays: Number(profile?.creditDays ?? 30),
+      creditDays: Number(customer.creditDays ?? 30),
       outstanding,
       availableCredit: Math.max(0, creditLimit - outstanding),
     };
@@ -289,7 +306,12 @@ export async function searchPosCatalog(q: string, warehouseId?: string) {
 
   const [warehouses, textProducts, identifierHits] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { companyId: company.id, status: "ACTIVE", isSaleable: true },
+      where: {
+        companyId: company.id,
+        status: "ACTIVE",
+        isSaleable: true,
+        ...(warehouseId ? { id: warehouseId } : {}),
+      },
       select: { id: true },
     }),
     loadProducts(company.id, query),
@@ -379,6 +401,19 @@ export async function searchPosCustomers(q: string) {
     },
     orderBy: { updatedAt: "desc" },
     take: 30,
+    select: {
+      id: true,
+      documentType: true,
+      documentNumber: true,
+      businessName: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      whatsapp: true,
+      creditEnabled: true,
+      creditLimit: true,
+      creditDays: true,
+    },
   });
 
   if (!customers.length) return [];

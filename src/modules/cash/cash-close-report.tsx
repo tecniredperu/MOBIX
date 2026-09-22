@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { Download, MessageCircle, Printer, X } from "lucide-react";
-import { buildCashClosePdf } from "./cash-close-pdf";
 import type { CashCloseReportData, CashPaymentTotals } from "./cash-types";
+
+async function buildPdf(report: CashCloseReportData) {
+  const { buildCashClosePdf } = await import("./cash-close-pdf");
+  return buildCashClosePdf(report);
+}
 
 const PAYMENT_LABELS: Array<{ key: keyof CashPaymentTotals; label: string }> = [
   { key: "CASH", label: "Efectivo" },
@@ -110,7 +114,7 @@ export function CashCloseReport({
     if (downloading) return;
     setDownloading(true);
     try {
-      const file = await buildCashClosePdf(report);
+      const file = await buildPdf(report);
       downloadFile(file);
     } catch (error) {
       console.error(error);
@@ -124,7 +128,7 @@ export function CashCloseReport({
     if (sharing) return;
     setSharing(true);
     try {
-      const file = await buildCashClosePdf(report);
+      const file = await buildPdf(report);
       const message = buildMessage();
       const canShareFiles =
         typeof navigator.share === "function"

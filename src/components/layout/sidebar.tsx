@@ -2,100 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowLeftRight,
-  BadgeDollarSign,
-  Boxes,
-  ChartNoAxesCombined,
-  CircleDollarSign,
-  LayoutDashboard,
-  PackageSearch,
-  Repeat2,
-  Settings,
-  ShieldCheck,
-  History,
-  ShoppingBag,
-  ShoppingCart,
-  Smartphone,
-  Truck,
-  Users,
-  Wrench,
-} from "lucide-react";
-
-type NavChild = {
-  label: string;
-  href: string;
-  permission: string;
-};
-
-type NavItem = {
-  label: string;
-  href?: string;
-  icon: typeof LayoutDashboard;
-  permission: string;
-  children?: NavChild[];
-};
-
-type NavSection = {
-  label: string;
-  items: NavItem[];
-};
-
-const sections: NavSection[] = [
-  {
-    label: "Inicio",
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" }],
-  },
-  {
-    label: "Ventas",
-    items: [
-      { label: "Punto de venta", href: "/pos", icon: ShoppingCart, permission: "sales.create" },
-      { label: "Ventas", href: "/ventas", icon: BadgeDollarSign, permission: "sales.view" },
-      { label: "Devoluciones / cambios", href: "/devoluciones", icon: Repeat2, permission: "returns.manage" },
-    ],
-  },
-  {
-    label: "Inventario",
-    items: [
-      {
-        label: "Productos",
-        icon: Boxes,
-        permission: "inventory.view",
-        children: [
-          { label: "Todos los productos", href: "/productos", permission: "inventory.view" },
-          { label: "Categorías", href: "/productos/categorias", permission: "inventory.view" },
-          { label: "Marcas", href: "/productos/marcas", permission: "inventory.view" },
-        ],
-      },
-      { label: "Equipos / IMEI", href: "/equipos", icon: Smartphone, permission: "inventory.view" },
-      { label: "Kardex", href: "/kardex", icon: PackageSearch, permission: "inventory.view" },
-      { label: "Transferencias", href: "/transferencias", icon: ArrowLeftRight, permission: "inventory.transfer" },
-    ],
-  },
-  {
-    label: "Compras",
-    items: [
-      { label: "Compras", href: "/compras", icon: ShoppingBag, permission: "purchases.view" },
-      { label: "Proveedores", href: "/proveedores", icon: Truck, permission: "purchases.view" },
-    ],
-  },
-  {
-    label: "Clientes",
-    items: [{ label: "Clientes", href: "/clientes", icon: Users, permission: "customers.manage" }],
-  },
-  {
-    label: "Postventa",
-    items: [{ label: "Servicio técnico", href: "/servicio-tecnico", icon: Wrench, permission: "service.manage" }],
-  },
-  {
-    label: "Finanzas",
-    items: [{ label: "Caja", href: "/caja", icon: CircleDollarSign, permission: "cash.manage" }],
-  },
-  {
-    label: "Reportes",
-    items: [{ label: "Reportes gerenciales", href: "/reportes", icon: ChartNoAxesCombined, permission: "reports.view" }],
-  },
-];
+import { useMemo } from "react";
+import { History, Settings, ShieldCheck } from "lucide-react";
+import { NAV_SECTIONS } from "./navigation-config";
 
 type SidebarProps = {
   companyName: string;
@@ -112,7 +21,7 @@ function isActivePath(pathname: string, href: string) {
 
 export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, permissions }: SidebarProps) {
   const pathname = usePathname();
-  const permissionSet = new Set(permissions);
+  const permissionSet = useMemo(() => new Set(permissions), [permissions]);
   const allowed = (permission: string) => isSystem || permissionSet.has(permission);
   const adminHref = allowed("users.manage") ? "/administracion/usuarios" : "/administracion/roles";
   const showAdmin = allowed("users.manage") || allowed("roles.manage");
@@ -144,7 +53,7 @@ export function Sidebar({ companyName, companyLogoUrl, branchName, isSystem, per
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegación principal">
-        {sections.map((section) => {
+        {NAV_SECTIONS.map((section) => {
           const items = section.items.filter((item) => allowed(item.permission));
           if (!items.length) return null;
 

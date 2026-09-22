@@ -102,7 +102,7 @@ button, a, input, select, textarea{transition:border-color .16s ease,background 
 }
 .nav-item.active::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:4px;background:#6e93ff;box-shadow:0 0 12px rgba(110,147,255,.55)}
 .nav-item.active svg{color:#8eabff}
-.nav-item.disabled-link{opacity:.62}
+
 .sidebar-bottom{border-top:1px solid rgba(255,255,255,.07);padding-top:11px}
 
 /* TOPBAR ----------------------------------------------------------------- */
