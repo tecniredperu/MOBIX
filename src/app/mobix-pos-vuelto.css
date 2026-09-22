@@ -30,13 +30,10 @@
 /* Carrito: controles sin desbordar la caja. */
 .pos-cart-line{min-width:0}
 
-
 .qty-control{min-width:0}
 .qty-control input{min-width:0;width:100%}
 
-
 /* Cliente y comprobante */
-
 
 /* Pago: pensado para una columna de caja de ~400 px. */
 .pos-payment-card{overflow:hidden}
@@ -57,16 +54,13 @@
 /* Resumen y vuelto */
 .pos-total-card{overflow:hidden;padding:14px}
 
-
 .pos-total-card .tax-note, .pos-total-card .form-footnote{overflow-wrap:anywhere;line-height:1.45}
-
 
 /* Evita que cualquier control interno cree scroll horizontal accidental. */
 .pos-page input, .pos-page select, .pos-page button{max-width:100%}
 
 /* En resoluciones medias el POS pasa a una sola columna antes de quedarse sin espacio. */
-@media(max-width:1240px){
-  .pos-layout{grid-template-columns:1fr}
+@media(max-width:1240px){.pos-layout{grid-template-columns:1fr}
   .pos-catalog-panel{min-height:auto}
   .pos-catalog-list{max-height:520px}
   .pos-checkout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
@@ -77,17 +71,14 @@
   .pos-payment-card .payment-actions .ghost-button{white-space:nowrap}
 }
 
-@media(max-width:900px){
-  
-  .pos-warehouse{width:100%}
+@media(max-width:900px){.pos-warehouse{width:100%}
   .pos-checkout{display:flex}
   .pos-payment-card .payment-line{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .pos-payment-card .payment-field.reference, .pos-payment-card .payment-actions{grid-column:1/-1}
   .pos-payment-card .payment-actions .ghost-button{white-space:normal}
 }
 
-@media(max-width:640px){
-  .pos-product{grid-template-columns:38px minmax(0,1fr);grid-template-areas:"icon info" "icon price" "unit unit" "action action";row-gap:7px;padding:12px}
+@media(max-width:640px){.pos-product{grid-template-columns:38px minmax(0,1fr);grid-template-areas:"icon info" "icon price" "unit unit" "action action";row-gap:7px;padding:12px}
   .pos-product-price{min-width:0;text-align:left}
   .pos-add{width:100%;justify-self:stretch}
   
@@ -97,7 +88,4 @@
   .payment-field.reference, .payment-actions, .pos-payment-card .payment-field.reference, .pos-payment-card .payment-actions{grid-column:1}
   .payment-actions{justify-content:stretch}
   .payment-actions .ghost-button{flex:1}
-  
-  
-  
 }
