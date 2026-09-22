@@ -37,6 +37,10 @@ type ReceivablePaymentRow = {
   createdBy: string;
 };
 
+type AmountSummaryRow = {
+  total: unknown;
+};
+
 function displayName(customer: {
   businessName: string | null;
   firstName: string | null;
@@ -205,7 +209,7 @@ export async function getCustomerDetail(id: string) {
   });
   if (!customer) return null;
 
-  const [profiles, receivables, payments, exchangeCredits, salesSummary, customerReturns] = await Promise.all([
+  const [profiles, receivables, payments, exchangeCredits, salesSummary, returnedPurchaseRows] = await Promise.all([
     prisma.$queryRaw<CustomerCreditRow[]>`
       SELECT
         c."id",
@@ -295,16 +299,15 @@ export async function getCustomerDetail(id: string) {
       _sum: { total: true },
       _count: { _all: true },
     }),
-    prisma.returnOrder.findMany({
-      where: {
-        companyId: company.id,
-        status: "COMPLETED",
-        sale: { customerId: customer.id },
-      },
-      select: {
-        items: { select: { amount: true } },
-      },
-    }),
+    prisma.$queryRaw<AmountSummaryRow[]>`
+      SELECT COALESCE(SUM(ri."amount"), 0) AS "total"
+      FROM "return_items" ri
+      INNER JOIN "return_orders" ro ON ro."id" = ri."returnOrderId"
+      INNER JOIN "sales" s ON s."id" = ro."saleId"
+      WHERE ro."companyId" = ${company.id}
+        AND ro."status" = 'COMPLETED'
+        AND s."customerId" = ${customer.id}
+    `,
   ]);
 
   const profile = profiles[0];
@@ -312,11 +315,7 @@ export async function getCustomerDetail(id: string) {
   const outstanding = Number(profile?.outstanding ?? 0);
   const overdue = Number(profile?.overdue ?? 0);
   const grossPurchaseTotal = Number(salesSummary._sum.total ?? 0);
-  const returnedPurchaseTotal = customerReturns.reduce(
-    (sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + Number(item.amount), 0),
-    0,
-  );
+  const returnedPurchaseTotal = Number(returnedPurchaseRows[0]?.total ?? 0);
   const purchaseTotal = Math.round(
     (grossPurchaseTotal - returnedPurchaseTotal + Number.EPSILON) * 100,
   ) / 100;
