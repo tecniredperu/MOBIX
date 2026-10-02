@@ -27,7 +27,8 @@
     "prod:check": "node scripts/check-production-env.mjs",
     "db:backup": "node scripts/backup-postgres.mjs",
     "db:restore": "node scripts/restore-postgres.mjs",
-    "go-live:check": "node scripts/go-live-check.mjs"
+    "go-live:check": "node scripts/go-live-check.mjs",
+    "test:e2e:operations": "tsx scripts/e2e-operations-audit.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

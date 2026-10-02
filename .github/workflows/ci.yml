@@ -155,6 +155,11 @@ jobs:
           MOBIX_BASE_URL: "http://127.0.0.1:3001"
         run: npm run test:e2e:critical
 
+      - name: Auditar Transferencias y Servicio Técnico con acciones reales
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+        run: npm run test:e2e:operations -- core
+
       - name: Probar venta POS real por API
         run: |
           set -euo pipefail
@@ -194,6 +199,12 @@ jobs:
           npx tsx scripts/ci-pos-sale-e2e.ts verify \
             /tmp/mobix-pos-sale-fixture.json \
             /tmp/mobix-pos-sale-response.json
+
+      - name: Auditar Devoluciones sobre una venta POS real
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+          MOBIX_POS_SALE_RESPONSE: "/tmp/mobix-pos-sale-response.json"
+        run: npm run test:e2e:operations -- return
 
       - name: Validar referencias de tarjeta y pago mixto
         run: |
