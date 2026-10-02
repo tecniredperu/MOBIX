@@ -150,6 +150,11 @@ jobs:
           SESSION_TOKEN=$(node scripts/create-ci-session.mjs)
           echo "MOBIX_SESSION_TOKEN=$SESSION_TOKEN" >> "$GITHUB_ENV"
 
+      - name: Auditar acciones reales de Clientes, Proveedores y Caja
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+        run: npm run test:e2e:critical
+
       - name: Probar venta POS real por API
         run: |
           set -euo pipefail
