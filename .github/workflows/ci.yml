@@ -603,6 +603,17 @@ jobs:
           fi
           grep -q "ya no están disponibles" /tmp/mobix-deleted-product-sale.json
 
+      - name: Instalar navegador para auditoría E2E
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Auditar acciones críticas desde navegador
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+          MOBIX_BOOTSTRAP_PASSWORD: ${{ env.MOBIX_BOOTSTRAP_PASSWORD }}
+        run: node scripts/e2e-critical-actions.mjs
+
       - name: Probar backup y restauración PostgreSQL
         run: |
           set -euo pipefail
