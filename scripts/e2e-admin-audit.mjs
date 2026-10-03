@@ -390,19 +390,33 @@ async function auditRolesAndUsers(browser, company, branch) {
   );
 
   const rowExpr = `[...document.querySelectorAll(".admin-users-table tbody tr")].find(x=>x.innerText.includes(${JSON.stringify(userEmail)}))`;
-  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[2]`, "SUSPENDED", "estado de usuario QA");
+  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[2]`, "SUSPENDED", "estado de membresía QA");
   await browser.clickButton("Guardar", rowExpr);
+  await waitDb(async () => {
+    const row = await prisma.companyUser.findUnique({
+      where: { companyId_userId: { companyId: company.id, userId: membership.user.id } },
+    });
+    return row?.status === "SUSPENDED" ? row : null;
+  }, "updateUserAction membresía");
 
+  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[2]`, "ACTIVE", "reactivación de membresía QA");
+  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[3]`, "SUSPENDED", "estado de usuario QA");
+  await browser.clickButton("Guardar", rowExpr);
   await waitDb(async () => {
     const row = await prisma.user.findUnique({ where: { id: membership.user.id } });
     return row?.status === "SUSPENDED" ? row : null;
-  }, "updateUserAction");
+  }, "updateUserAction usuario");
 
-  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[2]`, "ACTIVE", "reactivación de usuario QA");
+  await browser.setControl(`${rowExpr}?.querySelectorAll("select")[3]`, "ACTIVE", "reactivación de usuario QA");
   await browser.clickButton("Guardar", rowExpr);
   await waitDb(async () => {
-    const row = await prisma.user.findUnique({ where: { id: membership.user.id } });
-    return row?.status === "ACTIVE" ? row : null;
+    const [userRow, membershipRow] = await Promise.all([
+      prisma.user.findUnique({ where: { id: membership.user.id } }),
+      prisma.companyUser.findUnique({
+        where: { companyId_userId: { companyId: company.id, userId: membership.user.id } },
+      }),
+    ]);
+    return userRow?.status === "ACTIVE" && membershipRow?.status === "ACTIVE" ? userRow : null;
   }, "updateUserAction reactivación");
 
   await browser.clickButton("Cambiar clave", rowExpr);
