@@ -160,6 +160,11 @@ jobs:
           MOBIX_BASE_URL: "http://127.0.0.1:3001"
         run: npm run test:e2e:operations -- core
 
+      - name: Auditar Configuración, Roles y Usuarios con acciones reales
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+        run: node scripts/e2e-admin-audit.mjs
+
       - name: Probar venta POS real por API
         run: |
           set -euo pipefail
@@ -602,17 +607,6 @@ jobs:
             exit 1
           fi
           grep -q "ya no están disponibles" /tmp/mobix-deleted-product-sale.json
-
-      - name: Instalar navegador para auditoría E2E
-        run: |
-          npm install --no-save --ignore-scripts playwright@1.55.0
-          npx playwright install --with-deps chromium
-
-      - name: Auditar acciones críticas desde navegador
-        env:
-          MOBIX_BASE_URL: "http://127.0.0.1:3001"
-          MOBIX_BOOTSTRAP_PASSWORD: ${{ env.MOBIX_BOOTSTRAP_PASSWORD }}
-        run: node scripts/e2e-critical-actions.mjs
 
       - name: Probar backup y restauración PostgreSQL
         run: |
