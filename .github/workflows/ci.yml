@@ -160,6 +160,11 @@ jobs:
           MOBIX_BASE_URL: "http://127.0.0.1:3001"
         run: npm run test:e2e:operations -- core
 
+      - name: Auditar Configuración, Roles y Usuarios con acciones reales
+        env:
+          MOBIX_BASE_URL: "http://127.0.0.1:3001"
+        run: node scripts/e2e-admin-audit.mjs
+
       - name: Probar venta POS real por API
         run: |
           set -euo pipefail
